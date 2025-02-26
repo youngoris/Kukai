@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StatusBar, StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Dimensions, Animated } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Dimensions, Animated } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
@@ -7,8 +8,6 @@ import { createStackNavigator } from '@react-navigation/stack';
 import MeditationScreen from './MeditationScreen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-gesture-handler';
-import { MeditationProvider } from './contexts/MeditationContext';
-import { useMeditation } from './contexts/MeditationContext';
 
 const { width, height } = Dimensions.get('window');
 const Stack = createStackNavigator();
@@ -51,9 +50,6 @@ const HomeScreen = ({ navigation }) => {
     summary: false,
     journal: false
   });
-  
-  // 获取冥想状态
-  const { activeMeditation, formatTime } = useMeditation();
   
   // 加载已完成任务状态
   useEffect(() => {
@@ -216,11 +212,10 @@ const HomeScreen = ({ navigation }) => {
     const normalizedMenuName = menuName.toLowerCase();
     const isHighlighted = getCurrentHighlightedFunction() === menuName;
     const isCompleted = completedTasks[normalizedMenuName];
-    const isMeditating = normalizedMenuName === 'meditation' && activeMeditation;
     
     // 只使用透明度来区分状态，不使用颜色
     return {
-      opacity: isHighlighted ? 1 : (isCompleted && !isMeditating) ? 0.4 : 0.6,
+      opacity: isHighlighted ? 1 : isCompleted ? 0.4 : 0.6,
       color: '#fff' // 所有菜单项都使用白色
     };
   };
@@ -245,11 +240,6 @@ const HomeScreen = ({ navigation }) => {
         >
           <Text style={[styles.menuText, getMenuItemStyle('MEDITATION')]}>
             MEDITATION
-            {activeMeditation && (
-              <Text style={styles.meditationTimer}>
-                {" "}({formatTime(activeMeditation.remainingTime)})
-              </Text>
-            )}
           </Text>
         </TouchableOpacity>
         
@@ -300,7 +290,7 @@ const HomeScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
       
-      <StatusBar hidden={true} />
+      <StatusBar style="light" />
     </SafeAreaView>
   );
 };
@@ -308,8 +298,9 @@ const HomeScreen = ({ navigation }) => {
 // 主应用组件
 export default function App() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <MeditationProvider>
+    <>
+      <StatusBar hidden={true} />
+      <GestureHandlerRootView style={{ flex: 1 }}>
         <NavigationContainer>
           <Stack.Navigator
             initialRouteName="Home"
@@ -323,9 +314,8 @@ export default function App() {
             <Stack.Screen name="Meditation" component={MeditationScreen} />
           </Stack.Navigator>
         </NavigationContainer>
-      </MeditationProvider>
-      <StatusBar hidden={true} />
-    </GestureHandlerRootView>
+      </GestureHandlerRootView>
+    </>
   );
 }
 
@@ -401,10 +391,5 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontWeight: '500',
     letterSpacing: 1,
-  },
-  meditationTimer: {
-    fontSize: 20,
-    fontWeight: '400',
-    color: '#aaa',
   },
 });

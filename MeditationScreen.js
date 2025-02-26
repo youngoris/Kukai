@@ -10,13 +10,10 @@ import {
   SafeAreaView,
   LogBox,
   Vibration,
-  Platform,
   StatusBar
 } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-import * as Notifications from 'expo-notifications';
-import { useMeditation } from './contexts/MeditationContext';
 
 // 忽略特定警告
 LogBox.ignoreLogs(['Animated: `useNativeDriver`']);
@@ -43,8 +40,6 @@ const MeditationScreen = ({ navigation }) => {
   const meditationStartTime = useRef(0);
   // 动画帧请求ID
   const animationFrameId = useRef(null);
-  
-  const { activeMeditation, startMeditation, endMeditation } = useMeditation();
   
   // 清理动画帧
   useEffect(() => {
@@ -152,22 +147,6 @@ const MeditationScreen = ({ navigation }) => {
     }
   }, [remainingTime, isMeditating, isComplete, totalTime]);
   
-  // 检查是否有正在进行的冥想
-  useEffect(() => {
-    if (activeMeditation && !isMeditating && !isComplete) {
-      // 恢复正在进行的冥想
-      setSelectedDuration(Math.floor(activeMeditation.duration / 60));
-      setRemainingTime(activeMeditation.remainingTime);
-      setTotalTime(activeMeditation.duration);
-      setIsMeditating(true);
-      
-      // 设置进度动画初始值
-      const progress = (activeMeditation.duration - activeMeditation.remainingTime) / activeMeditation.duration;
-      progressAnim.setValue(progress);
-      fluidProgressAnim.setValue(Math.sqrt(progress));
-    }
-  }, [activeMeditation]);
-  
   // 选择冥想时长
   const selectDuration = (minutes) => {
     const seconds = minutes * 60;
@@ -205,7 +184,7 @@ const MeditationScreen = ({ navigation }) => {
       setCountdownValue((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          startMeditationSession();
+          startMeditation();
           return 0;
         }
         return prev - 1;
@@ -214,15 +193,12 @@ const MeditationScreen = ({ navigation }) => {
   };
   
   // 开始冥想
-  const startMeditationSession = () => {
+  const startMeditation = () => {
     // 重置开始时间
     meditationStartTime.current = Date.now();
     
     // 先设置冥想状态，确保UI能正确更新
     setIsMeditating(true);
-    
-    // 记录到全局状态
-    startMeditation(remainingTime);
     
     // 淡出倒计时然后淡入冥想界面
     Animated.sequence([
@@ -258,9 +234,6 @@ const MeditationScreen = ({ navigation }) => {
       cancelAnimationFrame(animationFrameId.current);
     }
     
-    // 结束全局冥想状态
-    endMeditation();
-    
     playCompletionSound();
     setIsComplete(true);
   };
@@ -279,7 +252,6 @@ const MeditationScreen = ({ navigation }) => {
       cancelAnimationFrame(animationFrameId.current);
     }
     
-    // 不结束冥想，让它在后台继续
     navigation.navigate('Home');
   };
   
@@ -311,82 +283,20 @@ const MeditationScreen = ({ navigation }) => {
     }
   }
   
-  // 替换当前的免打扰模式实现
   useEffect(() => {
-    let mounted = true;
+    // 隐藏状态栏
+    StatusBar.setHidden(true);
     
-    const handleNotifications = async () => {
-      try {
-        // 冥想开始时，请求通知权限并暂时禁用通知
-        const { status } = await Notifications.requestPermissionsAsync();
-        
-        if (status === 'granted' && mounted) {
-          // 暂时禁用通知
-          await Notifications.setNotificationHandler({
-            handleNotification: async () => ({
-              shouldShowAlert: false,
-              shouldPlaySound: false,
-              shouldSetBadge: false,
-            }),
-          });
-        }
-      } catch (error) {
-        console.error('无法管理通知设置:', error);
-      }
-    };
-    
-    handleNotifications();
-    
-    // 清理函数 - 冥想结束时恢复通知
+    // 组件卸载时恢复状态栏
     return () => {
-      mounted = false;
-      
-      const restoreNotifications = async () => {
-        try {
-          // 恢复默认通知行为
-          await Notifications.setNotificationHandler({
-            handleNotification: async () => ({
-              shouldShowAlert: true,
-              shouldPlaySound: true,
-              shouldSetBadge: true,
-            }),
-          });
-        } catch (error) {
-          console.error('无法恢复通知设置:', error);
-        }
-      };
-      
-      restoreNotifications();
-    };
-  }, []);
-  
-  // 在冥想开始时
-  useEffect(() => {
-    // 启用勿扰模式
-    const enableFocusMode = async () => {
-      try {
-        // 使用 StatusBar 来隐藏状态栏
-        StatusBar.setHidden(true);
-      } catch (error) {
-        console.error('无法隐藏状态栏:', error);
-      }
-    };
-    
-    enableFocusMode();
-    
-    // 冥想结束时
-    return () => {
-      // 恢复状态栏
-      try {
-        StatusBar.setHidden(false);
-      } catch (error) {
-        console.error('无法恢复状态栏:', error);
-      }
+      StatusBar.setHidden(false);
     };
   }, []);
   
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style="light" />
+      
       {/* 返回按钮 */}
       <TouchableOpacity style={styles.backButton} onPress={goBack}>
         <AntDesign name="arrowleft" size={24} color="#fff" />
