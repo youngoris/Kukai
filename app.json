@@ -13,16 +13,25 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.andre.kukai",
+      "infoPlist": {
+        "NSNotificationsUsageDescription": "需要通知权限来管理冥想过程中的免打扰模式",
+        "NSUserNotificationUsageDescription": "我们需要通知权限来管理冥想过程中的免打扰体验"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "permissions": ["ACCESS_NOTIFICATION_POLICY", "NOTIFICATIONS"]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "androidStatusBar": {
+      "hidden": true
     }
   }
 }
