@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -10,47 +10,93 @@ import {
   SafeAreaView,
   LogBox,
   Vibration,
-  StatusBar
+  StatusBar,
+  Platform,
+  Alert,
+  BackHandler,
+  AsyncStorage
 } from 'react-native';
-import { AntDesign } from '@expo/vector-icons';
+import { AntDesign, MaterialIcons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
+import * as Progress from 'react-native-progress';
+import { useFocusEffect } from '@react-navigation/native';
+import Slider from '@react-native-community/slider';
 
-// 忽略特定警告
+// Ignore specific warnings
 LogBox.ignoreLogs(['Animated: `useNativeDriver`']);
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const TIMER_SIZE = width * 0.8;
 
 const MeditationScreen = ({ navigation }) => {
+  // Session state
   const [selectedDuration, setSelectedDuration] = useState(null);
-  const [countdownValue, setCountdownValue] = useState(5);
+  const [countdown, setCountdown] = useState(5);
+  const [isCountingDown, setIsCountingDown] = useState(false);
   const [isMeditating, setIsMeditating] = useState(false);
   const [remainingTime, setRemainingTime] = useState(0);
   const [totalTime, setTotalTime] = useState(0);
-  const [isComplete, setIsComplete] = useState(false);
+  const [progress, setProgress] = useState(0);
   
+  // Animation values
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const breatheAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const fluidProgressAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(0)).current;
-  const [sound, setSound] = useState();
   
-  // 冥想开始时间引用
+  // References
+  const [sound, setSound] = useState();
+  const meditationTimer = useRef(null);
+  const countdownTimer = useRef(null);
   const meditationStartTime = useRef(0);
-  // 动画帧请求ID
   const animationFrameId = useRef(null);
   
-  // 清理动画帧
+  // New state variables
+  const [customDuration, setCustomDuration] = useState(30); // Default custom duration
+  
+  // Handle back button
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (isMeditating) {
+          // Show confirmation dialog when trying to exit during meditation
+          Alert.alert(
+            "End Meditation",
+            "Are you sure you want to end your current meditation session?",
+            [
+              { text: "Continue", style: "cancel" },
+              { 
+                text: "End Session", 
+                onPress: () => endMeditation(() => navigation.navigate('Home')),
+                style: "destructive"
+              }
+            ]
+          );
+          return true;
+        }
+        
+        // Allow normal back navigation if not meditating
+        return false;
+      };
+
+      BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+    }, [isMeditating, navigation])
+  );
+  
+  // Clean up animation frames
   useEffect(() => {
     return () => {
       if (animationFrameId.current) {
         cancelAnimationFrame(animationFrameId.current);
+        animationFrameId.current = null;
       }
     };
   }, []);
   
-  // 预加载音效
+  // Preload sound effects
   useEffect(() => {
     const loadSound = async () => {
       try {
@@ -60,7 +106,7 @@ const MeditationScreen = ({ navigation }) => {
         );
         setSound(sound);
       } catch (error) {
-        console.log('无法预加载音效', error);
+        console.log('Unable to preload sound effect', error);
       }
     };
     
@@ -73,11 +119,11 @@ const MeditationScreen = ({ navigation }) => {
     };
   }, []);
   
-  // 呼吸动画效果
+  // Breathing animation effect
   useEffect(() => {
-    if (isMeditating && !isComplete) {
-      // 创建循环呼吸动画
-      Animated.loop(
+    if (isMeditating) {
+      // Create looping breath animation
+      const breathAnimation = Animated.loop(
         Animated.sequence([
           Animated.timing(breatheAnim, {
             toValue: 1.05,
@@ -92,10 +138,10 @@ const MeditationScreen = ({ navigation }) => {
             useNativeDriver: true
           })
         ])
-      ).start();
+      );
       
-      // 创建脉冲动画
-      Animated.loop(
+      // Create pulse animation
+      const pulseAnimation = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
             toValue: 1,
@@ -110,308 +156,366 @@ const MeditationScreen = ({ navigation }) => {
             useNativeDriver: false
           })
         ])
-      ).start();
+      );
+      
+      breathAnimation.start();
+      pulseAnimation.start();
+      
+      return () => {
+        breathAnimation.stop();
+        pulseAnimation.stop();
+        // Reset animation values
+        breatheAnim.setValue(1);
+        pulseAnim.setValue(0);
+      };
     }
-    
-    return () => {
-      // 清理动画
-      breatheAnim.setValue(1);
-      pulseAnim.setValue(0);
-    };
-  }, [isMeditating, isComplete]);
+  }, [isMeditating, breatheAnim, pulseAnim]);
   
-  // 平滑进度动画
+  // Smooth progress animation
   useEffect(() => {
-    if (isMeditating && !isComplete) {
-      // 计算正确的进度值（从0到1）
+    if (isMeditating && totalTime > 0) {
+      // Calculate correct progress value (0 to 1)
       const targetProgress = (totalTime - remainingTime) / totalTime;
       
-      // 平滑过渡到新的进度值 - 使用更长的持续时间确保更平滑
+      // Use a consistent animation duration for smoother experience
+      const animationDuration = 950; // Just under 1 second for smoother transitions
+      
       Animated.timing(progressAnim, {
         toValue: targetProgress,
-        duration: 950, // 接近1秒但留有余量
+        duration: animationDuration,
         easing: Easing.linear,
         useNativeDriver: false
       }).start();
       
-      // 计算液体高度 - 使用平方根函数提供更自然的视觉效果
+      // Calculate fluid height - using square root for more natural visual effect
       const fluidHeight = Math.sqrt(targetProgress);
       
-      // 平滑过渡液体高度
       Animated.timing(fluidProgressAnim, {
         toValue: fluidHeight,
-        duration: 950,
-        easing: Easing.cubic, // 使用三次方缓动函数，更自然
+        duration: animationDuration,
+        easing: Easing.cubic, // More natural cubic easing
         useNativeDriver: false
       }).start();
     }
-  }, [remainingTime, isMeditating, isComplete, totalTime]);
+  }, [remainingTime, isMeditating, totalTime, progressAnim, fluidProgressAnim]);
   
-  // 选择冥想时长
-  const selectDuration = (minutes) => {
-    const seconds = minutes * 60;
-    setSelectedDuration(minutes);
-    setRemainingTime(seconds);
-    setTotalTime(seconds);
-    progressAnim.setValue(0);
-    fluidProgressAnim.setValue(0);
-    startCountdown();
-  };
-
-  // 测试模式 - 10秒冥想
-  const startTestMode = () => {
-    setSelectedDuration(0.17); // 10秒
-    setRemainingTime(10);
-    setTotalTime(10);
-    progressAnim.setValue(0);
-    fluidProgressAnim.setValue(0);
-    startCountdown();
-  };
-  
-  // 开始5秒倒计时
-  const startCountdown = () => {
-    setCountdownValue(5);
-    
-    // 淡入动画
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
-    
-    // 倒计时
-    const interval = setInterval(() => {
-      setCountdownValue((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          startMeditation();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-  
-  // 开始冥想
-  const startMeditation = () => {
-    // 重置开始时间
-    meditationStartTime.current = Date.now();
-    
-    // 先设置冥想状态，确保UI能正确更新
-    setIsMeditating(true);
-    
-    // 淡出倒计时然后淡入冥想界面
-    Animated.sequence([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      })
-    ]).start();
-    
-    // 正常计时器用于更新显示时间和控制何时完成
-    const interval = setInterval(() => {
-      setRemainingTime((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          completeMeditation();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-  
-  // 完成冥想
-  const completeMeditation = () => {
-    // 取消动画帧
-    if (animationFrameId.current) {
-      cancelAnimationFrame(animationFrameId.current);
+  // Countdown timer
+  useEffect(() => {
+    if (isCountingDown && countdown > 0) {
+      countdownTimer.current = setInterval(() => {
+        setCountdown(prevCount => prevCount - 1);
+      }, 1000);
+    } else if (isCountingDown && countdown === 0) {
+      // Countdown finished, start meditation
+      setIsCountingDown(false);
+      setIsMeditating(true);
+      meditationStartTime.current = Date.now();
     }
     
-    playCompletionSound();
-    setIsComplete(true);
+    return () => {
+      if (countdownTimer.current) {
+        clearInterval(countdownTimer.current);
+        countdownTimer.current = null;
+      }
+    };
+  }, [isCountingDown, countdown]);
+  
+  // Meditation timer
+  useEffect(() => {
+    if (isMeditating && remainingTime > 0) {
+      meditationTimer.current = setInterval(() => {
+        setRemainingTime(prevTime => {
+          const newTime = prevTime - 1;
+          // Update progress
+          setProgress(1 - (newTime / totalTime));
+          return newTime;
+        });
+      }, 1000);
+    } else if (isMeditating && remainingTime === 0) {
+      // Meditation complete
+      Vibration.vibrate(500); // Vibration notification
+      
+      // Handle meditation completion
+      handleMeditationComplete(selectedDuration);
+    }
+    
+    return () => {
+      if (meditationTimer.current) {
+        clearInterval(meditationTimer.current);
+        meditationTimer.current = null;
+      }
+    };
+  }, [isMeditating, remainingTime, totalTime, selectedDuration]);
+  
+  // Modified function to handle duration selection
+  const selectDuration = (minutes) => {
+    setSelectedDuration(minutes);
+    setRemainingTime(minutes * 60);
+    setTotalTime(minutes * 60);
+    setIsCountingDown(true);
   };
   
-  // 格式化时间
-  const formatTime = (seconds) => {
+  // Function to start custom duration meditation
+  const startCustomMeditation = () => {
+    setSelectedDuration(customDuration);
+    setRemainingTime(customDuration * 60);
+    setTotalTime(customDuration * 60);
+    setIsCountingDown(true);
+  };
+  
+  // Format time helper (mm:ss)
+  const formatTime = useCallback((seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-  
-  // 返回主页
-  const goBack = () => {
-    // 取消动画帧
-    if (animationFrameId.current) {
-      cancelAnimationFrame(animationFrameId.current);
-    }
-    
-    navigation.navigate('Home');
-  };
-  
-  // 计算剩余分钟的显示方式
-  const minutesText = Math.floor(remainingTime / 60);
-  const minutesLabel = minutesText === 1 ? "minute" : "minutes";
-  
-  // 播放完成提示音或振动
-  async function playCompletionSound() {
-    try {
-      // 先振动提供即时反馈
-      Vibration.vibrate(300);
-      
-      // 然后播放声音
-      if (sound) {
-        await sound.setPositionAsync(0);
-        await sound.playAsync();
-      } else {
-        // 如果没有预加载，尝试加载并播放
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: 'https://assets.mixkit.co/active_storage/sfx/2867/2867-preview.mp3' }, 
-          { volume: 0.7 }
-        );
-        setSound(newSound);
-        await newSound.playAsync();
-      }
-    } catch (error) {
-      console.log('无法播放提示音，仅使用振动', error);
-    }
-  }
-  
-  useEffect(() => {
-    // 隐藏状态栏
-    StatusBar.setHidden(true);
-    
-    // 组件卸载时恢复状态栏
-    return () => {
-      StatusBar.setHidden(false);
-    };
+    return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
   }, []);
   
+  // End meditation and clean up
+  const endMeditation = useCallback((callback) => {
+    // Stop timers
+    if (meditationTimer.current) {
+      clearInterval(meditationTimer.current);
+      meditationTimer.current = null;
+    }
+    
+    // Reset animation values
+    breatheAnim.setValue(1);
+    pulseAnim.setValue(0);
+    
+    // Reset state
+    setIsMeditating(false);
+    setSelectedDuration(null);
+    setProgress(0);
+    setRemainingTime(0);
+    
+    // Execute callback if provided
+    if (typeof callback === 'function') {
+      callback();
+    }
+  }, [breatheAnim, pulseAnim]);
+  
+  // Handle meditation complete
+  const handleMeditationComplete = useCallback((durationInMinutes) => {
+    console.log('Meditation completed, duration:', durationInMinutes);
+    
+    // Save meditation session data
+    saveMeditationSession(durationInMinutes);
+    
+    // Play completion sound
+    playCompletionSound();
+    
+    // Show completion message
+    Alert.alert(
+      "Meditation Complete",
+      "You've completed " + durationInMinutes + " minutes of meditation",
+      [{ text: "Continue", onPress: () => navigation.navigate('Task') }]
+    );
+  }, [navigation]);
+  
+  // Save meditation session to storage
+  const saveMeditationSession = useCallback(async (durationInMinutes) => {
+    try {
+      // Get current date in YYYY-MM-DD format
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Create new session object
+      const newSession = {
+        date: today,
+        duration: durationInMinutes,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Load existing meditation sessions
+      let sessions = [];
+      const savedSessions = await AsyncStorage.getItem('meditationSessions');
+      if (savedSessions) {
+        sessions = JSON.parse(savedSessions);
+      }
+      
+      // Add new session and save back to storage
+      sessions.push(newSession);
+      await AsyncStorage.setItem('meditationSessions', JSON.stringify(sessions));
+      
+      // Also update completed tasks for today
+      const completedTasksKey = `completed_${today}`;
+      let completedTasks = { meditation: true };
+      
+      const savedTasks = await AsyncStorage.getItem(completedTasksKey);
+      if (savedTasks) {
+        completedTasks = { ...JSON.parse(savedTasks), meditation: true };
+      }
+      
+      await AsyncStorage.setItem(completedTasksKey, JSON.stringify(completedTasks));
+      
+      console.log('Meditation session saved successfully');
+    } catch (error) {
+      console.log('Error saving meditation session:', error);
+    }
+  }, []);
+  
+  // Play completion sound
+  const playCompletionSound = useCallback(async () => {
+    try {
+      if (sound) {
+        await sound.replayAsync();
+      }
+    } catch (error) {
+      console.log('Error playing sound:', error);
+    }
+  }, [sound]);
+  
+  // Navigation handler - with confirmation if needed
+  const goBack = useCallback(() => {
+    if (isMeditating || isCountingDown) {
+      Alert.alert(
+        "End Meditation",
+        "Are you sure you want to end your current session?",
+        [
+          { text: "Continue", style: "cancel" },
+          { 
+            text: "End Session", 
+            onPress: () => {
+              endMeditation();
+              navigation.navigate('Home');
+            },
+            style: "destructive"
+          }
+        ]
+      );
+    } else {
+      navigation.navigate('Home');
+    }
+  }, [isMeditating, isCountingDown, navigation, endMeditation]);
+
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
-      
-      {/* 返回按钮 */}
-      <TouchableOpacity style={styles.backButton} onPress={goBack}>
-        <AntDesign name="arrowleft" size={24} color="#fff" />
-      </TouchableOpacity>
+      {!isMeditating && !isCountingDown && (
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('Home')}>
+          <AntDesign name="arrowleft" size={24} color="#fff" />
+        </TouchableOpacity>
+      )}
       
       {!selectedDuration && (
         <View style={styles.selectionContainer}>
           <Text style={styles.headerText}>MEDITATION</Text>
-          <Text style={styles.subText}>Select duration</Text>
+          <Text style={styles.subText}>Qick Start</Text>
           
-          <View style={styles.optionsContainer}>
-            <TouchableOpacity 
-              style={styles.optionButton} 
-              onPress={() => selectDuration(3)}
-            >
-              <Text style={styles.optionText}>3 MIN</Text>
-            </TouchableOpacity>
+          <View style={styles.presetContainer}>
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity 
+                style={styles.durationButton}
+                onPress={() => selectDuration(3)}
+              >
+                <Text style={styles.buttonText}>3 min</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.durationButton}
+                onPress={() => selectDuration(10)}
+              >
+                <Text style={styles.buttonText}>10 min</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.durationButton}
+                onPress={() => selectDuration(20)}
+              >
+                <Text style={styles.buttonText}>20 min</Text>
+              </TouchableOpacity>
+            </View>
             
-            <TouchableOpacity 
-              style={styles.optionButton} 
-              onPress={() => selectDuration(10)}
-            >
-              <Text style={styles.optionText}>10 MIN</Text>
-            </TouchableOpacity>
+            {/* <View style={styles.divider} /> */}
+            <View style={styles.customContainer}>
+              <Text style={styles.customDurationText}>{customDuration} min</Text>
+              
+              <Slider
+                style={styles.slider}
+                minimumValue={1}
+                maximumValue={60}
+                step={1}
+                value={customDuration}
+                onValueChange={(value) => setCustomDuration(value)}
+                minimumTrackTintColor="#26de81"
+                maximumTrackTintColor="#444"
+                thumbTintColor="#fff"
+              />
+              
+              <View style={styles.sliderLabels}>
+                <Text style={styles.sliderLabel}>1 min</Text>
+                <Text style={styles.sliderLabel}>60 min</Text>
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.startCustomButton}
+                onPress={() => startCustomMeditation()}
+              >
+                <Text style={styles.startButtonText}>Start</Text>
+              </TouchableOpacity>
+            </View>
             
+            {/* Test button for debugging
             <TouchableOpacity 
-              style={styles.optionButton} 
-              onPress={() => selectDuration(20)}
+              style={[styles.durationButton, styles.testButton]}
+              onPress={() => selectDuration(0.1)}
             >
-              <Text style={styles.optionText}>20 MIN</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.optionButton, styles.testButton]} 
-              onPress={startTestMode}
-            >
-              <Text style={styles.optionText}>TEST (10 SEC)</Text>
-            </TouchableOpacity>
+              <Text style={styles.buttonText}>Test (6s)</Text>
+            </TouchableOpacity> */}
           </View>
         </View>
       )}
       
-      {selectedDuration && !isMeditating && !isComplete && (
-        <Animated.View style={[styles.countdownContainer, { opacity: fadeAnim }]}>
-          <Text style={styles.countdownText}>{countdownValue}</Text>
-          <Text style={styles.countdownSubtext}>
-            {countdownValue > 0 ? "Prepare to focus..." : "Begin"}
+      {isCountingDown && (
+        <View style={styles.countdownContainer}>
+          <Text style={styles.countdownText}>{countdown}</Text>
+          <Text style={styles.countdownSubtext}>Prepare to meditate...</Text>
+        </View>
+      )}
+      
+      {isMeditating && (
+        <View style={styles.meditationContainer}>
+          <Progress.Circle
+            size={200}
+            thickness={6}
+            color="#fff"
+            unfilledColor="rgba(255, 255, 255, 0.2)"
+            borderWidth={0}
+            progress={progress}
+            formatText={() => formatTime(remainingTime)}
+            showsText={true}
+            textStyle={styles.progressText}
+            style={styles.progressCircle}
+          />
+          
+          <Text style={styles.durationText}>
+            {selectedDuration} minute{selectedDuration !== 1 ? 's' : ''} session
           </Text>
-        </Animated.View>
-      )}
-      
-      {isMeditating && !isComplete && (
-        <Animated.View style={[styles.meditationContainer, { opacity: fadeAnim }]}>
-          {/* 全屏进度背景 - 修改为覆盖整个屏幕高度 */}
-          <View style={styles.progressBackground}>
-            <Animated.View 
-              style={[
-                styles.progressFill, 
-                { 
-                  height: fluidProgressAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0%', '100%'],
-                  })
-                }
-              ]} 
-            />
-          </View>
           
-          {/* 时间显示区域 */}
-          <View style={styles.timerContainer}>
-            {/* 脉动环 */}
-            <Animated.View 
-              style={[
-                styles.pulseRing,
-                {
-                  opacity: pulseAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.15, 0.3]
-                  })
-                }
-              ]}
-            />
-            
-            {/* 时间显示 */}
-            <Animated.Text 
-              style={[
-                styles.timerText, 
-                {
-                  transform: [{scale: breatheAnim}]
-                }
-              ]}
-            >
-              {formatTime(remainingTime)}
-            </Animated.Text>
-            
-            {/* 分钟指示器 */}
-            <Text style={styles.minutesRemainingText}>
-              {minutesText} {minutesLabel} remaining
-            </Text>
-          </View>
-          
-          <Text style={styles.meditationSubtext}>呼吸放松...</Text>
-        </Animated.View>
-      )}
-      
-      {isComplete && (
-        <View style={styles.completeContainer}>
-          <Text style={styles.completeText}>Meditation Complete</Text>
-          <Text style={styles.completeSubtext}>How do you feel?</Text>
+          <Text style={styles.meditationSubtext}>
+            Breathe and relax...
+          </Text>
           
           <TouchableOpacity 
-            style={styles.completeButton}
-            onPress={() => navigation.navigate('Home')}
+            style={styles.endMeditationButton} 
+            onPress={() => {
+              Alert.alert(
+                "End Meditation",
+                "Are you sure you want to end your current meditation session?",
+                [
+                  {
+                    text: "Continue",
+                    style: "cancel"
+                  },
+                  { 
+                    text: "End Session", 
+                    onPress: () => endMeditation(() => navigation.navigate('Home')),
+                    style: "destructive"
+                  }
+                ]
+              );
+            }}
           >
-            <Text style={styles.completeButtonText}>TASK</Text>
+            <MaterialIcons name="close" size={20} color="#fff" />
+            <Text style={styles.endMeditationText}>Cancel</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -450,138 +554,150 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     fontWeight: '300',
   },
-  optionsContainer: {
-    width: '100%',
-    alignItems: 'center',
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    marginBottom: 30,
   },
-  optionButton: {
-    paddingVertical: 15,
-    marginVertical: 10,
-    width: '80%',
-    alignItems: 'center',
+  durationButton: {
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#555',
     borderRadius: 4,
+    padding: 15,
+    margin: 10,
+    minWidth: 100,
+    alignItems: 'center',
   },
   testButton: {
-    marginTop: 30,
-    borderColor: '#555',
     backgroundColor: '#222',
+    marginTop: 30,
   },
-  optionText: {
+  buttonText: {
     color: '#fff',
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '500',
-    letterSpacing: 1,
   },
   countdownContainer: {
-    alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   countdownText: {
     color: '#fff',
     fontSize: 80,
     fontWeight: '200',
-    marginBottom: 20,
   },
   countdownSubtext: {
     color: '#aaa',
     fontSize: 18,
-    fontWeight: '300',
+    marginTop: 20,
   },
   meditationContainer: {
-    alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
-    width: '100%',
-    height: '100%',
-  },
-  progressBackground: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%', 
-    height: '100%',  // 使用整个屏幕高度
-    backgroundColor: 'transparent',
-    overflow: 'hidden',
-    zIndex: 5,
-  },
-  progressFill: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    width: '100%',
-    backgroundColor: 'rgba(50, 50, 50, 0.5)',
-  },
-  timerContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    width: TIMER_SIZE,
-    height: TIMER_SIZE,
-    position: 'relative',
-    zIndex: 15,
   },
-  pulseRing: {
-    position: 'absolute',
-    width: TIMER_SIZE + 10, // 略大于背景
-    height: TIMER_SIZE + 10,
-    borderRadius: (TIMER_SIZE + 10) / 2,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    backgroundColor: 'transparent',
-    zIndex: 6,
+  progressCircle: {
+    marginBottom: 40,
   },
-  timerText: {
+  progressText: {
     color: '#fff',
-    fontSize: 70,
+    fontSize: 36,
     fontWeight: '200',
-    letterSpacing: 4,
-    fontVariant: ['tabular-nums'],
-    zIndex: 20,
   },
-  minutesRemainingText: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: 14,
-    fontWeight: '300',
-    marginTop: 15,
-    letterSpacing: 1,
+  durationText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 16,
+    marginBottom: 20,
   },
   meditationSubtext: {
     color: '#aaa',
     fontSize: 18,
-    fontWeight: '300',
-    marginTop: 60,
-    letterSpacing: 1,
+    marginTop: 40,
   },
-  completeContainer: {
+  endMeditationButton: {
+    position: 'absolute',
+    bottom: 50,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  completeText: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '500',
-    marginBottom: 10,
-  },
-  completeSubtext: {
-    color: '#aaa',
-    fontSize: 18,
-    fontWeight: '300',
-    marginBottom: 60,
-  },
-  completeButton: {
-    paddingVertical: 15,
-    paddingHorizontal: 30,
     backgroundColor: '#222',
-    borderRadius: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#444',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  completeButtonText: {
+  endMeditationText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '500',
-    letterSpacing: 1,
+    marginLeft: 8,
+  },
+  presetContainer: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  sectionTitle: {
+    color: '#aaa',
+    fontSize: 16,
+    marginBottom: 20,
+    alignSelf: 'flex-start',
+    marginLeft: 20,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#333',
+    width: '90%',
+    marginVertical: 30,
+  },
+  customContainer: {
+    width: '90%',
+    backgroundColor: '#111',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  customDurationText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 20,
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 5,
+  },
+  sliderLabel: {
+    color: '#777',
+    fontSize: 12,
+  },
+  startCustomButton: {
+    backgroundColor: '#26de81',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 8,
+    marginTop: 30,
+    width: '100%',
+    alignItems: 'center',
+  },
+  startButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });
 

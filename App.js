@@ -1,18 +1,56 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Dimensions, Animated } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Dimensions, Animated, Easing } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import MeditationScreen from './MeditationScreen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-gesture-handler';
+import MeditationScreen from './MeditationScreen';
+import TaskScreen from './TaskScreen';
+import FocusScreen from './FocusScreen';
+import SummaryScreen from './SummaryScreen';
+import JournalScreen from './JournalScreen';
+import SettingsScreen from './SettingsScreen';
+import { useFonts, Roboto_300Light, Roboto_400Regular, Roboto_500Medium, Roboto_700Bold } from '@expo-google-fonts/roboto';
+import AppLoading from 'expo-app-loading';
+import { useFocusEffect } from '@react-navigation/native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
+import JournalEditScreen from './JournalEditScreen';
+import { MaterialIcons } from '@expo/vector-icons';
 
 const { width, height } = Dimensions.get('window');
 const Stack = createStackNavigator();
 
-// 名言数据库
+// Define screen order
+const SCREEN_ORDER = [
+  'Meditation',
+  'Task',
+  'Focus',
+  'Summary',
+  'Journal'
+];
+
+// Navigation helper functions
+const getNextScreen = (currentScreen) => {
+  const currentIndex = SCREEN_ORDER.indexOf(currentScreen);
+  if (currentIndex < SCREEN_ORDER.length - 1) {
+    return SCREEN_ORDER[currentIndex + 1];
+  }
+  return null;
+};
+
+const getPreviousScreen = (currentScreen) => {
+  const currentIndex = SCREEN_ORDER.indexOf(currentScreen);
+  if (currentIndex > 0) {
+    return SCREEN_ORDER[currentIndex - 1];
+  }
+  return null;
+};
+
+// Quote database
 const quotes = {
   morning: [
     "Start is half of success.",
@@ -50,6 +88,21 @@ const HomeScreen = ({ navigation }) => {
     summary: false,
     journal: false
   });
+  
+  // 添加一个标记，用于识别是首次加载还是返回
+  const isFirstLoad = useRef(true);
+  const previousTimeOfDay = useRef(timeOfDay);
+  
+  const [weather, setWeather] = useState(null);
+  const [weatherError, setWeatherError] = useState(null);
+  const [location, setLocation] = useState(null);
+  const [isLoadingWeather, setIsLoadingWeather] = useState(true);
+  
+  // 在HomeScreen组件中添加一个ref来跟踪是否是初始加载
+  const isInitialMount = useRef(true);
+  
+  // 使用ref追踪坐标变化
+  const previousCoords = useRef(null);
   
   // 加载已完成任务状态
   useEffect(() => {
@@ -117,30 +170,53 @@ const HomeScreen = ({ navigation }) => {
     return () => clearInterval(interval);
   }, [timeOfDay]);
   
-  // 设置名言并添加淡入效果
+  // 设置名言 - 更新动画效果为直接淡入
   useEffect(() => {
     // 根据时间选择名言类别
     const quoteList = quotes[timeOfDay];
     // 随机选择一条名言
     const randomIndex = Math.floor(Math.random() * quoteList.length);
     
-    // 先淡出
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 500,
-      useNativeDriver: true,
-    }).start(() => {
-      // 更新名言
+    // 首次加载时直接设置不做动画
+    if (isFirstLoad.current) {
+      setQuote(quoteList[randomIndex]);
+      fadeAnim.setValue(1); // 直接设置为可见
+      isFirstLoad.current = false;
+    } 
+    else if (previousTimeOfDay.current !== timeOfDay) {
+      // 时段变化时更新引用 - 直接更新而不是先淡出再淡入
+      
+      // 立即将旧引用隐藏并更新内容
+      fadeAnim.setValue(0);
       setQuote(quoteList[randomIndex]);
       
-      // 再淡入
+      // 直接淡入新引用
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 1000,
+        duration: 800, // 使用略短的时间
         useNativeDriver: true,
+        easing: Easing.out(Easing.cubic), // 使用更平滑的缓动函数
       }).start();
-    });
+    }
+    
+    // 更新前一个时段引用
+    previousTimeOfDay.current = timeOfDay;
   }, [timeOfDay]);
+  
+  // 将 useFocusEffect 添加到组件中
+  useFocusEffect(
+    useCallback(() => {
+      // 从其他屏幕返回时，只有在需要时才刷新引用
+      if (!isFirstLoad.current && fadeAnim._value < 1) {
+        // 如果由于某种原因引用是不可见的，确保它变为可见
+        fadeAnim.setValue(1);
+      }
+      
+      return () => {
+        // 此处可以放置清理代码（如果需要）
+      };
+    }, [])
+  );
   
   // 格式化日期
   const formatDate = () => {
@@ -165,20 +241,19 @@ const HomeScreen = ({ navigation }) => {
         navigation.navigate('Meditation');
         break;
       case 'task':
-        // 未来实现: navigation.navigate('Task');
-        console.log('Accessing Task function');
+        navigation.navigate('Task');
         break;
       case 'focus':
-        // 未来实现: navigation.navigate('Focus');
-        console.log('Accessing Focus function');
+        navigation.navigate('Focus');
         break;
       case 'summary':
-        // 未来实现: navigation.navigate('Summary');
-        console.log('Accessing Summary function');
+        navigation.navigate('Summary');
         break;
       case 'journal':
-        // 未来实现: navigation.navigate('Journal');
-        console.log('Accessing Journal function');
+        navigation.navigate('Journal');
+        break;
+      case 'settings':
+        navigation.navigate('Settings');
         break;
       default:
         console.log(`Accessing ${taskName} function`);
@@ -220,11 +295,173 @@ const HomeScreen = ({ navigation }) => {
     };
   };
   
+  // Add this function to map OpenWeather icon codes to MaterialCommunityIcons
+  const getWeatherIcon = (iconCode) => {
+    const weatherIcons = {
+      '01d': 'weather-sunny',
+      '01n': 'weather-night',
+      '02d': 'weather-partly-cloudy',
+      '02n': 'weather-night-partly-cloudy',
+      '03d': 'weather-cloudy',
+      '03n': 'weather-cloudy',
+      '04d': 'weather-cloudy',
+      '04n': 'weather-cloudy',
+      '09d': 'weather-pouring',
+      '09n': 'weather-pouring',
+      '10d': 'weather-rainy',
+      '10n': 'weather-rainy',
+      '11d': 'weather-lightning',
+      '11n': 'weather-lightning',
+      '13d': 'weather-snowy',
+      '13n': 'weather-snowy',
+      '50d': 'weather-fog',
+      '50n': 'weather-fog',
+    };
+
+    return weatherIcons[iconCode] || 'weather-cloudy';
+  };
+  
+  // 修改天气获取功能
+  useEffect(() => {
+    const fetchWeather = async () => {
+      try {
+        setIsLoadingWeather(true);
+        setWeatherError(null);
+        
+        // 获取位置权限
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setWeatherError('位置权限被拒绝');
+          setIsLoadingWeather(false);
+          console.log('位置权限被拒绝');
+          return;
+        }
+
+        // 获取当前位置 - 添加超时和高精度选项
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 5000,
+          mayShowUserSettingsDialog: true
+        });
+        
+        if (!location) {
+          throw new Error('无法获取位置信息');
+        }
+        
+        setLocation(location);
+        console.log('位置获取成功:', location.coords.latitude, location.coords.longitude);
+
+        // 使用OpenWeather API获取天气数据
+        const apiKey = '847915028262f4981a07546eb43696ce';
+        const url = `https://api.openweathermap.org/data/2.5/weather?lat=${location.coords.latitude}&lon=${location.coords.longitude}&units=metric&appid=${apiKey}`;
+        
+        console.log('正在请求天气数据:', url);
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('天气API响应错误:', response.status, errorText);
+          throw new Error(`天气数据获取失败: ${response.status}`);
+        }
+        
+        const weatherData = await response.json();
+        console.log('天气数据获取成功:', weatherData);
+        setWeather(weatherData);
+
+        // 保存天气数据到AsyncStorage
+        if (weatherData) {
+          await AsyncStorage.setItem('currentWeatherData', JSON.stringify({
+            weather: weatherData.weather[0].main,
+            temperature: Math.round(weatherData.main.temp),
+            location: weatherData.name,
+            timestamp: new Date().toISOString(),
+            data: weatherData
+          }));
+        }
+      } catch (error) {
+        console.error('获取天气时出错:', error.message);
+        setWeatherError(`无法获取天气: ${error.message}`);
+      } finally {
+        setIsLoadingWeather(false);
+      }
+    };
+
+    // 检查坐标是否显著变化
+    const hasLocationChanged = () => {
+      if (!previousCoords.current || !location) return true;
+      
+      const distance = calculateDistance(
+        previousCoords.current.latitude,
+        previousCoords.current.longitude,
+        location.coords.latitude,
+        location.coords.longitude
+      );
+      
+      // 仅当位置变化超过1公里时才更新
+      return distance > 1;
+    };
+    
+    if (hasLocationChanged()) {
+      if (location) {
+        previousCoords.current = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude
+        };
+      }
+      fetchWeather();
+    }
+    
+    const weatherInterval = setInterval(fetchWeather, 1800000);
+    return () => clearInterval(weatherInterval);
+  }, [location]);
+  
+  // 辅助函数计算两点之间的距离（单位：公里）
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // 地球半径（公里）
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+  
   return (
     <SafeAreaView style={styles.container}>
       {/* 顶部日期 */}
-      <View style={styles.dateContainer}>
+      <View style={styles.headerContainer}>
         <Text style={styles.dateText}>{formatDate()}</Text>
+        
+        {/* Weather display */}
+        {isLoadingWeather ? (
+          <View style={styles.weatherContainer}>
+            <Text style={styles.weatherText}>...</Text>
+          </View>
+        ) : weatherError ? (
+          <View style={styles.weatherContainer}>
+            <MaterialCommunityIcons 
+              name="weather-cloudy-alert"
+              size={22}
+              color="#ff6b6b"
+              style={styles.weatherIcon}
+            />
+            <Text style={[styles.weatherText, {color: '#ff6b6b'}]}>--°C</Text>
+          </View>
+        ) : weather && (
+          <View style={styles.weatherContainer}>
+            <MaterialCommunityIcons 
+              name={getWeatherIcon(weather.weather[0].icon)}
+              size={22}
+              color="#fff"
+              style={styles.weatherIcon}
+            />
+            <Text style={styles.weatherText}>
+              {Math.round(weather.main.temp)}°C
+            </Text>
+          </View>
+        )}
       </View>
       
       {/* 名言显示 */}
@@ -284,8 +521,9 @@ const HomeScreen = ({ navigation }) => {
       <View style={styles.settingsContainer}>
         <TouchableOpacity 
           style={styles.settingsButton}
-          onPress={() => console.log('Settings pressed')}
+          onPress={() => navigation.navigate('Settings')}
         >
+          <MaterialIcons name="settings" size={18} color="#888" />
           <Text style={styles.settingsText}>SETTINGS</Text>
         </TouchableOpacity>
       </View>
@@ -295,25 +533,118 @@ const HomeScreen = ({ navigation }) => {
   );
 };
 
+// 自定义导航容器组件
+const AppNavigator = () => {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator
+        initialRouteName="Home"
+        screenOptions={({ route, navigation }) => ({
+          headerShown: false,
+          cardStyle: { backgroundColor: '#000' },
+          animationEnabled: true,
+          gestureEnabled: route.name !== 'Home' && route.name !== 'Settings',
+          gestureDirection: route.name === 'Home' ? 'horizontal-inverted' : 'horizontal',
+          gestureResponseDistance: {
+            horizontal: width * 0.5,
+          },
+          cardStyleInterpolator: ({ current, layouts, next }) => {
+            // 检查是否是返回到 Home 屏幕的导航
+            const isGoingHome = next?.route?.name === 'Home' || route.name === 'Home';
+            
+            // 如果是返回到 Home，使用相反的动画方向
+            if (isGoingHome) {
+              return {
+                cardStyle: {
+                  transform: [
+                    {
+                      translateX: current.progress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-layouts.screen.width, 0],
+                      }),
+                    },
+                  ],
+                },
+              };
+            }
+            
+            // 默认从右向左的动画
+            return {
+              cardStyle: {
+                transform: [
+                  {
+                    translateX: current.progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [layouts.screen.width, 0],
+                    }),
+                  },
+                ],
+              },
+            };
+          },
+        })}
+      >
+        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen 
+          name="Meditation" 
+          component={MeditationScreen} 
+          options={{
+            gestureEnabled: true,
+          }}
+        />
+        <Stack.Screen 
+          name="Task" 
+          component={TaskScreen}
+        />
+        <Stack.Screen 
+          name="Focus" 
+          component={FocusScreen}
+        />
+        <Stack.Screen 
+          name="Summary" 
+          component={SummaryScreen}
+        />
+        <Stack.Screen 
+          name="Journal" 
+          component={JournalScreen}
+        />
+        <Stack.Screen 
+          name="Settings" 
+          component={SettingsScreen} 
+          options={{
+            gestureEnabled: false, // 禁用设置页面的手势导航
+          }}
+        />
+        <Stack.Screen 
+          name="JournalEdit" 
+          component={JournalEditScreen} 
+          options={{ headerShown: false }}
+        />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
+
 // 主应用组件
 export default function App() {
+  // 加载字体
+  let [fontsLoaded] = useFonts({
+    Roboto_300Light,
+    Roboto_400Regular, 
+    Roboto_500Medium,
+    Roboto_700Bold
+  });
+
+  // 等待字体加载
+  if (!fontsLoaded) {
+    return <AppLoading />;
+  }
+
   return (
     <>
       <StatusBar hidden={true} />
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <NavigationContainer>
-          <Stack.Navigator
-            initialRouteName="Home"
-            screenOptions={{
-              headerShown: false,
-              cardStyle: { backgroundColor: '#000' },
-              animationEnabled: true,
-            }}
-          >
-            <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen name="Meditation" component={MeditationScreen} />
-          </Stack.Navigator>
-        </NavigationContainer>
+        <AppNavigator />
       </GestureHandlerRootView>
     </>
   );
@@ -325,7 +656,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     padding: 20,
   },
-  dateContainer: {
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
     marginTop: 10,
     marginBottom: 30,
@@ -335,6 +668,23 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '300',
     letterSpacing: 1,
+  },
+  weatherContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  weatherIcon: {
+    marginRight: 5,
+  },
+  weatherText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '400',
   },
   quoteContainer: {
     alignItems: 'center',
@@ -367,7 +717,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   menuText: {
-    fontSize: 30,
+    fontSize: 40,
     fontWeight: '700',
     letterSpacing: 2,
     textAlign: 'center',

@@ -14,7 +14,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.andre.kukai"
+      "bundleIdentifier": "com.andre.kukai",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "This app requires access to save your meditation sessions as mindfulness data",
+        "NSHealthUpdateUsageDescription": "This app requires access to save your meditation sessions as mindfulness data"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -27,6 +31,9 @@
     },
     "androidStatusBar": {
       "hidden": true
-    }
+    },
+    "plugins": [
+      "expo-asset"
+    ]
   }
 }
