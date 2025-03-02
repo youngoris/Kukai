@@ -21,6 +21,7 @@ import { Audio } from 'expo-av';
 import * as Progress from 'react-native-progress';
 import { useFocusEffect } from '@react-navigation/native';
 import Slider from '@react-native-community/slider';
+import { SPACING, FONT_SIZE, FONT_FAMILY, COLORS, LAYOUT, SHADOWS } from './constants/DesignSystem';
 
 // Ignore specific warnings
 LogBox.ignoreLogs(['Animated: `useNativeDriver`']);
@@ -390,14 +391,17 @@ const MeditationScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       {!isMeditating && !isCountingDown && (
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('Home')}>
-          <AntDesign name="arrowleft" size={24} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.navigate('Home')}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerText}>MEDITATION</Text>
+          <View style={styles.headerSpacer} />
+        </View>
       )}
       
       {!selectedDuration && (
-        <View style={styles.selectionContainer}>
-          <Text style={styles.headerText}>MEDITATION</Text>
+        <View style={styles.selectionContent}>
           <Text style={styles.subText}>Qick Start</Text>
           
           <View style={styles.presetContainer}>
@@ -424,7 +428,6 @@ const MeditationScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
             
-            {/* <View style={styles.divider} /> */}
             <View style={styles.customContainer}>
               <Text style={styles.customDurationText}>{customDuration} min</Text>
               
@@ -435,9 +438,9 @@ const MeditationScreen = ({ navigation }) => {
                 step={1}
                 value={customDuration}
                 onValueChange={(value) => setCustomDuration(value)}
-                minimumTrackTintColor="#26de81"
+                minimumTrackTintColor={COLORS.text.primary}
                 maximumTrackTintColor="#444"
-                thumbTintColor="#fff"
+                thumbTintColor={COLORS.text.primary}
               />
               
               <View style={styles.sliderLabels}>
@@ -452,14 +455,6 @@ const MeditationScreen = ({ navigation }) => {
                 <Text style={styles.startButtonText}>Start</Text>
               </TouchableOpacity>
             </View>
-            
-            {/* Test button for debugging
-            <TouchableOpacity 
-              style={[styles.durationButton, styles.testButton]}
-              onPress={() => selectDuration(0.1)}
-            >
-              <Text style={styles.buttonText}>Test (6s)</Text>
-            </TouchableOpacity> */}
           </View>
         </View>
       )}
@@ -476,7 +471,7 @@ const MeditationScreen = ({ navigation }) => {
           <Progress.Circle
             size={200}
             thickness={6}
-            color="#fff"
+            color={COLORS.text.primary}
             unfilledColor="rgba(255, 255, 255, 0.2)"
             borderWidth={0}
             progress={progress}
@@ -514,7 +509,7 @@ const MeditationScreen = ({ navigation }) => {
               );
             }}
           >
-            <MaterialIcons name="close" size={20} color="#fff" />
+            <MaterialIcons name="close" size={20} color={COLORS.text.primary} />
             <Text style={styles.endMeditationText}>Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -526,56 +521,73 @@ const MeditationScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
-    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    padding: SPACING.l,
     justifyContent: 'center',
-    padding: 20,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.l,
+    paddingTop: SPACING.m,
+    paddingBottom: SPACING.m,
+    width: '100%',
+    position: 'absolute',
+    top: SPACING.xl,
+    left: 0,
+    zIndex: 10,
   },
   backButton: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    zIndex: 10,
+    color: COLORS.text.primary,
+    fontSize: FONT_SIZE.xl,
+    fontWeight: 'bold',
+  },
+  headerSpacer: {
+    width: 24,
+  },
+  headerText: {
+    color: COLORS.text.primary,
+    fontSize: FONT_SIZE.xl,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  selectionContent: {
+    alignItems: 'center',
+    width: '100%',
+    justifyContent: 'center',
+    paddingTop: SPACING.xxl,
   },
   selectionContainer: {
     alignItems: 'center',
     width: '100%',
-  },
-  headerText: {
-    color: '#fff',
-    fontSize: 30,
-    fontWeight: '700',
-    marginBottom: 40,
-    letterSpacing: 2,
+    justifyContent: 'center',
   },
   subText: {
-    color: '#aaa',
-    fontSize: 18,
-    marginBottom: 40,
+    color: COLORS.text.secondary,
+    fontSize: FONT_SIZE.l,
+    marginBottom: SPACING.xl,
     fontWeight: '300',
   },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     flexWrap: 'wrap',
-    marginBottom: 30,
+    marginBottom: SPACING.xl,
   },
   durationButton: {
     borderWidth: 1,
     borderColor: '#555',
-    borderRadius: 4,
-    padding: 15,
-    margin: 10,
+    borderRadius: LAYOUT.borderRadius.m,
+    padding: SPACING.m,
+    margin: SPACING.s,
     minWidth: 100,
     alignItems: 'center',
-  },
-  testButton: {
-    backgroundColor: '#222',
-    marginTop: 30,
+    backgroundColor: COLORS.card,
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 16,
+    color: COLORS.text.primary,
+    fontSize: FONT_SIZE.m,
     fontWeight: '500',
   },
   countdownContainer: {
@@ -584,14 +596,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   countdownText: {
-    color: '#fff',
+    color: COLORS.text.primary,
     fontSize: 80,
     fontWeight: '200',
   },
   countdownSubtext: {
-    color: '#aaa',
-    fontSize: 18,
-    marginTop: 20,
+    color: COLORS.text.secondary,
+    fontSize: FONT_SIZE.l,
+    marginTop: SPACING.l,
   },
   meditationContainer: {
     flex: 1,
@@ -599,77 +611,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   progressCircle: {
-    marginBottom: 40,
+    marginBottom: SPACING.xl,
   },
   progressText: {
-    color: '#fff',
+    color: COLORS.text.primary,
     fontSize: 36,
     fontWeight: '200',
   },
   durationText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 16,
-    marginBottom: 20,
+    color: COLORS.text.secondary,
+    fontSize: FONT_SIZE.m,
+    marginBottom: SPACING.l,
   },
   meditationSubtext: {
-    color: '#aaa',
-    fontSize: 18,
-    marginTop: 40,
+    color: COLORS.text.secondary,
+    fontSize: FONT_SIZE.l,
+    marginTop: SPACING.xl,
   },
   endMeditationButton: {
     position: 'absolute',
-    bottom: 50,
+    bottom: SPACING.xxl,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#222',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    backgroundColor: COLORS.card,
+    paddingVertical: SPACING.m,
+    paddingHorizontal: SPACING.l,
+    borderRadius: LAYOUT.borderRadius.m,
     borderWidth: 1,
     borderColor: '#444',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    ...SHADOWS.small,
   },
   endMeditationText: {
-    color: '#fff',
-    fontSize: 16,
+    color: COLORS.text.primary,
+    fontSize: FONT_SIZE.m,
     fontWeight: '500',
-    marginLeft: 8,
+    marginLeft: SPACING.xs,
   },
   presetContainer: {
     width: '100%',
     alignItems: 'center',
   },
   sectionTitle: {
-    color: '#aaa',
-    fontSize: 16,
-    marginBottom: 20,
+    color: COLORS.text.secondary,
+    fontSize: FONT_SIZE.m,
+    marginBottom: SPACING.l,
     alignSelf: 'flex-start',
-    marginLeft: 20,
+    marginLeft: SPACING.l,
   },
   divider: {
     height: 1,
     backgroundColor: '#333',
     width: '90%',
-    marginVertical: 30,
+    marginVertical: SPACING.xl,
   },
   customContainer: {
     width: '90%',
-    backgroundColor: '#111',
-    borderRadius: 12,
-    padding: 20,
+    backgroundColor: COLORS.card,
+    borderRadius: LAYOUT.borderRadius.l,
+    padding: SPACING.l,
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: SPACING.xl,
   },
   customDurationText: {
-    color: '#fff',
-    fontSize: 20,
+    color: COLORS.text.primary,
+    fontSize: FONT_SIZE.xl,
     fontWeight: '600',
-    marginBottom: 20,
+    marginBottom: SPACING.l,
   },
   slider: {
     width: '100%',
@@ -679,25 +687,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    marginTop: 5,
+    marginTop: SPACING.xs,
   },
   sliderLabel: {
-    color: '#777',
-    fontSize: 12,
+    color: COLORS.text.tertiary,
+    fontSize: FONT_SIZE.xs,
   },
   startCustomButton: {
-    backgroundColor: '#26de81',
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 8,
-    marginTop: 30,
+    backgroundColor: COLORS.text.primary,
+    paddingVertical: SPACING.m,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: LAYOUT.borderRadius.m,
+    marginTop: SPACING.xl,
     width: '100%',
     alignItems: 'center',
   },
   startButtonText: {
-    color: '#fff',
+    color: COLORS.background,
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: FONT_SIZE.m,
   },
 });
 

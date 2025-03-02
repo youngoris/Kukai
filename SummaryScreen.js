@@ -63,8 +63,11 @@ const SummaryScreen = ({ navigation }) => {
 
   const loadData = async () => {
     try {
+      // 加载任务数据
       const tasksJson = await AsyncStorage.getItem('tasks');
       let allTasks = [];
+      
+      // 处理tasks数据
       if (tasksJson) {
         allTasks = JSON.parse(tasksJson);
         const completed = allTasks.filter((task) => task.completed);
@@ -74,9 +77,15 @@ const SummaryScreen = ({ navigation }) => {
         const rate = allTasks.length > 0 ? (completed.length / allTasks.length) * 100 : 0;
         setCompletionRate(Math.round(rate));
       } else {
-        throw new Error('Failed to load tasks');
+        // 如果没有任务数据，初始化为空数组而不是抛出错误
+        setCompletedTasks([]);
+        setPendingTasks([]);
+        setCompletionRate(0);
+        // 创建初始的空任务数组并保存
+        await AsyncStorage.setItem('tasks', JSON.stringify([]));
       }
 
+      // 加载冥想数据
       const today = new Date().toISOString().split('T')[0];
       const meditationSessionsJson = await AsyncStorage.getItem('meditationSessions');
       let totalMeditationMinutes = 0;
@@ -92,6 +101,7 @@ const SummaryScreen = ({ navigation }) => {
       }
       setTotalMeditationMinutes(totalMeditationMinutes);
 
+      // 加载专注时间数据
       const focusSessionsJson = await AsyncStorage.getItem('focusSessions');
       if (focusSessionsJson) {
         const focusSessions = JSON.parse(focusSessionsJson);
@@ -105,18 +115,38 @@ const SummaryScreen = ({ navigation }) => {
         setTotalFocusMinutes(totalMinutes);
       }
 
+      // 加载番茄钟计数
       const pomodoros = await AsyncStorage.getItem('pomodoroCount');
       if (pomodoros) {
         setPomodoroCount(parseInt(pomodoros));
       }
 
+      // 加载明日任务
       const tomorrowTasksJson = await AsyncStorage.getItem('tomorrowTasks');
       if (tomorrowTasksJson) {
         setTomorrowTasks(JSON.parse(tomorrowTasksJson));
+      } else {
+        // 如果没有明日任务数据，初始化为空数组
+        setTomorrowTasks([]);
+        await AsyncStorage.setItem('tomorrowTasks', JSON.stringify([]));
       }
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert('Error', 'Failed to load summary data. Please try again.');
+      // 显示友好的错误信息，并提供重试选项
+      Alert.alert(
+        '数据加载错误',
+        '无法加载摘要数据。',
+        [
+          { 
+            text: '重试', 
+            onPress: () => loadData() 
+          },
+          {
+            text: '确定',
+            style: 'cancel'
+          }
+        ]
+      );
     }
   };
 

@@ -10,7 +10,7 @@ import {
   Dimensions,
   Animated
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
@@ -56,15 +56,20 @@ const JournalScreen = ({ navigation }) => {
       const now = new Date();
       const currentYear = now.getFullYear();
       const currentMonth = now.getMonth();
+      const currentDate = now.getDate();
       const daysInMonth = getDaysInMonth(currentYear, currentMonth);
 
-      const days = [];
-      for (let i = 0; i < daysInMonth; i++) {
-        const date = new Date(currentYear, currentMonth, i + 1);
-        const dateString = date.toISOString().split('T')[0];
+      const days = Array(daysInMonth).fill(false);
+      
+      for (let i = 1; i <= daysInMonth; i++) {
+        const month = String(currentMonth + 1).padStart(2, '0');
+        const day = String(i).padStart(2, '0');
+        const dateString = `${currentYear}-${month}-${day}`;
+        
         const hasEntry = await AsyncStorage.getItem(`journal_${dateString}`);
-        days[i] = !!hasEntry;
+        days[i-1] = !!hasEntry;
       }
+      
       setEntriesByDay(days);
 
       const journalData = await AsyncStorage.getItem('journal');
@@ -80,7 +85,8 @@ const JournalScreen = ({ navigation }) => {
           setSavedJournalMeta({
             location: todayJournal.location,
             weather: todayJournal.weather,
-            temperature: todayJournal.temperature
+            temperature: todayJournal.temperature,
+            mood: todayJournal.mood
           });
         } else {
           setSavedJournal('');
@@ -88,35 +94,92 @@ const JournalScreen = ({ navigation }) => {
         }
       }
 
-      let currentStreak = 0;
-      for (let i = 0; i < days.length; i++) {
-        if (days[i]) currentStreak++;
-        else break;
+      // 修复连续记录计算
+      // 使用相同的日期格式化函数获取今天的日期
+      const formatDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+      
+      const todayFormatted = formatDate(now);
+      const todayEntry = await AsyncStorage.getItem(`journal_${todayFormatted}`);
+      let currentStreak = todayEntry ? 1 : 0;
+      
+      if (currentStreak > 0) {
+        // 从昨天开始向前检查
+        const checkDate = new Date(now);
+        checkDate.setDate(checkDate.getDate() - 1);
+        
+        while (true) {
+          const dateStr = formatDate(checkDate);
+          const hasEntry = await AsyncStorage.getItem(`journal_${dateStr}`);
+          
+          if (hasEntry) {
+            currentStreak++;
+            checkDate.setDate(checkDate.getDate() - 1);
+          } else {
+            break;
+          }
+        }
       }
+      
       setStreak(currentStreak);
 
-      const monthCounts = Array(12).fill(0);
+      const monthStatus = Array(12).fill(0);
       const journalKeys = await AsyncStorage.getAllKeys();
       const journalEntries = journalKeys.filter(key => key.startsWith('journal_'));
       
+      // 用于月度统计的计数数组
+      const monthCounts = Array(12).fill(0);
+      
+      // 使用正确的日期格式分析journal键
       journalEntries.forEach(key => {
-        const date = key.replace('journal_', '');
-        const year = parseInt(date.split('-')[0]);
-        if (year === currentYear) {
-          const month = parseInt(date.split('-')[1]) - 1;
-          monthCounts[month]++;
+        const dateString = key.replace('journal_', '');
+        // 确保日期格式正确：YYYY-MM-DD
+        const dateParts = dateString.split('-');
+        if (dateParts.length === 3) {
+          const year = parseInt(dateParts[0]);
+          const month = parseInt(dateParts[1]) - 1; // 月份从0开始
+          
+          if (year === currentYear && month >= 0 && month < 12) {
+            monthCounts[month]++;
+          }
         }
       });
-      setEntriesByMonth(monthCounts);
+      
+      // 确定每个月的状态
+      for (let i = 0; i < 12; i++) {
+        if (monthCounts[i] === 0) {
+          // 无日志
+          monthStatus[i] = 0;
+        } else {
+          const daysInThisMonth = getDaysInMonth(currentYear, i);
+          if (monthCounts[i] >= daysInThisMonth) {
+            // 全部完成
+            monthStatus[i] = 2;
+          } else {
+            // 部分完成
+            monthStatus[i] = 1;
+          }
+        }
+      }
+      
+      setEntriesByMonth(monthStatus);
     } catch (error) {
       console.error('Error loading journal data:', error);
     }
   };
 
   const renderDayDots = () => {
-    const todayDate = new Date().getDate();
+    const today = new Date();
+    const todayDate = today.getDate();
+    
     return entriesByDay.map((hasEntry, index) => {
-      const isToday = index === todayDate - 1;
+      const day = index + 1;
+      const isToday = day === todayDate;
+      
       return (
         <View 
           key={index}
@@ -130,7 +193,15 @@ const JournalScreen = ({ navigation }) => {
     });
   };
 
-  // Rest of the component (saveJournal, clearJournal, renderMonthBars, etc.) remains unchanged
+  // 获取心情图标
+  const getMoodIcon = (moodType) => {
+    switch(moodType) {
+      case 'happy': return 'emoticon-happy-outline';
+      case 'calm': return 'emoticon-neutral-outline';
+      case 'sad': return 'emoticon-sad-outline';
+      default: return null;
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -156,43 +227,52 @@ const JournalScreen = ({ navigation }) => {
               <View style={styles.statCard}>
                 <Text style={styles.statTitle}>RECORDS THIS YEAR</Text>
                 <View style={styles.monthDotsContainer}>
-                  {entriesByMonth.map((count, index) => (
+                  {entriesByMonth.map((status, index) => (
                     <View 
                       key={index}
                       style={[
                         styles.monthDot,
-                        count > 0 && styles.monthDotActive
+                        status === 1 ? styles.monthDotPartial : null,
+                        status === 2 ? styles.monthDotActive : null
                       ]}
-                    />
+                    >
+                      {status === 1 && (
+                        <View style={styles.monthDotHalfFilled} />
+                      )}
+                    </View>
                   ))}
                 </View>
               </View>
             </View>
             
             <View style={styles.calendarContainer}>
-              <Text style={styles.calendarLabel}>This Month</Text>
+              <Text style={styles.calendarLabel}>THIS MONTH</Text>
               <View style={styles.calendarDots}>
                 {renderDayDots()}
               </View>
             </View>
             
             <View style={styles.journalContainer}>
-              <Text style={styles.journalLabel}>Today's Reflections</Text>
+              <Text style={styles.journalLabel}>TODAY'S REFLECTIONS</Text>
               <TouchableOpacity 
                 style={styles.journalButton}
                 onPress={() => navigation.navigate('JournalEdit', {
                   savedJournal: savedJournal,
-                  date: today
+                  date: today,
+                  location: savedJournalMeta?.location,
+                  weather: savedJournalMeta?.weather,
+                  temperature: savedJournalMeta?.temperature,
+                  mood: savedJournalMeta?.mood
                 })}
               >
                 <MaterialIcons name="edit" size={22} color="#CCCCCC" />
                 <Text style={styles.journalButtonText}>
-                  {savedJournal ? 'Edit today\'s journal' : 'Write in your journal'}
+                  {savedJournal ? 'EDIT TODAY\'S JOURNAL' : 'WRITE IN YOUR JOURNAL'}
                 </Text>
               </TouchableOpacity>
             </View>
             
-            <Text style={styles.sectionTitle}>Journal Entries</Text>
+            <Text style={styles.sectionTitle}>JOURNAL LIST</Text>
           </>
         }
         data={allJournals}
@@ -203,17 +283,33 @@ const JournalScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('JournalEdit', {
               savedJournal: item.text,
               date: item.date,
-              viewOnly: true
+              viewOnly: true,
+              location: item.location,
+              weather: item.weather,
+              temperature: item.temperature,
+              mood: item.mood
             })}
           >
             <View style={styles.journalItemContent}>
-              <Text style={styles.journalItemDate}>
-                {new Date(item.date).toLocaleDateString('en-US', { 
-                  month: 'short', 
-                  day: 'numeric',
-                  year: 'numeric'
-                })}
-              </Text>
+              <View style={styles.journalItemHeader}>
+                <Text style={styles.journalItemDate}>
+                  {new Date(item.date).toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
+                </Text>
+                {item.mood && (
+                  <>
+                    <Text style={{color: '#666', marginHorizontal: 1}}>·</Text>
+                    <MaterialCommunityIcons 
+                      name={getMoodIcon(item.mood)} 
+                      size={16} 
+                      color="#CCCCCC" 
+                    />
+                  </>
+                )}
+              </View>
               <Text style={styles.journalItemPreview} numberOfLines={1}>
                 {item.text}
               </Text>
@@ -242,26 +338,52 @@ const styles = StyleSheet.create({
   statValue: { color: '#fff', fontSize: 36, fontWeight: '300' },
   statUnit: { color: '#666', fontSize: 14 },
   monthDotsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 },
-  monthDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#333', margin: 4 },
+  monthDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#333', margin: 4, overflow: 'hidden', position: 'relative' },
   monthDotActive: { backgroundColor: '#FFFFFF' },
-  calendarContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 30 },
+  monthDotPartial: { backgroundColor: '#333' },
+  monthDotHalfFilled: { 
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: 6,
+    height: 12,
+    backgroundColor: '#FFFFFF'
+  },
+  calendarContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 30, paddingHorizontal: 15 },
   calendarLabel: { color: '#aaa', fontSize: 14, marginBottom: 12 },
   calendarDots: { flexDirection: 'row', flexWrap: 'wrap' },
   calendarDot: { width: CALENDAR_DOT_SIZE, height: CALENDAR_DOT_SIZE, borderRadius: CALENDAR_DOT_SIZE / 2, margin: 3 },
   emptyDot: { backgroundColor: '#222' },
   filledDot: { backgroundColor: '#FFFFFF' },
   todayDot: { borderWidth: 2, borderColor: '#FFFFFF' },
-  journalContainer: { backgroundColor: '#111', borderRadius: 12, padding: 20, marginBottom: 40 },
+  journalContainer: { backgroundColor: '#111', borderRadius: 12, padding: 15, marginBottom: 20 },
   journalLabel: { color: '#aaa', fontSize: 14, marginBottom: 15 },
   journalButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#000', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#333', marginBottom: 10 },
   journalButtonText: { color: '#CCCCCC', fontSize: 16, marginLeft: 10 },
-  sectionTitle: { color: '#aaa', fontSize: 16, fontWeight: '500', marginBottom: 15 },
+  sectionTitle: { color: '#aaa', fontSize: 16, fontWeight: '500', marginBottom: 15, paddingHorizontal: 15 },
   journalItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#111', borderRadius: 8, padding: 16, marginBottom: 10 },
   journalItemContent: { flex: 1 },
-  journalItemDate: { color: '#fff', fontSize: 14, fontWeight: '500', marginBottom: 4 },
+  journalItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center', 
+    marginBottom: 4,
+  },
+  journalItemDate: { 
+    color: '#fff', 
+    fontSize: 14, 
+    fontWeight: '500',
+  },
+  journalItemMoodIcon: {
+    marginLeft: 6,
+  },
   journalItemPreview: { color: '#aaa', fontSize: 14 },
   emptyText: { color: '#666', fontSize: 14, textAlign: 'center', padding: 20 },
-  flatListContent: { paddingHorizontal: 20, paddingBottom: 40 }
+  flatListContent: { paddingHorizontal: 20, paddingBottom: 40 },
+  journalItemMeta: { 
+    color: '#888', 
+    fontSize: 12, 
+    marginBottom: 4 
+  }
 });
 
 export default JournalScreen;
