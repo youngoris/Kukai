@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -61,6 +61,12 @@ const SettingsScreen = ({ navigation }) => {
   const [currentValue, setCurrentValue] = useState(null);
   const [currentSetter, setCurrentSetter] = useState(null);
   const [currentModalTitle, setCurrentModalTitle] = useState('');
+  
+  // 添加一个状态来跟踪设置是否已更改
+  const [settingsChanged, setSettingsChanged] = useState(false);
+  
+  // 添加一个防抖定时器引用
+  const saveTimeoutRef = useRef(null);
   
   // Sound theme options
   const soundThemes = [
@@ -143,6 +149,83 @@ const SettingsScreen = ({ navigation }) => {
     loadSettings();
     checkNotificationPermissions();
   }, []);
+  
+  // 添加自动保存功能的useEffect
+  useEffect(() => {
+    // 只有当设置已更改时才自动保存
+    if (settingsChanged) {
+      // 清除之前的定时器
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      
+      // 设置新的定时器，延迟1秒后保存
+      saveTimeoutRef.current = setTimeout(() => {
+        autoSaveSettings();
+        setSettingsChanged(false);
+      }, 1000);
+    }
+    
+    // 组件卸载时清除定时器
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [
+    meditationDuration, selectedSoundTheme,
+    focusDuration, breakDuration, longBreakDuration, longBreakInterval,
+    focusNotifications, autoStartNextFocus, differentWeekendSettings,
+    includeWeather, includeLocation, markdownSupport, journalReminder,
+    journalReminderTime, selectedJournalTemplate,
+    darkMode, appTheme, fontSizeScale, notificationsEnabled, syncEnabled,
+    settingsChanged
+  ]);
+  
+  // 自动保存设置的函数
+  const autoSaveSettings = async () => {
+    try {
+      const settings = {
+        // Meditation settings
+        meditationDuration,
+        selectedSoundTheme,
+        
+        // Focus settings
+        focusDuration,
+        breakDuration,
+        longBreakDuration,
+        longBreakInterval,
+        focusNotifications,
+        autoStartNextFocus,
+        differentWeekendSettings,
+        
+        // Journal settings
+        includeWeather,
+        includeLocation,
+        markdownSupport,
+        journalReminder,
+        journalReminderTime: journalReminderTime.toISOString(),
+        selectedJournalTemplate,
+        
+        // General settings
+        darkMode,
+        appTheme,
+        fontSizeScale,
+        notificationsEnabled,
+        syncEnabled
+      };
+      
+      console.log('Auto-saving settings:', settings);
+      await AsyncStorage.setItem('userSettings', JSON.stringify(settings));
+      
+      // 设置日志提醒通知（如果启用）
+      if (journalReminder && notificationsEnabled) {
+        await scheduleJournalReminder();
+      }
+    } catch (error) {
+      console.error('Error auto-saving settings:', error);
+    }
+  };
   
   const checkNotificationPermissions = async () => {
     if (notificationsEnabled) {
@@ -357,7 +440,10 @@ const SettingsScreen = ({ navigation }) => {
     
     setCurrentOptions(options);
     setCurrentValue(currentVal);
-    setCurrentSetter(() => setterFunction);
+    setCurrentSetter(() => (newValue) => {
+      setterFunction(newValue);
+      setSettingsChanged(true); // 标记设置已更改
+    });
     setCurrentModalTitle(title);
     setOptionModalVisible(true);
   };
@@ -380,67 +466,68 @@ const SettingsScreen = ({ navigation }) => {
           return setLongBreakInterval;
         case 'Journal Template':
           return setSelectedJournalTemplate;
+        case 'Sound Theme':
+          return setSelectedSoundTheme;
         case 'App Theme':
           return setAppTheme;
         case 'Font Size':
           return setFontSizeScale;
-        case 'Sound Theme':
-          return setSelectedSoundTheme;
         default:
-          console.warn(`No setter found for label: ${label}`);
           return null;
       }
     };
     
     return (
-      <View style={styles.settingRow}>
+      <TouchableOpacity 
+        style={styles.settingRow}
+        onPress={() => openOptionModal(options, value, getSetter(), label)}
+      >
         <View style={styles.settingLabelContainer}>
-          <Text style={styles.settingLabel}>{label}</Text>
+          <Text style={[styles.settingLabel, appTheme === 'light' && styles.lightText]}>{label}</Text>
           {description && <Text style={styles.settingDescription}>{description}</Text>}
         </View>
-        <TouchableOpacity 
-          style={styles.dropdownButton}
-          onPress={() => {
-            const setter = getSetter();
-            if (!setter) {
-              Alert.alert('Error', `Cannot change setting for ${label}`);
-              return;
-            }
-            openOptionModal(options, value, setter, label);
-          }}
-        >
-          <Text style={styles.dropdownButtonText}>
+        <View style={styles.settingValueContainer}>
+          <Text style={[styles.settingValue, appTheme === 'light' && styles.lightText]}>
             {selectedOption ? selectedOption.label : 'Select'}
           </Text>
-          <MaterialIcons name="arrow-drop-down" size={24} color="#CCC" />
-        </TouchableOpacity>
+          <MaterialIcons name="chevron-right" size={22} color="#666666" />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+  
+  // 修改设置开关渲染函数
+  const renderSettingSwitch = (value, setter, label, description = null) => {
+    const toggleSwitch = () => {
+      setter(!value);
+      setSettingsChanged(true); // 标记设置已更改
+    };
+    
+    return (
+      <View style={styles.settingRow}>
+        <View style={styles.settingLabelContainer}>
+          <Text style={[styles.settingLabel, appTheme === 'light' && styles.lightText]}>{label}</Text>
+          {description && <Text style={styles.settingDescription}>{description}</Text>}
+        </View>
+        <Switch
+          trackColor={{ false: "#222222", true: "#777777" }}
+          thumbColor={value ? "#FFFFFF" : "#888888"}
+          ios_backgroundColor="#222222"
+          onValueChange={toggleSwitch}
+          value={value}
+        />
       </View>
     );
   };
   
-  const renderSettingSwitch = (value, onValueChange, label, description = null) => (
-    <View style={styles.settingRow}>
-      <View style={styles.settingLabelContainer}>
-        <Text style={styles.settingLabel}>{label}</Text>
-        {description && <Text style={styles.settingDescription}>{description}</Text>}
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: '#3e3e3e', true: '#5A5A5A' }}
-        thumbColor={value ? '#FFFFFF' : '#f4f3f4'}
-      />
-    </View>
-  );
-  
   const renderTimeSetting = (value, onPress, label, description = null) => (
     <TouchableOpacity style={styles.settingRow} onPress={onPress}>
       <View style={styles.settingLabelContainer}>
-        <Text style={styles.settingLabel}>{label}</Text>
+        <Text style={[styles.settingLabel, appTheme === 'light' && styles.lightText]}>{label}</Text>
         {description && <Text style={styles.settingDescription}>{description}</Text>}
       </View>
       <View style={styles.timeContainer}>
-        <Text style={styles.timeText}>
+        <Text style={[styles.timeText, appTheme === 'light' && styles.lightText]}>
           {value.getHours().toString().padStart(2, '0')}:{value.getMinutes().toString().padStart(2, '0')}
         </Text>
         <MaterialIcons name="access-time" size={20} color="#AAAAAA" style={styles.timeIcon} />
@@ -464,6 +551,15 @@ const SettingsScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
   
+  // 修改时间选择器处理函数
+  const handleTimeChange = (event, selectedTime) => {
+    setTimePickerVisible(false);
+    if (selectedTime) {
+      setJournalReminderTime(selectedTime);
+      setSettingsChanged(true); // 标记设置已更改
+    }
+  };
+  
   return (
     <SafeAreaView style={[styles.container, appTheme === 'light' && styles.lightContainer]}>
       <View style={[styles.header, appTheme === 'light' && styles.lightHeader]}>
@@ -474,12 +570,7 @@ const SettingsScreen = ({ navigation }) => {
           <MaterialIcons name="arrow-back" size={24} color={appTheme === 'light' ? "#000000" : "#FFFFFF"} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, appTheme === 'light' && styles.lightText]}>Settings</Text>
-        <TouchableOpacity
-          style={styles.saveButton}
-          onPress={saveSettings}
-        >
-          <MaterialIcons name="check" size={24} color={appTheme === 'light' ? "#000000" : "#FFFFFF"} />
-        </TouchableOpacity>
+        <View style={styles.headerRight} />
       </View>
       
       <ScrollView 
@@ -735,10 +826,6 @@ const SettingsScreen = ({ navigation }) => {
                     if (typeof currentSetter === 'function') {
                       currentSetter(item.value);
                       setOptionModalVisible(false);
-                    } else {
-                      console.error('Error: currentSetter is not a function', currentSetter);
-                      Alert.alert('Error', 'An error occurred. Please try again.');
-                      setOptionModalVisible(false);
                     }
                   }}
                 >
@@ -749,19 +836,17 @@ const SettingsScreen = ({ navigation }) => {
                     {item.label}
                   </Text>
                   {currentValue === item.value && (
-                    <MaterialIcons name="check" size={22} color="#FFF" />
+                    <MaterialIcons name="check" size={22} color="#007AFF" />
                   )}
                 </TouchableOpacity>
               )}
             />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]} 
-                onPress={() => setOptionModalVisible(false)}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={() => setOptionModalVisible(false)}
+            >
+              <Text style={styles.modalCancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -781,27 +866,15 @@ const SettingsScreen = ({ navigation }) => {
                 value={journalReminderTime}
                 mode="time"
                 display="spinner"
-                onChange={(event, selectedDate) => {
-                  if (selectedDate) {
-                    setJournalReminderTime(selectedDate);
-                  }
-                }}
+                onChange={handleTimeChange}
                 style={styles.timePicker}
               />
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]} 
-                  onPress={() => setTimePickerVisible(false)}
-                >
-                  <Text style={styles.modalButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.modalButton, styles.confirmButton]} 
-                  onPress={() => setTimePickerVisible(false)}
-                >
-                  <Text style={styles.modalButtonText}>Confirm</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setTimePickerVisible(false)}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -864,7 +937,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#222',
   },
@@ -881,6 +954,10 @@ const styles = StyleSheet.create({
   },
   lightText: {
     color: '#000',
+  },
+  headerRight: {
+    width: 24,
+    height: 24,
   },
   saveButton: {
     padding: 5,
@@ -925,16 +1002,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-  dropdownButton: {
+  settingValueContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#222',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
   },
-  dropdownButtonText: {
+  settingValue: {
     color: '#CCC',
+    fontSize: 16,
     marginRight: 8,
   },
   timeContainer: {
@@ -1059,6 +1133,18 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: '#222',
     marginBottom: 20,
+  },
+  modalCancelButton: {
+    backgroundColor: '#333',
+    padding: 12,
+    alignItems: 'center',
+    borderRadius: 8,
+    marginHorizontal: 5,
+  },
+  modalCancelButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 
