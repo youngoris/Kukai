@@ -26,6 +26,7 @@ const JournalEditScreen = ({ navigation, route }) => {
   const [temperature, setTemperature] = useState(routeTemperature || null);
   const [mood, setMood] = useState(routeMood || null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [loading, setLoading] = useState(true);
   const [locationError, setLocationError] = useState(null);
 
@@ -33,11 +34,20 @@ const JournalEditScreen = ({ navigation, route }) => {
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
-      () => setKeyboardVisible(true)
+      (event) => {
+        const keyboardHeight = event.endCoordinates.height;
+        console.log('Keyboard shown, height:', keyboardHeight);
+        setKeyboardVisible(true);
+        setKeyboardHeight(keyboardHeight);
+      }
     );
     const keyboardDidHideListener = Keyboard.addListener(
       'keyboardDidHide',
-      () => setKeyboardVisible(false)
+      () => {
+        console.log('Keyboard hidden');
+        setKeyboardVisible(false);
+        setKeyboardHeight(0);
+      }
     );
 
     return () => {
@@ -49,7 +59,7 @@ const JournalEditScreen = ({ navigation, route }) => {
   // 修改获取天气信息的部分，添加从API提取位置信息
   const getWeatherAndLocation = async (latitude, longitude) => {
     try {
-      const API_KEY = 'your_api_key';
+      const API_KEY = '847915028262f4981a07546eb43696ce';
       const response = await fetch(
         `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&units=metric&appid=${API_KEY}`
       );
@@ -271,39 +281,46 @@ const markdownStyles = {
     color: '#FFF',
     fontSize: 16,
     lineHeight: 24,
+    fontFamily: Platform.OS === 'ios' ? 'PingFang SC' : 'sans-serif',
   },
   // 标题 - 使用 heading1, heading2 等键名
   heading1: {
     color: '#FFF',
     fontSize: 28,
     fontWeight: 'bold',
-    paddingVertical: 10,
+    paddingBottom: 5,
     borderBottomWidth: 1,
     borderBottomColor: '#444',
+    lineHeight: 36,
+    fontFamily: Platform.OS === 'ios' ? 'PingFang SC' : 'sans-serif',
   },
   heading2: {
     color: '#FFF',
     fontSize: 22,
     fontWeight: 'bold',
     marginVertical: 12,
+    lineHeight: 32,
   },
   heading3: {
     color: '#FFF',
     fontSize: 18,
     fontWeight: 'bold',
     marginVertical: 8,
+    lineHeight: 28,
   },
   heading4: {
     color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
     marginVertical: 6,
+    lineHeight: 26,
   },
   heading5: {
     color: '#FFF',
     fontSize: 14,
     fontWeight: 'bold',
     marginVertical: 4,
+    lineHeight: 24,
   },
   heading6: {
     color: '#FFF',
@@ -311,12 +328,13 @@ const markdownStyles = {
     fontWeight: 'bold',
     fontStyle: 'italic',
     marginVertical: 4,
+    lineHeight: 24,
   },
   // 其他元素
   paragraph: {
     color: '#FFF',
     fontSize: 16,
-    lineHeight: 24,
+    lineHeight: 28,
     marginVertical: 8,
   },
   // 修改列表项样式
@@ -330,14 +348,14 @@ const markdownStyles = {
   bullet_list_item: {
     color: '#FFF', 
     fontSize: 16,
-    lineHeight: 24,
+    lineHeight: 28,
     marginVertical: 4,
     flexDirection: 'row',
   },
   ordered_list_item: {
     color: '#FFF',
     fontSize: 16,
-    lineHeight: 24,
+    lineHeight: 28,
     marginVertical: 4,
     flexDirection: 'row',
   },
@@ -387,7 +405,9 @@ const markdownStyles = {
 const markdownRules = {
   heading1: (node, children, parent, styles) => (
     <View key={node.key} style={{ width: '100%' }}>
-      <Text style={styles.heading1}>{children}</Text>
+      <Text style={[styles.heading1, { textAlign: 'left', letterSpacing: 0.5 }]}>
+        {children}
+      </Text>
     </View>
   ),
   heading2: (node, children, parent, styles) => (
@@ -502,19 +522,40 @@ const markdownRules = {
           >{journalText}</Markdown>
         </ScrollView>
       ) : (
-        <TextInput
-          style={styles.editor}
-          multiline
-          autoFocus
-          placeholder="Write your journal entry here... (supports markdown)"
-          placeholderTextColor="#666"
-          value={journalText}
-          onChangeText={setJournalText}
-        />
+        <ScrollView 
+          style={{flex: 1}} 
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            flexGrow: 1, 
+            paddingBottom: keyboardVisible ? keyboardHeight + 60 : 20
+          }}
+        >
+          <TextInput
+            style={styles.editor}
+            multiline
+            autoFocus
+            keyboardAppearance="dark"
+            placeholder="Write your journal entry here... (supports markdown)"
+            placeholderTextColor="#666"
+            value={journalText}
+            onChangeText={setJournalText}
+          />
+        </ScrollView>
       )}
       
       {/* 底部显示区域 */}
-      <View style={styles.infoBar}>
+      <View style={[
+        styles.infoBar, 
+        keyboardVisible && !viewOnly ? {
+          position: 'absolute', 
+          bottom: keyboardHeight, 
+          left: 0, 
+          right: 0, 
+          backgroundColor: '#000',
+          borderTopWidth: 1,
+          borderTopColor: '#222',
+        } : {}
+      ]}>
         {loading ? (
           <Text style={styles.loadingText}>Loading location and weather...</Text>
         ) : (

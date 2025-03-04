@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 const CALENDAR_DOT_SIZE = 8;
@@ -30,6 +31,15 @@ const JournalScreen = ({ navigation }) => {
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadJournalData();
+      return () => {
+        // 清理函数（如果需要）
+      };
+    }, [])
+  );
 
   useEffect(() => {
     StatusBar.setHidden(true);
@@ -105,13 +115,32 @@ const JournalScreen = ({ navigation }) => {
       
       const todayFormatted = formatDate(now);
       const todayEntry = await AsyncStorage.getItem(`journal_${todayFormatted}`);
-      let currentStreak = todayEntry ? 1 : 0;
       
-      if (currentStreak > 0) {
-        // 从昨天开始向前检查
-        const checkDate = new Date(now);
+      // 计算streak时，首先检查今天是否有记录，如果没有，再检查昨天
+      let currentStreak = 0;
+      let checkDate = new Date(now);
+      
+      if (todayEntry) {
+        // 如果今天有记录，streak至少为1
+        currentStreak = 1;
+        // 从昨天开始向前检查连续的记录
         checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        // 如果今天没有记录，检查昨天
+        checkDate.setDate(checkDate.getDate() - 1);
+        const yesterdayFormatted = formatDate(checkDate);
+        const yesterdayEntry = await AsyncStorage.getItem(`journal_${yesterdayFormatted}`);
         
+        if (yesterdayEntry) {
+          // 如果昨天有记录，streak为1
+          currentStreak = 1;
+          // 从前天开始向前检查连续的记录
+          checkDate.setDate(checkDate.getDate() - 1);
+        }
+      }
+      
+      // 如果已经有streak了，继续向前检查更早的日期
+      if (currentStreak > 0) {
         while (true) {
           const dateStr = formatDate(checkDate);
           const hasEntry = await AsyncStorage.getItem(`journal_${dateStr}`);
