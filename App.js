@@ -326,6 +326,23 @@ const HomeScreen = ({ navigation }) => {
   useEffect(() => {
     const fetchWeather = async () => {
       try {
+        // 首先检查 AsyncStorage 中是否有最近的天气数据
+        const savedWeatherData = await AsyncStorage.getItem('currentWeatherData');
+        
+        if (savedWeatherData) {
+          const parsedWeatherData = JSON.parse(savedWeatherData);
+          const savedTimestamp = new Date(parsedWeatherData.timestamp);
+          const currentTime = new Date();
+          
+          // 如果天气数据不超过3小时，直接使用缓存的数据
+          if ((currentTime - savedTimestamp) < 3 * 60 * 60 * 1000) {
+            console.log('使用缓存的天气数据');
+            setWeather(parsedWeatherData.data);
+            setIsLoadingWeather(false);
+            return;
+          }
+        }
+        
         setIsLoadingWeather(true);
         setWeatherError(null);
         
@@ -334,6 +351,7 @@ const HomeScreen = ({ navigation }) => {
         if (status !== 'granted') {
           setWeatherError('Location permission denied');
           console.log('Location permission denied');
+          setIsLoadingWeather(false);
           return;
         }
 
@@ -381,47 +399,12 @@ const HomeScreen = ({ navigation }) => {
       }
     };
 
-    // 检查坐标是否显著变化
-    const hasLocationChanged = () => {
-      if (!previousCoords.current || !location) return true;
-      
-      const distance = calculateDistance(
-        previousCoords.current.latitude,
-        previousCoords.current.longitude,
-        location.coords.latitude,
-        location.coords.longitude
-      );
-      
-      // 仅当位置变化超过1公里时才更新
-      return distance > 1;
-    };
+    // 只在应用启动时获取一次天气数据，而不是基于位置变化
+    fetchWeather();
     
-    if (hasLocationChanged()) {
-      if (location) {
-        previousCoords.current = {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude
-        };
-      }
-      fetchWeather();
-    }
-    
-    const weatherInterval = setInterval(fetchWeather, 1800000);
-    return () => clearInterval(weatherInterval);
-  }, [location]);
-  
-  // 辅助函数计算两点之间的距离（单位：公里）
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // 地球半径（公里）
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  };
+    // 移除基于位置变化的检查和定时刷新
+    // 不再需要 weatherInterval
+  }, []); // 依赖数组为空，确保只在组件挂载时执行一次
   
   return (
     <SafeAreaView style={styles.container}>

@@ -92,10 +92,23 @@ const JournalEditScreen = ({ navigation, route }) => {
     }
   };
 
-  // 修改位置获取函数以调用天气API
+  // 修改位置获取函数以使用缓存的天气数据
   const getLocationAndWeather = async () => {
     setLoading(true);
     try {
+      // 首先尝试从 AsyncStorage 获取缓存的天气数据
+      const savedWeatherData = await AsyncStorage.getItem('currentWeatherData');
+      
+      if (savedWeatherData) {
+        const parsedWeatherData = JSON.parse(savedWeatherData);
+        setWeather(parsedWeatherData.weather);
+        setTemperature(parsedWeatherData.temperature);
+        setLocation(parsedWeatherData.location);
+        setLoading(false);
+        return;
+      }
+      
+      // 如果没有缓存数据，则获取位置和天气
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setLocationError('Permission to access location was denied');
