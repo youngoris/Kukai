@@ -24,9 +24,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 const SettingsScreen = ({ navigation }) => {
   // Meditation Settings
   const [meditationDuration, setMeditationDuration] = useState(10);
-  const [meditationSounds, setMeditationSounds] = useState(true);
   const [selectedSoundTheme, setSelectedSoundTheme] = useState('rain');
-  const [guidedMeditation, setGuidedMeditation] = useState(false);
   
   // Focus Settings
   const [focusDuration, setFocusDuration] = useState(25);
@@ -66,11 +64,14 @@ const SettingsScreen = ({ navigation }) => {
   
   // Sound theme options
   const soundThemes = [
+    { value: 'silence', label: 'Silence' },
+    { value: 'whitenoise', label: 'Bright' },
+    { value: 'brownnoise', label: 'Dark' },
     { value: 'rain', label: 'Rain' },
     { value: 'forest', label: 'Forest' },
     { value: 'ocean', label: 'Ocean' },
-    { value: 'whitenoise', label: 'White Noise' },
-    { value: 'silence', label: 'Silence' }
+    { value: 'fire', label: 'Fire' },
+    { value: 'plane', label: 'Plane' }
   ];
   
   // Journal template options
@@ -158,15 +159,14 @@ const SettingsScreen = ({ navigation }) => {
   
   const loadSettings = async () => {
     try {
-      const settings = await AsyncStorage.getItem('appSettings');
+      const settings = await AsyncStorage.getItem('userSettings');
       if (settings) {
         const parsedSettings = JSON.parse(settings);
+        console.log('Loading settings from storage:', parsedSettings);
         
         // Meditation settings
         setMeditationDuration(parsedSettings.meditationDuration || 10);
-        setMeditationSounds(parsedSettings.meditationSounds !== false);
         setSelectedSoundTheme(parsedSettings.selectedSoundTheme || 'rain');
-        setGuidedMeditation(parsedSettings.guidedMeditation || false);
         
         // Focus settings
         setFocusDuration(parsedSettings.focusDuration || 25);
@@ -204,9 +204,7 @@ const SettingsScreen = ({ navigation }) => {
       const settings = {
         // Meditation settings
         meditationDuration,
-        meditationSounds,
         selectedSoundTheme,
-        guidedMeditation,
         
         // Focus settings
         focusDuration,
@@ -233,7 +231,8 @@ const SettingsScreen = ({ navigation }) => {
         syncEnabled
       };
       
-      await AsyncStorage.setItem('appSettings', JSON.stringify(settings));
+      console.log('Saving settings:', settings);
+      await AsyncStorage.setItem('userSettings', JSON.stringify(settings));
       
       // Set journal reminder notification if enabled
       if (journalReminder && notificationsEnabled) {
@@ -350,9 +349,15 @@ const SettingsScreen = ({ navigation }) => {
   
   // Function to open dropdown modal
   const openOptionModal = (options, currentVal, setterFunction, title) => {
+    if (typeof setterFunction !== 'function') {
+      console.error('Error: setterFunction is not a function', setterFunction);
+      Alert.alert('Error', 'An error occurred. Please try again later.');
+      return;
+    }
+    
     setCurrentOptions(options);
     setCurrentValue(currentVal);
-    setCurrentSetter(setterFunction);
+    setCurrentSetter(() => setterFunction);
     setCurrentModalTitle(title);
     setOptionModalVisible(true);
   };
@@ -360,6 +365,32 @@ const SettingsScreen = ({ navigation }) => {
   // Render dropdown option
   const renderDropdownOption = (value, options, label, description = null) => {
     const selectedOption = options.find(option => option.value === value);
+    
+    const getSetter = () => {
+      switch(label) {
+        case 'Duration':
+          return setMeditationDuration;
+        case 'Focus Duration':
+          return setFocusDuration;
+        case 'Break Duration':
+          return setBreakDuration;
+        case 'Long Break Duration':
+          return setLongBreakDuration;
+        case 'Long Break Interval':
+          return setLongBreakInterval;
+        case 'Journal Template':
+          return setSelectedJournalTemplate;
+        case 'App Theme':
+          return setAppTheme;
+        case 'Font Size':
+          return setFontSizeScale;
+        case 'Sound Theme':
+          return setSelectedSoundTheme;
+        default:
+          console.warn(`No setter found for label: ${label}`);
+          return null;
+      }
+    };
     
     return (
       <View style={styles.settingRow}>
@@ -369,16 +400,14 @@ const SettingsScreen = ({ navigation }) => {
         </View>
         <TouchableOpacity 
           style={styles.dropdownButton}
-          onPress={() => openOptionModal(options, value, val => {
-            if (label === 'Duration') setMeditationDuration(val);
-            else if (label === 'Focus Duration') setFocusDuration(val);
-            else if (label === 'Break Duration') setBreakDuration(val);
-            else if (label === 'Long Break Duration') setLongBreakDuration(val);
-            else if (label === 'Long Break Interval') setLongBreakInterval(val);
-            else if (label === 'Journal Template') setSelectedJournalTemplate(val);
-            else if (label === 'App Theme') setAppTheme(val);
-            else if (label === 'Font Size') setFontSizeScale(val);
-          }, label)}
+          onPress={() => {
+            const setter = getSetter();
+            if (!setter) {
+              Alert.alert('Error', `Cannot change setting for ${label}`);
+              return;
+            }
+            openOptionModal(options, value, setter, label);
+          }}
         >
           <Text style={styles.dropdownButtonText}>
             {selectedOption ? selectedOption.label : 'Select'}
@@ -468,25 +497,11 @@ const SettingsScreen = ({ navigation }) => {
             'Set how long your meditation session will last'
           )}
           
-          {renderSettingSwitch(
-            meditationSounds,
-            setMeditationSounds,
-            'Background Sounds',
-            'Play background sounds during meditation'
-          )}
-          
-          {meditationSounds && renderDropdownOption(
+          {renderDropdownOption(
             selectedSoundTheme,
             soundThemes,
             'Sound Theme',
             'Choose your preferred background sound'
-          )}
-          
-          {renderSettingSwitch(
-            guidedMeditation,
-            setGuidedMeditation,
-            'Guided Meditation',
-            'Use voice guidance for meditation practice'
           )}
         </View>
         
@@ -717,8 +732,14 @@ const SettingsScreen = ({ navigation }) => {
                     currentValue === item.value && styles.modalOptionSelected
                   ]}
                   onPress={() => {
-                    currentSetter(item.value);
-                    setOptionModalVisible(false);
+                    if (typeof currentSetter === 'function') {
+                      currentSetter(item.value);
+                      setOptionModalVisible(false);
+                    } else {
+                      console.error('Error: currentSetter is not a function', currentSetter);
+                      Alert.alert('Error', 'An error occurred. Please try again.');
+                      setOptionModalVisible(false);
+                    }
                   }}
                 >
                   <Text style={[

@@ -12,6 +12,9 @@ import {
 } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Progress from 'react-native-progress';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import { COLORS } from './constants/DesignSystem';
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -28,7 +31,7 @@ const BREAK_TIME = 1 * 60; // 5 minutes
 
 export default function FocusScreen({ navigation }) {
   // State variables
-  const [timeRemaining, setTimeRemaining] = useState(FOCUS_TIME);
+  const [timeRemaining, setTimeRemaining] = useState(0);
   const [isActive, setIsActive] = useState(false); 
   const [isBreak, setIsBreak] = useState(false);
   const [pomodoroCount, setPomodoroCount] = useState(0);
@@ -36,12 +39,72 @@ export default function FocusScreen({ navigation }) {
   const [notificationPermission, setNotificationPermission] = useState(false);
   const [showChoice, setShowChoice] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [hasStartedBefore, setHasStartedBefore] = useState(false); // Track if user has started focus before
+  const [hasStartedBefore, setHasStartedBefore] = useState(false);
+  
+  // Focus settings
+  const [focusDuration, setFocusDuration] = useState(25);
+  const [breakDuration, setBreakDuration] = useState(5);
+  const [longBreakDuration, setLongBreakDuration] = useState(15);
+  const [longBreakInterval, setLongBreakInterval] = useState(4);
+  const [focusNotifications, setFocusNotifications] = useState(true);
+  const [autoStartNextFocus, setAutoStartNextFocus] = useState(false);
 
   // Reference variables
   const timer = useRef(null);
   const sessionStartTime = useRef(null);
   const appState = useRef(AppState.currentState);
+  
+  // Load focus settings
+  useFocusEffect(
+    React.useCallback(() => {
+      const loadFocusSettings = async () => {
+        try {
+          const settingsData = await AsyncStorage.getItem('userSettings');
+          if (settingsData) {
+            const parsedSettings = JSON.parse(settingsData);
+            console.log('Loaded focus settings:', parsedSettings);
+            
+            // Update focus settings
+            if (parsedSettings.focusDuration) {
+              setFocusDuration(parsedSettings.focusDuration);
+            }
+            
+            if (parsedSettings.breakDuration) {
+              setBreakDuration(parsedSettings.breakDuration);
+            }
+            
+            if (parsedSettings.longBreakDuration) {
+              setLongBreakDuration(parsedSettings.longBreakDuration);
+            }
+            
+            if (parsedSettings.longBreakInterval) {
+              setLongBreakInterval(parsedSettings.longBreakInterval);
+            }
+            
+            if (parsedSettings.focusNotifications !== undefined) {
+              setFocusNotifications(parsedSettings.focusNotifications);
+            }
+            
+            if (parsedSettings.autoStartNextFocus !== undefined) {
+              setAutoStartNextFocus(parsedSettings.autoStartNextFocus);
+            }
+            
+            // Initialize timeRemaining with focus duration
+            setTimeRemaining(parsedSettings.focusDuration * 60 || 25 * 60);
+          } else {
+            // Default values if no settings found
+            setTimeRemaining(25 * 60);
+          }
+        } catch (error) {
+          console.error('Error loading focus settings:', error);
+          setTimeRemaining(25 * 60);
+        }
+      };
+      
+      loadFocusSettings();
+      return () => {};
+    }, [])
+  );
 
   // Initialize notification permissions and app state listener
   useEffect(() => {
@@ -69,7 +132,7 @@ export default function FocusScreen({ navigation }) {
     if (!sessionStartTime.current) return;
     const now = new Date();
     const elapsedSeconds = Math.floor((now - sessionStartTime.current) / 1000);
-    const totalTime = isBreak ? BREAK_TIME : FOCUS_TIME;
+    const totalTime = isBreak ? (breakDuration * 60) : (focusDuration * 60);
     if (elapsedSeconds >= totalTime) {
       if (!isBreak) handleFocusComplete();
       else handleBreakComplete();
@@ -85,7 +148,7 @@ export default function FocusScreen({ navigation }) {
       timer.current = setInterval(() => {
         setTimeRemaining((prev) => {
           const newTime = prev - 1;
-          const totalTime = isBreak ? BREAK_TIME : FOCUS_TIME;
+          const totalTime = isBreak ? (breakDuration * 60) : (focusDuration * 60);
           setProgress(1 - newTime / totalTime);
           return newTime;
         });
@@ -94,10 +157,10 @@ export default function FocusScreen({ navigation }) {
       clearInterval(timer.current);
       if (!isBreak) handleFocusComplete();
       else handleBreakComplete();
-      if (notificationPermission) triggerNotification();
+      if (focusNotifications && notificationPermission) triggerNotification();
     }
     return () => clearInterval(timer.current);
-  }, [isActive, timeRemaining, isBreak, notificationPermission]);
+  }, [isActive, timeRemaining, isBreak, notificationPermission, focusNotifications, focusDuration, breakDuration]);
 
   // Format time display
   const formatTime = (seconds) => {
@@ -123,7 +186,8 @@ export default function FocusScreen({ navigation }) {
   // Start focus session
   const startFocusSession = () => {
     setIsActive(true);
-    setTimeRemaining(isBreak ? BREAK_TIME : FOCUS_TIME);
+    const currentSessionTime = isBreak ? (breakDuration * 60) : (focusDuration * 60);
+    setTimeRemaining(currentSessionTime);
     sessionStartTime.current = new Date();
     setHasStartedBefore(true);
   };
@@ -131,7 +195,7 @@ export default function FocusScreen({ navigation }) {
   // Resume focus session
   const resumeFocusSession = () => {
     setIsActive(true);
-    const totalTime = isBreak ? BREAK_TIME : FOCUS_TIME;
+    const totalTime = isBreak ? (breakDuration * 60) : (focusDuration * 60);
     const elapsedTime = totalTime - timeRemaining;
     const now = new Date();
     sessionStartTime.current = new Date(now.getTime() - (elapsedTime * 1000));
@@ -160,18 +224,33 @@ export default function FocusScreen({ navigation }) {
   const handleBreakComplete = () => {
     setIsActive(false);
     setIsBreak(false);
-    setTimeRemaining(FOCUS_TIME);
+    setTimeRemaining(focusDuration * 60);
     setProgress(0);
     setShowChoice(false);
     Vibration.vibrate(500);
     setHasStartedBefore(false);
+    
+    // Auto-start next focus session if enabled
+    if (autoStartNextFocus) {
+      setTimeout(() => {
+        setIsActive(true);
+        sessionStartTime.current = new Date();
+      }, 1500);
+    }
   };
 
   // Start break
   const startBreak = () => {
     setShowChoice(false);
     setIsBreak(true);
-    setTimeRemaining(BREAK_TIME);
+    
+    // Check if it's time for a long break
+    let currentBreakDuration = breakDuration;
+    if (pomodoroCount > 0 && pomodoroCount % longBreakInterval === 0) {
+      currentBreakDuration = longBreakDuration;
+    }
+    
+    setTimeRemaining(currentBreakDuration * 60);
     setProgress(0);
     setIsActive(true);
     sessionStartTime.current = new Date();
@@ -181,7 +260,7 @@ export default function FocusScreen({ navigation }) {
   const startNextFocus = () => {
     setShowChoice(false);
     setIsBreak(false);
-    setTimeRemaining(FOCUS_TIME);
+    setTimeRemaining(focusDuration * 60);
     setProgress(0);
     setIsActive(true);
     sessionStartTime.current = new Date();
@@ -189,15 +268,53 @@ export default function FocusScreen({ navigation }) {
 
   // Trigger notification
   const triggerNotification = async () => {
+    // Only send notification if user has enabled focus notifications
+    if (!focusNotifications) return;
+    
+    // Check if it's time for a long break
+    let isLongBreak = false;
+    if (!isBreak && pomodoroCount > 0 && pomodoroCount % longBreakInterval === 0) {
+      isLongBreak = true;
+    }
+    
     await Notifications.presentNotificationAsync({
       content: {
         title: isBreak ? 'Break Time Ended' : 'Focus Time Ended',
         body: isBreak
           ? 'Your break is over! Ready to start another focus session?'
-          : 'Focus complete! Time to take a break or continue?',
+          : isLongBreak 
+            ? `Great work! You've completed ${longBreakInterval} focus sessions. Time for a longer break!`
+            : 'Focus complete! Time to take a break or continue?',
         sound: true,
       },
     });
+  };
+
+  // 添加一个新的渲染函数来生成进度点
+  const renderProgressDots = () => {
+    // 创建长度为longBreakInterval的数组
+    const dots = Array.from({ length: longBreakInterval }, (_, index) => {
+      // 计算当前dot是否是已完成的、当前的，或未完成的
+      const isCompleted = index < pomodoroCount % longBreakInterval;
+      const isCurrent = !isBreak && index === pomodoroCount % longBreakInterval;
+      
+      // 根据状态返回不同样式的点
+      return (
+        <View 
+          key={index} 
+          style={[
+            styles.progressDot,
+            isCompleted || isCurrent ? styles.progressDotFilled : styles.progressDotEmpty
+          ]}
+        />
+      );
+    });
+    
+    return (
+      <View style={styles.progressDotsContainer}>
+        {dots}
+      </View>
+    );
   };
 
   // Render interface
@@ -220,17 +337,24 @@ export default function FocusScreen({ navigation }) {
           <View style={styles.choiceContainer}>
             <Text style={styles.choiceText}>Focus Complete!</Text>
             <Text style={styles.choiceSubtext}>You've completed {pomodoroCount} pomodoros</Text>
+            
+            {/* 根据是否是长休息时间修改显示文本 */}
             <TouchableOpacity style={styles.actionButton} onPress={startBreak}>
-              <Text style={styles.actionButtonText}>Take a 5 min Break</Text>
+              <Text style={styles.actionButtonText}>
+                {pomodoroCount % longBreakInterval === 0 
+                  ? `Take a ${longBreakDuration} min Long Break` 
+                  : `Take a ${breakDuration} min Break`}
+              </Text>
             </TouchableOpacity>
+            
             <TouchableOpacity style={styles.actionButton} onPress={startNextFocus}>
-              <Text style={styles.actionButtonText}>Next 25 min Focus</Text>
+              <Text style={styles.actionButtonText}>Next {focusDuration} min Focus</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <>
             <Text style={styles.subHeaderText}>
-              SESSION {pomodoroCount + (isBreak ? 1 : 1)}
+              {isBreak ? 'BREAK' : 'FOCUS'} {Math.floor(pomodoroCount / longBreakInterval) + 1}.{(pomodoroCount % longBreakInterval) + 1}
             </Text>
             <Text style={styles.subText}>
               {isActive ? 
@@ -249,15 +373,14 @@ export default function FocusScreen({ navigation }) {
                 <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
               </View>
               
+              {/* 添加周期进度指示器 */}
+              {renderProgressDots()}
+              
               <TouchableOpacity style={styles.timerButton} onPress={toggleTimer}>
                 <Text style={styles.timerButtonText}>
                   {isActive ? 'PAUSE' : (hasStartedBefore ? 'RESUME' : 'START')}
                 </Text>
               </TouchableOpacity>
-              
-              <Text style={styles.timerInfoText}>
-                {isBreak ? 'Break: 5 minutes' : 'Focus: 25 minutes'}
-              </Text>
             </View>
           </>
         )}
@@ -273,7 +396,7 @@ export default function FocusScreen({ navigation }) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <Text style={styles.modalText}>Enter Focus Mode?</Text>
-            <Text style={styles.modalSubtext}>This will start a 25-minute focus session.</Text>
+            <Text style={styles.modalSubtext}>This will start a {focusDuration}-minute focus session.</Text>
             <View style={styles.modalButtonContainer}>
               <Pressable style={styles.modalButton} onPress={cancelFocusMode}>
                 <Text style={styles.modalButtonText}>Cancel</Text>
@@ -336,11 +459,6 @@ const styles = StyleSheet.create({
   },
   timerButton: { backgroundColor: '#FFFFFF', padding: 20, borderRadius: 40 },
   timerButtonText: { color: '#000000', fontSize: 20, fontWeight: 'bold' },
-  timerInfoText: { 
-    color: '#666666', 
-    fontSize: 14, 
-    marginVertical: 20
-  },
   choiceContainer: { alignItems: 'center' },
   choiceText: { color: '#FFFFFF', fontSize: 24, fontWeight: '500', marginBottom: 10 },
   choiceSubtext: { color: '#666666', fontSize: 16, marginBottom: 20 },
@@ -400,5 +518,26 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  progressDotsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 15,
+    marginBottom: 20,
+  },
+  progressDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginHorizontal: 5,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
+  progressDotEmpty: {
+    backgroundColor: 'transparent',
+  },
+  progressDotFilled: {
+    backgroundColor: '#FFFFFF',
   },
 });

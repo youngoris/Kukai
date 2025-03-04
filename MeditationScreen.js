@@ -14,20 +14,42 @@ import {
   Platform,
   Alert,
   BackHandler,
-  AsyncStorage
+  Image,
+  FlatList
 } from 'react-native';
-import { AntDesign, MaterialIcons } from '@expo/vector-icons';
+import { AntDesign, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import * as Progress from 'react-native-progress';
 import { useFocusEffect } from '@react-navigation/native';
 import Slider from '@react-native-community/slider';
 import { SPACING, FONT_SIZE, FONT_FAMILY, COLORS, LAYOUT, SHADOWS } from './constants/DesignSystem';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Ignore specific warnings
 LogBox.ignoreLogs(['Animated: `useNativeDriver`']);
 
 const { width } = Dimensions.get('window');
 const TIMER_SIZE = width * 0.8;
+
+// Define sound themes
+const soundThemes = [
+  { id: 'silence', label: 'Silence', icon: 'volume-mute', source: null },
+  { id: 'whitenoise', label: 'Bright', icon: 'sunny', source: require('./assets/whitenoise.m4a') },
+  { id: 'brownnoise', label: 'Dark', icon: 'moon', source: require('./assets/brownnoise.m4a') },
+  { id: 'rain', label: 'Rain', icon: 'rainy', source: require('./assets/rain.m4a') },
+  { id: 'forest', label: 'Forest', icon: 'leaf', source: require('./assets/forest.m4a') },
+  { id: 'ocean', label: 'Ocean', icon: 'water', source: require('./assets/ocean.m4a') },
+  { id: 'fire', label: 'Fire', icon: 'flame', source: require('./assets/fire.m4a') },
+  { id: 'plane', label: 'Plane', icon: 'airplane', source: require('./assets/plane.m4a') }
+];
+
+// Define quick duration options
+const durationOptions = [
+  { value: 5, label: '5 min' },
+  { value: 10, label: '10 min' },
+  { value: 15, label: '15 min' },
+  { value: 30, label: '30 min' }
+];
 
 const MeditationScreen = ({ navigation }) => {
   // Session state
@@ -48,13 +70,50 @@ const MeditationScreen = ({ navigation }) => {
   
   // References
   const [sound, setSound] = useState();
+  const [backgroundSound, setBackgroundSound] = useState();
   const meditationTimer = useRef(null);
   const countdownTimer = useRef(null);
   const meditationStartTime = useRef(0);
   const animationFrameId = useRef(null);
   
   // New state variables
-  const [customDuration, setCustomDuration] = useState(30); // Default custom duration
+  const [customDuration, setCustomDuration] = useState(10); // Default custom duration
+  const [selectedSoundTheme, setSelectedSoundTheme] = useState('silence'); // 默认设置为静音
+  
+  // Load settings from AsyncStorage when screen focuses
+  useFocusEffect(
+    useCallback(() => {
+      const loadMeditationSettings = async () => {
+        try {
+          // 使用userSettings作为存储键名以匹配SettingsScreen.js
+          const settingsData = await AsyncStorage.getItem('userSettings');
+          if (settingsData) {
+            const parsedSettings = JSON.parse(settingsData);
+            console.log('Loaded meditation settings:', parsedSettings);
+            
+            // Update meditation duration from settings
+            if (parsedSettings.meditationDuration) {
+              console.log('Setting meditation duration to:', parsedSettings.meditationDuration);
+              setCustomDuration(parsedSettings.meditationDuration);
+            }
+            
+            // Update sound theme from settings
+            if (parsedSettings.selectedSoundTheme) {
+              console.log('Setting sound theme to:', parsedSettings.selectedSoundTheme);
+              setSelectedSoundTheme(parsedSettings.selectedSoundTheme);
+            }
+          } else {
+            console.log('No settings data found');
+          }
+        } catch (error) {
+          console.error('Error loading meditation settings:', error);
+        }
+      };
+      
+      loadMeditationSettings();
+      return () => {};
+    }, [navigation])
+  );
   
   // Handle back button
   useFocusEffect(
@@ -120,6 +179,45 @@ const MeditationScreen = ({ navigation }) => {
     };
   }, []);
   
+  // Play background sound when meditation starts
+  useEffect(() => {
+    const playBackgroundSound = async () => {
+      try {
+        // Unload previous sound if any
+        if (backgroundSound) {
+          await backgroundSound.unloadAsync();
+        }
+        
+        // Don't load sound for silence option
+        if (selectedSoundTheme === 'silence' || !isMeditating) return;
+        
+        // Find the selected sound theme
+        const theme = soundThemes.find(theme => theme.id === selectedSoundTheme);
+        if (!theme || !theme.source) return;
+        
+        // Create and play the sound from local asset
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          theme.source,
+          { volume: 0.5, isLooping: true }
+        );
+        
+        setBackgroundSound(newSound);
+        await newSound.playAsync();
+      } catch (error) {
+        console.log('Error playing background sound:', error);
+      }
+    };
+    
+    playBackgroundSound();
+    
+    return () => {
+      // Clean up background sound when component unmounts
+      if (backgroundSound) {
+        backgroundSound.unloadAsync();
+      }
+    };
+  }, [isMeditating, selectedSoundTheme]);
+  
   // Breathing animation effect
   useEffect(() => {
     if (isMeditating) {
@@ -161,14 +259,14 @@ const MeditationScreen = ({ navigation }) => {
       
       breathAnimation.start();
       pulseAnimation.start();
-      
-      return () => {
+    
+    return () => {
         breathAnimation.stop();
         pulseAnimation.stop();
         // Reset animation values
-        breatheAnim.setValue(1);
-        pulseAnim.setValue(0);
-      };
+      breatheAnim.setValue(1);
+      pulseAnim.setValue(0);
+    };
     }
   }, [isMeditating, breatheAnim, pulseAnim]);
   
@@ -248,20 +346,19 @@ const MeditationScreen = ({ navigation }) => {
     };
   }, [isMeditating, remainingTime, totalTime, selectedDuration]);
   
-  // Modified function to handle duration selection
-  const selectDuration = (minutes) => {
-    setSelectedDuration(minutes);
-    setRemainingTime(minutes * 60);
-    setTotalTime(minutes * 60);
-    setIsCountingDown(true);
-  };
-  
-  // Function to start custom duration meditation
-  const startCustomMeditation = () => {
+  // Function to start meditation with selected duration
+  const startMeditation = () => {
+    console.log('Starting meditation with duration:', customDuration);
     setSelectedDuration(customDuration);
     setRemainingTime(customDuration * 60);
     setTotalTime(customDuration * 60);
     setIsCountingDown(true);
+  };
+  
+  // Function to handle quick duration selection
+  const selectQuickDuration = (minutes) => {
+    console.log('Selected quick duration:', minutes);
+    setCustomDuration(minutes);
   };
   
   // Format time helper (mm:ss)
@@ -279,6 +376,11 @@ const MeditationScreen = ({ navigation }) => {
       meditationTimer.current = null;
     }
     
+    // Stop background sound
+    if (backgroundSound) {
+      backgroundSound.stopAsync();
+    }
+    
     // Reset animation values
     breatheAnim.setValue(1);
     pulseAnim.setValue(0);
@@ -293,7 +395,7 @@ const MeditationScreen = ({ navigation }) => {
     if (typeof callback === 'function') {
       callback();
     }
-  }, [breatheAnim, pulseAnim]);
+  }, [breatheAnim, pulseAnim, backgroundSound]);
   
   // Handle meditation complete
   const handleMeditationComplete = useCallback((durationInMinutes) => {
@@ -323,6 +425,7 @@ const MeditationScreen = ({ navigation }) => {
       const newSession = {
         date: today,
         duration: durationInMinutes,
+        soundTheme: selectedSoundTheme,
         timestamp: new Date().toISOString()
       };
       
@@ -352,7 +455,7 @@ const MeditationScreen = ({ navigation }) => {
     } catch (error) {
       console.log('Error saving meditation session:', error);
     }
-  }, []);
+  }, [selectedSoundTheme]);
   
   // Play completion sound
   const playCompletionSound = useCallback(async () => {
@@ -387,14 +490,14 @@ const MeditationScreen = ({ navigation }) => {
       navigation.navigate('Home');
     }
   }, [isMeditating, isCountingDown, navigation, endMeditation]);
-
+  
   return (
     <SafeAreaView style={styles.container}>
       {!isMeditating && !isCountingDown && (
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.navigate('Home')}>
             <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
+      </TouchableOpacity>
           <Text style={styles.headerText}>MEDITATION</Text>
           <View style={styles.headerSpacer} />
         </View>
@@ -402,30 +505,30 @@ const MeditationScreen = ({ navigation }) => {
       
       {!selectedDuration && (
         <View style={styles.selectionContent}>
-          <Text style={styles.subText}>Qick Start</Text>
-          
-          <View style={styles.presetContainer}>
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity 
-                style={styles.durationButton}
-                onPress={() => selectDuration(3)}
-              >
-                <Text style={styles.buttonText}>3 min</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.durationButton}
-                onPress={() => selectDuration(10)}
-              >
-                <Text style={styles.buttonText}>10 min</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.durationButton}
-                onPress={() => selectDuration(20)}
-              >
-                <Text style={styles.buttonText}>20 min</Text>
-              </TouchableOpacity>
+          {/* Duration Selection */}
+          <View style={styles.durationSection}>
+            <Text style={styles.sectionTitle}>Duration</Text>
+            
+            <View style={styles.quickDurationContainer}>
+              {durationOptions.map((option) => (
+            <TouchableOpacity 
+                  key={option.value}
+                  style={[
+                    styles.quickDurationButton,
+                    customDuration === option.value && styles.quickDurationButtonSelected
+                  ]}
+                  onPress={() => selectQuickDuration(option.value)}
+                >
+                  <Text 
+                    style={[
+                      styles.quickDurationText,
+                      customDuration === option.value && styles.quickDurationTextSelected
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+            </TouchableOpacity>
+              ))}
             </View>
             
             <View style={styles.customContainer}>
@@ -447,15 +550,48 @@ const MeditationScreen = ({ navigation }) => {
                 <Text style={styles.sliderLabel}>1 min</Text>
                 <Text style={styles.sliderLabel}>60 min</Text>
               </View>
-              
-              <TouchableOpacity 
-                style={styles.startCustomButton}
-                onPress={() => startCustomMeditation()}
-              >
-                <Text style={styles.startButtonText}>Start</Text>
-              </TouchableOpacity>
             </View>
           </View>
+          
+          {/* Sound Selection */}
+          <View style={styles.soundSection}>
+            <Text style={styles.sectionTitle}>Background Sound</Text>
+            <View style={styles.soundThemeContainer}>
+              {soundThemes.map((theme) => (
+            <TouchableOpacity 
+                  key={theme.id}
+                  style={[
+                    styles.soundThemeButton,
+                    selectedSoundTheme === theme.id && styles.soundThemeButtonSelected
+                  ]}
+                  onPress={() => setSelectedSoundTheme(theme.id)}
+                >
+                  <Ionicons 
+                    name={theme.icon} 
+                    size={24} 
+                    color={selectedSoundTheme === theme.id ? COLORS.background : COLORS.text.secondary} 
+                  />
+                  <Text 
+                    style={[
+                      styles.soundThemeText,
+                      selectedSoundTheme === theme.id && styles.soundThemeTextSelected
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {theme.label}
+                  </Text>
+            </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          
+          {/* Start Button */}
+          <TouchableOpacity 
+            style={styles.startButton}
+            onPress={startMeditation}
+          >
+            <Text style={styles.startButtonText}>BEGIN</Text>
+          </TouchableOpacity>
         </View>
       )}
       
@@ -484,6 +620,19 @@ const MeditationScreen = ({ navigation }) => {
           <Text style={styles.durationText}>
             {selectedDuration} minute{selectedDuration !== 1 ? 's' : ''} session
           </Text>
+          
+          {selectedSoundTheme !== 'silence' && (
+            <View style={styles.soundIndicator}>
+              <Ionicons 
+                name={soundThemes.find(t => t.id === selectedSoundTheme)?.icon || 'volume-medium'} 
+                size={16} 
+                color={COLORS.text.secondary} 
+              />
+              <Text style={styles.soundIndicatorText}>
+                {soundThemes.find(t => t.id === selectedSoundTheme)?.label || 'Sound'}
+            </Text>
+          </View>
+          )}
           
           <Text style={styles.meditationSubtext}>
             Breathe and relax...
@@ -522,7 +671,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-    padding: SPACING.l,
+    padding: 0,
     justifyContent: 'center',
   },
   header: {
@@ -553,42 +702,56 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   selectionContent: {
+    flex: 1,
     alignItems: 'center',
     width: '100%',
     justifyContent: 'center',
     paddingTop: SPACING.xxl,
+    paddingHorizontal: SPACING.l,
   },
-  selectionContainer: {
-    alignItems: 'center',
+  durationSection: {
     width: '100%',
-    justifyContent: 'center',
+    marginBottom: SPACING.xl,
   },
-  subText: {
+  soundSection: {
+    width: '100%',
+    marginBottom: SPACING.m,
+  },
+  sectionTitle: {
     color: COLORS.text.secondary,
     fontSize: FONT_SIZE.l,
-    marginBottom: SPACING.xl,
-    fontWeight: '300',
+    marginBottom: SPACING.m,
+    fontWeight: '400',
   },
-  buttonContainer: {
+  quickDurationContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    marginBottom: SPACING.xl,
+    justifyContent: 'space-between',
+    marginBottom: SPACING.l,
   },
-  durationButton: {
+  quickDurationButton: {
     borderWidth: 1,
     borderColor: '#555',
     borderRadius: LAYOUT.borderRadius.m,
-    padding: SPACING.m,
-    margin: SPACING.s,
-    minWidth: 100,
+    paddingVertical: SPACING.m,
+    paddingHorizontal: 0,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: COLORS.card,
+    flex: 1,
+    marginHorizontal: 4,
+    aspectRatio: 1.5,
   },
-  buttonText: {
-    color: COLORS.text.primary,
+  quickDurationButtonSelected: {
+    backgroundColor: COLORS.text.primary,
+    borderColor: COLORS.text.primary,
+  },
+  quickDurationText: {
+    color: COLORS.text.secondary,
     fontSize: FONT_SIZE.m,
     fontWeight: '500',
+  },
+  quickDurationTextSelected: {
+    color: COLORS.background,
   },
   countdownContainer: {
     flex: 1,
@@ -609,6 +772,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: SPACING.l,
   },
   progressCircle: {
     marginBottom: SPACING.xl,
@@ -621,7 +785,21 @@ const styles = StyleSheet.create({
   durationText: {
     color: COLORS.text.secondary,
     fontSize: FONT_SIZE.m,
+    marginBottom: SPACING.s,
+  },
+  soundIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.m,
+    borderRadius: LAYOUT.borderRadius.l,
     marginBottom: SPACING.l,
+  },
+  soundIndicatorText: {
+    color: COLORS.text.secondary,
+    fontSize: FONT_SIZE.s,
+    marginLeft: SPACING.xs,
   },
   meditationSubtext: {
     color: COLORS.text.secondary,
@@ -648,30 +826,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: SPACING.xs,
   },
-  presetContainer: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    color: COLORS.text.secondary,
-    fontSize: FONT_SIZE.m,
-    marginBottom: SPACING.l,
-    alignSelf: 'flex-start',
-    marginLeft: SPACING.l,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#333',
-    width: '90%',
-    marginVertical: SPACING.xl,
-  },
   customContainer: {
-    width: '90%',
+    width: '100%',
     backgroundColor: COLORS.card,
     borderRadius: LAYOUT.borderRadius.l,
     padding: SPACING.l,
     alignItems: 'center',
-    marginBottom: SPACING.xl,
   },
   customDurationText: {
     color: COLORS.text.primary,
@@ -693,12 +853,44 @@ const styles = StyleSheet.create({
     color: COLORS.text.tertiary,
     fontSize: FONT_SIZE.xs,
   },
-  startCustomButton: {
+  soundThemeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: SPACING.xs,
+  },
+  soundThemeButton: {
+    borderWidth: 1,
+    borderColor: '#555',
+    borderRadius: LAYOUT.borderRadius.m,
+    padding: SPACING.s,
+    marginBottom: SPACING.m,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.card,
+    width: '22%',
+    aspectRatio: 1,
+  },
+  soundThemeButtonSelected: {
+    backgroundColor: COLORS.text.primary,
+    borderColor: COLORS.text.primary,
+  },
+  soundThemeText: {
+    color: COLORS.text.secondary,
+    fontSize: 10,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  soundThemeTextSelected: {
+    color: COLORS.background,
+  },
+  startButton: {
     backgroundColor: COLORS.text.primary,
     paddingVertical: SPACING.m,
     paddingHorizontal: SPACING.xl,
     borderRadius: LAYOUT.borderRadius.m,
-    marginTop: SPACING.xl,
+    marginTop: SPACING.m,
     width: '100%',
     alignItems: 'center',
   },
