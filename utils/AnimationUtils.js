@@ -1,7 +1,7 @@
 import { Animated, Easing } from 'react-native';
 import { ANIMATION } from '../constants/DesignSystem';
 
-// 淡入动画
+// Fade in animation
 export const fadeIn = (animValue, duration = ANIMATION.duration.normal, callback) => {
   Animated.timing(animValue, {
     toValue: 1,
@@ -11,7 +11,7 @@ export const fadeIn = (animValue, duration = ANIMATION.duration.normal, callback
   }).start(callback);
 };
 
-// 淡出动画
+// Fade out animation
 export const fadeOut = (animValue, duration = ANIMATION.duration.normal, callback) => {
   Animated.timing(animValue, {
     toValue: 0,
@@ -21,7 +21,7 @@ export const fadeOut = (animValue, duration = ANIMATION.duration.normal, callbac
   }).start(callback);
 };
 
-// 滑入动画（从下方）
+// Slide in animation (from bottom)
 export const slideInUp = (animValue, from = 50, duration = ANIMATION.duration.normal, callback) => {
   Animated.timing(animValue, {
     toValue: 0,
@@ -31,7 +31,7 @@ export const slideInUp = (animValue, from = 50, duration = ANIMATION.duration.no
   }).start(callback);
 };
 
-// 缩放动画
+// Scale animation
 export const scale = (animValue, toValue, duration = ANIMATION.duration.normal, callback) => {
   Animated.timing(animValue, {
     toValue: toValue,
@@ -41,7 +41,7 @@ export const scale = (animValue, toValue, duration = ANIMATION.duration.normal, 
   }).start(callback);
 };
 
-// 呼吸动画
+// Breathing animation
 export const breathe = (animValue, min = 0.97, max = 1.03, duration = 4000) => {
   Animated.loop(
     Animated.sequence([
@@ -61,7 +61,7 @@ export const breathe = (animValue, min = 0.97, max = 1.03, duration = 4000) => {
   ).start();
 };
 
-// 按钮按压效果
+// Button press effect
 export const pressAnimation = (animValue, callback) => {
   Animated.sequence([
     Animated.timing(animValue, {

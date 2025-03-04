@@ -20,6 +20,7 @@ import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import CloudBackupSection from './components/CloudBackupSection';
 
 const SettingsScreen = ({ navigation }) => {
   // Meditation Settings
@@ -144,6 +145,9 @@ const SettingsScreen = ({ navigation }) => {
     { value: 4, label: '4 cycles' },
     { value: 5, label: '5 cycles' }
   ];
+  
+  // New state for CloudBackupSection visibility
+  const [showCloudBackup, setShowCloudBackup] = useState(false);
   
   useEffect(() => {
     loadSettings();
@@ -560,6 +564,63 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
   
+  // 处理备份完成后的操作
+  const handleBackupComplete = () => {
+    // 重新加载设置
+    loadSettings();
+  };
+  
+  const clearAllData = async () => {
+    try {
+      // Get all keys
+      const allKeys = await AsyncStorage.getAllKeys();
+      
+      // Filter out keys that shouldn't be deleted
+      const keysToRemove = allKeys.filter(key => 
+        !key.startsWith('expo.') && 
+        !key.startsWith('google_drive_')
+      );
+      
+      // Remove all data
+      await AsyncStorage.multiRemove(keysToRemove);
+      
+      // Reset state
+      setSettings({
+        darkMode: true,
+        notifications: true,
+        journalReminder: true,
+        journalReminderTime: new Date(),
+        focusDuration: 25,
+        breakDuration: 5,
+        longBreakDuration: 15,
+        longBreakInterval: 4,
+        autoStartBreaks: false,
+        autoStartPomodoros: false,
+        soundEnabled: true,
+        vibrationEnabled: true,
+        meditationDuration: 10,
+        meditationSound: 'silence',
+        meditationEndSound: 'bell',
+        meditationBackgroundColor: '#1E1E1E',
+      });
+      
+      Alert.alert('Data Cleared', 'All data has been deleted.');
+    } catch (error) {
+      console.error('Error clearing data:', error);
+      Alert.alert('Error', 'An error occurred while clearing data.');
+    }
+  };
+
+  const showAboutInfo = () => {
+    Alert.alert('About Kukai', 'Version 1.0.0\n\nA personal growth app focused on meditation, focus, and journaling.');
+  };
+
+  const sendFeedback = () => {
+    // Implement feedback mechanism here
+    // For now, just show a confirmation
+    Alert.alert('Send Feedback', 'Thank you for your feedback, it helps us improve the app.');
+  };
+  
   return (
     <SafeAreaView style={[styles.container, appTheme === 'light' && styles.lightContainer]}>
       <View style={[styles.header, appTheme === 'light' && styles.lightHeader]}>
@@ -733,74 +794,69 @@ const SettingsScreen = ({ navigation }) => {
             'Data Sync',
             'Sync your data across devices'
           )}
-          
-          {renderActionButton(
-            () => setExportModalVisible(true),
-            'Export Data',
-            'save-alt',
-            'Backup your data to a file'
-          )}
-          
-          {renderActionButton(
-            importData,
-            'Import Data',
-            'file-upload',
-            'Restore data from backup'
-          )}
-          
-          {renderActionButton(
-            () => {
-              Alert.alert(
-                'Clear All Data',
-                'Are you sure you want to delete all data? This cannot be undone.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { 
-                    text: 'Clear Data', 
-                    style: 'destructive',
-                    onPress: async () => {
-                      try {
-                        await AsyncStorage.clear();
-                        loadSettings(); // Reload default settings
-                        Alert.alert('Data Cleared', 'All data has been deleted.');
-                      } catch (error) {
-                        console.error('Error clearing data:', error);
-                        Alert.alert('Error', 'Error clearing data.');
-                      }
-                    }
-                  }
-                ]
-              );
-            },
-            'Clear All Data',
-            'delete',
-            'Permanently delete all app data',
-            true
-          )}
         </View>
         
+        {/* Data Management Section */}
+        <Text style={styles.sectionTitle}>Data Management</Text>
+        
+        {/* Google Drive Backup */}
+        {renderActionButton(
+          () => {
+            // Show the CloudBackupSection as a modal or navigate to a dedicated screen
+            // For now, we'll just toggle the visibility of the CloudBackupSection
+            setShowCloudBackup(!showCloudBackup);
+          },
+          'Google Drive Backup',
+          'cloud',
+          'Backup and sync data with Google Drive'
+        )}
+        
+        {showCloudBackup && (
+          <View style={styles.cloudBackupContainer}>
+            <CloudBackupSection 
+              navigation={navigation}
+              onBackupComplete={handleBackupComplete}
+            />
+          </View>
+        )}
+        
+        {renderActionButton(
+          exportData,
+          'Local Backup',
+          'save-alt',
+          'Backup data to a local file'
+        )}
+        
+        {renderActionButton(
+          importData,
+          'Restore from Local',
+          'restore',
+          'Restore data from a local backup file'
+        )}
+        
+        {/* Clear Data */}
+        {renderActionButton(
+          clearAllData,
+          'Clear All Data',
+          'delete',
+          'Permanently delete all app data',
+          true
+        )}
+        
         {/* About Section */}
-        <View style={styles.settingSection}>
-          <Text style={[styles.sectionTitle, appTheme === 'light' && styles.lightSectionTitle]}>About</Text>
-          
-          {renderActionButton(
-            () => {
-              // Open about page or show version info
-              Alert.alert('About Kukai', 'Version 1.0.0\n\nA personal growth app focused on meditation, focus, and journaling.');
-            },
-            'Version Info',
-            'info'
-          )}
-          
-          {renderActionButton(
-            () => {
-              // Open feedback form or send email
-              Alert.alert('Send Feedback', 'Thank you for your feedback, it helps us improve the app.');
-            },
-            'Send Feedback',
-            'feedback'
-          )}
-        </View>
+        <Text style={styles.sectionTitle}>About</Text>
+        
+        {renderActionButton(
+          showAboutInfo,
+          'Version Info',
+          'info'
+        )}
+        
+        {renderActionButton(
+          sendFeedback,
+          'Send Feedback',
+          'feedback'
+        )}
       </ScrollView>
       
       {/* Options Modal */}
@@ -1145,6 +1201,13 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '500',
+  },
+  cloudBackupContainer: {
+    marginTop: 10,
+    marginBottom: 10,
+    backgroundColor: '#111',
+    borderRadius: 10,
+    padding: 15,
   },
 });
 

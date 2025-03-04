@@ -20,7 +20,9 @@
     "expo": "~52.0.37",
     "expo-app-loading": "^2.1.1",
     "expo-asset": "~11.0.4",
+    "expo-auth-session": "^6.0.3",
     "expo-av": "~15.0.2",
+    "expo-crypto": "^14.0.2",
     "expo-document-picker": "^13.0.3",
     "expo-file-system": "~18.0.11",
     "expo-haptics": "~14.0.1",
@@ -28,8 +30,10 @@
     "expo-linear-gradient": "~14.0.2",
     "expo-location": "~18.0.7",
     "expo-notifications": "^0.29.13",
+    "expo-sharing": "^13.0.1",
     "expo-status-bar": "~2.0.1",
     "expo-system-ui": "~4.0.8",
+    "expo-web-browser": "^14.0.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-native": "0.76.7",
@@ -44,7 +48,8 @@
     "react-native-safe-area-context": "^5.2.0",
     "react-native-screens": "^4.9.0",
     "react-native-svg": "15.8.0",
-    "react-native-web": "~0.19.13"
+    "react-native-web": "~0.19.13",
+    "react-native-zip-archive": "^7.0.1"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"

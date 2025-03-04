@@ -63,11 +63,11 @@ const SummaryScreen = ({ navigation }) => {
 
   const loadData = async () => {
     try {
-      // 加载任务数据
+      // Load task data
       const tasksJson = await AsyncStorage.getItem('tasks');
       let allTasks = [];
       
-      // 处理tasks数据
+      // Process tasks data
       if (tasksJson) {
         allTasks = JSON.parse(tasksJson);
         const completed = allTasks.filter((task) => task.completed);
@@ -77,15 +77,15 @@ const SummaryScreen = ({ navigation }) => {
         const rate = allTasks.length > 0 ? (completed.length / allTasks.length) * 100 : 0;
         setCompletionRate(Math.round(rate));
       } else {
-        // 如果没有任务数据，初始化为空数组而不是抛出错误
+        // If no task data exists, initialize as empty array instead of throwing an error
         setCompletedTasks([]);
         setPendingTasks([]);
         setCompletionRate(0);
-        // 创建初始的空任务数组并保存
+        // Create initial empty tasks array and save
         await AsyncStorage.setItem('tasks', JSON.stringify([]));
       }
 
-      // 加载冥想数据
+      // Load meditation data
       const today = new Date().toISOString().split('T')[0];
       const meditationSessionsJson = await AsyncStorage.getItem('meditationSessions');
       let totalMeditationMinutes = 0;
@@ -101,7 +101,7 @@ const SummaryScreen = ({ navigation }) => {
       }
       setTotalMeditationMinutes(totalMeditationMinutes);
 
-      // 加载专注时间数据
+      // Load focus time data
       const focusSessionsJson = await AsyncStorage.getItem('focusSessions');
       if (focusSessionsJson) {
         const focusSessions = JSON.parse(focusSessionsJson);
@@ -115,34 +115,34 @@ const SummaryScreen = ({ navigation }) => {
         setTotalFocusMinutes(totalMinutes);
       }
 
-      // 加载番茄钟计数
+      // Load pomodoro count
       const pomodoros = await AsyncStorage.getItem('pomodoroCount');
       if (pomodoros) {
         setPomodoroCount(parseInt(pomodoros));
       }
 
-      // 加载明日任务
+      // Load tomorrow's tasks
       const tomorrowTasksJson = await AsyncStorage.getItem('tomorrowTasks');
       if (tomorrowTasksJson) {
         setTomorrowTasks(JSON.parse(tomorrowTasksJson));
       } else {
-        // 如果没有明日任务数据，初始化为空数组
+        // If no tomorrow tasks data exists, initialize as empty array
         setTomorrowTasks([]);
         await AsyncStorage.setItem('tomorrowTasks', JSON.stringify([]));
       }
     } catch (error) {
       console.error('Error loading data:', error);
-      // 显示友好的错误信息，并提供重试选项
+      // Display friendly error message and provide retry option
       Alert.alert(
-        '数据加载错误',
-        '无法加载摘要数据。',
+        'Data Loading Error',
+        'Unable to load summary data.',
         [
           { 
-            text: '重试', 
+            text: 'Retry', 
             onPress: () => loadData() 
           },
           {
-            text: '确定',
+            text: 'OK',
             style: 'cancel'
           }
         ]

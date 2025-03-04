@@ -20,6 +20,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import JournalEditScreen from './JournalEditScreen';
 import { MaterialIcons } from '@expo/vector-icons';
+import googleDriveService from './services/GoogleDriveService';
 
 const { width, height } = Dimensions.get('window');
 const Stack = createStackNavigator();
@@ -328,24 +329,18 @@ const HomeScreen = ({ navigation }) => {
         setIsLoadingWeather(true);
         setWeatherError(null);
         
-        // 获取位置权限
+        // Request location permission
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          setWeatherError('位置权限被拒绝');
-          setIsLoadingWeather(false);
-          console.log('位置权限被拒绝');
+          setWeatherError('Location permission denied');
+          console.log('Location permission denied');
           return;
         }
 
-        // 获取当前位置 - 添加超时和高精度选项
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 5000,
-          mayShowUserSettingsDialog: true
-        });
-        
+        // Get current location
+        const location = await Location.getCurrentPositionAsync({});
         if (!location) {
-          throw new Error('无法获取位置信息');
+          throw new Error('Unable to get location information');
         }
         
         setLocation(location);
@@ -627,15 +622,36 @@ const AppNavigator = () => {
 
 // 主应用组件
 export default function App() {
-  // 加载字体
+  // Load fonts
   let [fontsLoaded] = useFonts({
     Roboto_300Light,
     Roboto_400Regular, 
     Roboto_500Medium,
     Roboto_700Bold
   });
+  
+  // Initialize Google Drive service
+  useEffect(() => {
+    const initializeGoogleDrive = async () => {
+      try {
+        console.log('Initializing Google Drive service...');
+        const initialized = await googleDriveService.initialize();
+        console.log('Google Drive service initialized:', initialized);
+        
+        // If initialized, check if auto sync is needed
+        if (initialized) {
+          const syncPerformed = await googleDriveService.checkAndPerformAutoSync();
+          console.log('Auto sync check performed:', syncPerformed);
+        }
+      } catch (error) {
+        console.error('Failed to initialize Google Drive service:', error);
+      }
+    };
+    
+    initializeGoogleDrive();
+  }, []);
 
-  // 等待字体加载
+  // Wait for fonts to load
   if (!fontsLoaded) {
     return <AppLoading />;
   }

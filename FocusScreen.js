@@ -290,15 +290,15 @@ export default function FocusScreen({ navigation }) {
     });
   };
 
-  // 添加一个新的渲染函数来生成进度点
+  // Add a new render function to generate progress dots
   const renderProgressDots = () => {
-    // 创建长度为longBreakInterval的数组
+    // Create an array with length of longBreakInterval
     const dots = Array.from({ length: longBreakInterval }, (_, index) => {
-      // 计算当前dot是否是已完成的、当前的，或未完成的
+      // Calculate if the current dot is completed, current, or incomplete
       const isCompleted = index < pomodoroCount % longBreakInterval;
       const isCurrent = !isBreak && index === pomodoroCount % longBreakInterval;
       
-      // 根据状态返回不同样式的点
+      // Return different styled dots based on status
       return (
         <View 
           key={index} 
@@ -338,7 +338,7 @@ export default function FocusScreen({ navigation }) {
             <Text style={styles.choiceText}>Focus Complete!</Text>
             <Text style={styles.choiceSubtext}>You've completed {pomodoroCount} pomodoros</Text>
             
-            {/* 根据是否是长休息时间修改显示文本 */}
+            {/* Modify display text based on whether it's long break time */}
             <TouchableOpacity style={styles.actionButton} onPress={startBreak}>
               <Text style={styles.actionButtonText}>
                 {pomodoroCount % longBreakInterval === 0 
@@ -373,7 +373,7 @@ export default function FocusScreen({ navigation }) {
                 <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
               </View>
               
-              {/* 添加周期进度指示器 */}
+              {/* Add cycle progress indicator */}
               {renderProgressDots()}
               
               <TouchableOpacity style={styles.timerButton} onPress={toggleTimer}>

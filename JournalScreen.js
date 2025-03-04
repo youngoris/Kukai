@@ -36,7 +36,7 @@ const JournalScreen = ({ navigation }) => {
     React.useCallback(() => {
       loadJournalData();
       return () => {
-        // 清理函数（如果需要）
+        // Cleanup function (if needed)
       };
     }, [])
   );
@@ -104,8 +104,8 @@ const JournalScreen = ({ navigation }) => {
         }
       }
 
-      // 修复连续记录计算
-      // 使用相同的日期格式化函数获取今天的日期
+      // Fix streak calculation
+      // Use the same date formatting function to get today's date
       const formatDate = (date) => {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -116,30 +116,30 @@ const JournalScreen = ({ navigation }) => {
       const todayFormatted = formatDate(now);
       const todayEntry = await AsyncStorage.getItem(`journal_${todayFormatted}`);
       
-      // 计算streak时，首先检查今天是否有记录，如果没有，再检查昨天
+      // When calculating streak, first check if there's an entry for today, if not, check yesterday
       let currentStreak = 0;
       let checkDate = new Date(now);
       
       if (todayEntry) {
-        // 如果今天有记录，streak至少为1
+        // If there's an entry for today, streak is at least 1
         currentStreak = 1;
-        // 从昨天开始向前检查连续的记录
+        // Check consecutive entries starting from yesterday
         checkDate.setDate(checkDate.getDate() - 1);
       } else {
-        // 如果今天没有记录，检查昨天
+        // If no entry for today, check yesterday
         checkDate.setDate(checkDate.getDate() - 1);
         const yesterdayFormatted = formatDate(checkDate);
         const yesterdayEntry = await AsyncStorage.getItem(`journal_${yesterdayFormatted}`);
         
         if (yesterdayEntry) {
-          // 如果昨天有记录，streak为1
+          // If there's an entry for yesterday, streak is 1
           currentStreak = 1;
-          // 从前天开始向前检查连续的记录
+          // Check consecutive entries starting from the day before yesterday
           checkDate.setDate(checkDate.getDate() - 1);
         }
       }
       
-      // 如果已经有streak了，继续向前检查更早的日期
+      // If streak is already calculated, continue checking earlier dates
       if (currentStreak > 0) {
         while (true) {
           const dateStr = formatDate(checkDate);
@@ -160,17 +160,17 @@ const JournalScreen = ({ navigation }) => {
       const journalKeys = await AsyncStorage.getAllKeys();
       const journalEntries = journalKeys.filter(key => key.startsWith('journal_'));
       
-      // 用于月度统计的计数数组
+      // Count array for monthly statistics
       const monthCounts = Array(12).fill(0);
       
-      // 使用正确的日期格式分析journal键
+      // Use correct date formatting to analyze journal keys
       journalEntries.forEach(key => {
         const dateString = key.replace('journal_', '');
-        // 确保日期格式正确：YYYY-MM-DD
+        // Ensure correct date format: YYYY-MM-DD
         const dateParts = dateString.split('-');
         if (dateParts.length === 3) {
           const year = parseInt(dateParts[0]);
-          const month = parseInt(dateParts[1]) - 1; // 月份从0开始
+          const month = parseInt(dateParts[1]) - 1; // Months start from 0
           
           if (year === currentYear && month >= 0 && month < 12) {
             monthCounts[month]++;
@@ -178,18 +178,18 @@ const JournalScreen = ({ navigation }) => {
         }
       });
       
-      // 确定每个月的状态
+      // Determine month status
       for (let i = 0; i < 12; i++) {
         if (monthCounts[i] === 0) {
-          // 无日志
+          // No journal
           monthStatus[i] = 0;
         } else {
           const daysInThisMonth = getDaysInMonth(currentYear, i);
           if (monthCounts[i] >= daysInThisMonth) {
-            // 全部完成
+            // All completed
             monthStatus[i] = 2;
           } else {
-            // 部分完成
+            // Partially completed
             monthStatus[i] = 1;
           }
         }
@@ -222,7 +222,7 @@ const JournalScreen = ({ navigation }) => {
     });
   };
 
-  // 获取心情图标
+  // Get mood icon
   const getMoodIcon = (moodType) => {
     switch(moodType) {
       case 'happy': return 'emoticon-happy-outline';
