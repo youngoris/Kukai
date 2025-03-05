@@ -11,7 +11,10 @@ import {
   StatusBar,
   Keyboard,
   Alert,
-  ScrollView
+  ScrollView,
+  Image,
+  Linking,
+  Dimensions
 } from 'react-native';
 import { MaterialIcons, Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -214,6 +217,21 @@ const JournalEditScreen = ({ navigation, route }) => {
   const markdownParserOptions = {
     typographer: true,
     breaks: true,
+    html: true,
+    linkify: true,
+  };
+
+  // 处理引用块内容
+  const processBlockquoteContent = (content) => {
+    if (!content) return '';
+    // 移除引用块前面的 '>' 符号
+    return content.replace(/^>\s*/gm, '').trim();
+  };
+
+  // 自定义图片处理函数
+  const handleImageUri = (uri) => {
+    console.log('Processing image URI:', uri);
+    return uri;
   };
 
 // Markdown 样式
@@ -233,34 +251,38 @@ const markdownStyles = {
     borderBottomWidth: 1,
     borderBottomColor: '#444',
     lineHeight: 36,
+    marginVertical: 15,
     fontFamily: Platform.OS === 'ios' ? 'PingFang SC' : 'sans-serif',
   },
   heading2: {
     color: '#FFF',
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
     marginVertical: 12,
     lineHeight: 32,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#444',
+    paddingBottom: 3,
   },
   heading3: {
     color: '#FFF',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    marginVertical: 8,
+    marginVertical: 10,
     lineHeight: 28,
   },
   heading4: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginVertical: 6,
+    marginVertical: 8,
     lineHeight: 26,
   },
   heading5: {
     color: '#FFF',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginVertical: 4,
+    marginVertical: 6,
     lineHeight: 24,
   },
   heading6: {
@@ -269,36 +291,40 @@ const markdownStyles = {
     fontWeight: 'bold',
     fontStyle: 'italic',
     marginVertical: 4,
-    lineHeight: 24,
+    lineHeight: 22,
   },
   // 其他元素
   paragraph: {
     color: '#FFF',
     fontSize: 16,
-    lineHeight: 28,
+    lineHeight: 24,
     marginVertical: 8,
   },
   // 修改列表项样式
   bullet_list: {
     marginLeft: 10,
+    marginVertical: 8,
   },
   ordered_list: {
     marginLeft: 10,
+    marginVertical: 8,
   },
   // React Native Markdown Display使用这些键名
   bullet_list_item: {
     color: '#FFF', 
     fontSize: 16,
-    lineHeight: 28,
+    lineHeight: 24,
     marginVertical: 4,
     flexDirection: 'row',
+    alignItems: 'center',
   },
   ordered_list_item: {
     color: '#FFF',
     fontSize: 16,
-    lineHeight: 28,
+    lineHeight: 24,
     marginVertical: 4,
     flexDirection: 'row',
+    alignItems: 'center',
   },
   bullet_list_content: {
     flex: 1,
@@ -308,37 +334,108 @@ const markdownStyles = {
     flex: 1,
     color: '#FFF',
   },
+  bullet_list_icon: {
+    marginRight: 8,
+    alignSelf: 'center',
+  },
+  ordered_list_icon: {
+    marginRight: 8,
+    alignSelf: 'center',
+  },
   strong: {
     fontWeight: 'bold',
+    color: '#FFF',
   },
   em: {
     fontStyle: 'italic',
+    color: '#FFF',
   },
   link: {
     color: '#5E9EFF',
     textDecorationLine: 'underline',
   },
   code_inline: {
-    backgroundColor: '#222',
+    backgroundColor: '#333',
     color: '#FFD700',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    padding: 2,
+    padding: 5,
     borderRadius: 3,
+    fontSize: 14,
+    borderColor:'#444',
+    // borderWidth:1,
   },
   code_block: {
     backgroundColor: '#222',
     padding: 10,
-    borderRadius: 5,
+    borderRadius: 3,
     color: '#FFD700',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  fence: {
+    backgroundColor: '#222',
+    padding: 10,
+    borderRadius: 3,
+    color: '#FFD700',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: '#333',
   },
   blockquote: {
     borderLeftWidth: 4,
     borderLeftColor: '#666',
     paddingLeft: 10,
+    paddingVertical: 5,
+    backgroundColor: '#222',
+    borderRadius: 3,
     color: '#CCC',
     fontStyle: 'italic',
-    marginVertical: 8,
+    marginVertical: 10,
+  },
+  hr: {
+    backgroundColor: '#444',
+    height: 1,
+    marginVertical: 15,
+  },
+  table: {
+    borderWidth: 1,
+    borderColor: '#444',
+    borderRadius: 3,
+    marginVertical: 10,
+  },
+  thead: {
+    backgroundColor: '#222',
+    borderBottomWidth: 1,
+    borderBottomColor: '#444',
+  },
+  th: {
+    padding: 8,
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  tbody: {
+    
+  },
+  tr: {
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#333',
+    flexDirection: 'row',
+  },
+  td: {
+    padding: 8,
+    color: '#FFF',
+    fontSize: 14,
+  },
+  image: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    marginVertical: 15,
+    alignSelf: 'center',
   },
 };
 
@@ -376,21 +473,137 @@ const markdownRules = {
       <Text style={styles.heading6}>{children}</Text>
     </View>
   ),
+  image: (node, children, parent, styles) => {
+    // 从node中提取属性
+    const { src, alt } = node.attributes || {};
+    
+    // 调试信息
+    console.log('Image node:', { src, alt });
+    
+    // 确保图片URL是有效的
+    if (!src) {
+      console.log('Image source is empty');
+      return null;
+    }
+    
+    return (
+      <View key={node.key} style={{width: '100%', marginVertical: 15}}>
+        <View style={{
+          width: '100%',
+          // backgroundColor: '#1A1A1A',
+          borderRadius: 8,
+          overflow: 'hidden',
+        }}>
+          <Image 
+            source={{uri: src}} 
+            style={{
+              width: '100%',
+              height: undefined,
+              aspectRatio: 1,
+              resizeMode: 'contain',
+            }}
+            accessible={true}
+            accessibilityLabel={alt || 'Image'}
+          />
+        </View>
+        {alt && <Text style={{color: '#999', fontSize: 12, marginTop: 5, textAlign: 'center'}}>{alt}</Text>}
+      </View>
+    );
+  },
+  fence: (node, children, parent, styles) => {
+    return (
+      <View key={node.key} style={[styles.fence, {marginVertical: 10, width: '100%'}]}>
+        <Text style={{color: '#FFD700', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace'}}>
+          {node.content}
+        </Text>
+      </View>
+    );
+  },
+  blockquote: (node, children, parent, styles) => {
+    // 确保引用块内容正确显示
+    console.log('Blockquote node:', node);
+    
+    // 尝试从node中提取内容
+    let content = '';
+    if (node.content) {
+      content = processBlockquoteContent(node.content);
+    } else if (node.children && node.children.length > 0) {
+      // 尝试从子节点中提取内容
+      content = node.children.map(child => {
+        if (typeof child === 'string') return child;
+        return child.content || '';
+      }).join(' ');
+      content = processBlockquoteContent(content);
+    }
+    
+    return (
+      <View key={node.key} style={styles.blockquote}>
+        {children && children.length > 0 ? (
+          children
+        ) : content ? (
+          <Text style={{color: '#CCC', fontStyle: 'italic'}}>
+            {content}
+          </Text>
+        ) : (
+          <Text style={{color: '#CCC', fontStyle: 'italic'}}>
+            引用内容
+          </Text>
+        )}
+      </View>
+    );
+  },
+  code_block: (node, children, parent, styles) => {
+    return (
+      <View key={node.key} style={[styles.code_block, {marginVertical: 10, width: '100%'}]}>
+        <Text style={{color: '#FFD700', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace'}}>
+          {node.content}
+        </Text>
+      </View>
+    );
+  },
+  bullet_list_item: (node, children, parent, styles) => {
+    return (
+      <View key={node.key} style={styles.bullet_list_item}>
+        <View style={styles.bullet_list_icon}>
+          <Text style={{color: '#FFF', fontSize: 16}}>•</Text>
+        </View>
+        <View style={styles.bullet_list_content}>
+          {children}
+        </View>
+      </View>
+    );
+  },
+  ordered_list_item: (node, children, parent, styles, inheritedProps) => {
+    const number = inheritedProps?.index || 1;
+    return (
+      <View key={node.key} style={styles.ordered_list_item}>
+        <View style={styles.ordered_list_icon}>
+          <Text style={{color: '#FFF', fontSize: 16}}>{number}.</Text>
+        </View>
+        <View style={styles.ordered_list_content}>
+          {children}
+        </View>
+      </View>
+    );
+  },
 };
 
-// Markdown 组件使用
-<ScrollView style={styles.contentScrollView} contentContainerStyle={{ paddingBottom: 20 }}>
-  <Markdown
-    style={markdownStyles}
-    rules={markdownRules}
-    markdownitOptions={{
-      typographer: true,
-      breaks: true,
-    }}
-  >
-    {journalText}
-  </Markdown>
-</ScrollView>
+// 在显示前预处理Markdown
+useEffect(() => {
+  if (viewOnly && journalText) {
+    // 查找所有图片标记
+    const imgRegex = /!\[(.*?)\]\((.*?)\)/g;
+    const matches = [...journalText.matchAll(imgRegex)];
+    
+    if (matches.length > 0) {
+      console.log('Found images in text:', matches.length);
+      matches.forEach((match, index) => {
+        const [fullMatch, alt, url] = match;
+        console.log(`Image ${index + 1}:`, { alt, url });
+      });
+    }
+  }
+}, [viewOnly, journalText]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -458,8 +671,15 @@ const markdownRules = {
           <Markdown 
             style={markdownStyles}
             rules={markdownRules}
-            options={markdownParserOptions}
-            mergeStyle={false}
+            options={{
+              typographer: true,
+              breaks: true,
+              html: true,
+              linkify: true,
+            }}
+            mergeStyle={true}
+            allowedImageHandlers={['data:image/png;base64', 'data:image/gif;base64', 'data:image/jpeg;base64', 'https://', 'http://']}
+            defaultImageHandler={'https://'}
           >{journalText}</Markdown>
         </ScrollView>
       ) : (
@@ -696,6 +916,7 @@ const styles = StyleSheet.create({
   contentScrollView: {
     flex: 1,
     padding: 15,
+    backgroundColor: '#000',
   },
   contentText: {
     color: '#FFF',

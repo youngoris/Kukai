@@ -356,7 +356,7 @@ const JournalScreen = ({ navigation }) => {
 // Styles remain unchanged
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 10, paddingTop: 10, paddingBottom: 30, backgroundColor: '#000' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingTop: 10, paddingBottom: 30, backgroundColor: '#000' },
   backButton: { color: '#FFFFFF', fontSize: 26, fontWeight: 'bold' },
   headerText: { color: '#FFFFFF', fontSize: 24, fontWeight: 'bold', textAlign: 'center' },
   headerSpacer: { width: 24 },

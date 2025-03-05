@@ -14,6 +14,9 @@ import {
   Animated,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import FrogIcon from './assets/frog.svg';
 
 const TaskScreen = ({ navigation }) => {
   const [tasks, setTasks] = useState([]);
@@ -22,7 +25,9 @@ const TaskScreen = ({ navigation }) => {
   const [editText, setEditText] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [isFrogTask, setIsFrogTask] = useState(false); // 标记为“蛙”状态
+  const [isFrogTask, setIsFrogTask] = useState(false); // 标记为"蛙"状态
+  const [isImportant, setIsImportant] = useState(false); // 重要标签
+  const [isUrgent, setIsUrgent] = useState(false); // 紧急标签
   
   const inputRef = useRef(null);
   const editInputRef = useRef(null);
@@ -78,7 +83,9 @@ const TaskScreen = ({ navigation }) => {
       text: newTaskText.trim(),
       completed: false,
       createdAt: new Date().toISOString(),
-      isFrog: isFrogTask, // 保存“蛙”状态
+      isFrog: isFrogTask, // 保存"蛙"状态
+      isImportant: isImportant, // 保存重要状态
+      isUrgent: isUrgent, // 保存紧急状态
     };
 
     const updatedTasks = [newTask, ...tasks].sort((a, b) => {
@@ -91,6 +98,8 @@ const TaskScreen = ({ navigation }) => {
     saveTasks(updatedTasks);
     setNewTaskText('');
     setIsFrogTask(false);
+    setIsImportant(false);
+    setIsUrgent(false);
     closeModal();
   };
 
@@ -113,6 +122,8 @@ const TaskScreen = ({ navigation }) => {
     setEditingTask(task);
     setEditText(task.text);
     setIsFrogTask(task.isFrog || false);
+    setIsImportant(task.isImportant || false);
+    setIsUrgent(task.isUrgent || false);
     setEditModalVisible(true);
 
     setTimeout(() => {
@@ -125,7 +136,13 @@ const TaskScreen = ({ navigation }) => {
     if (editText.trim() === '') return;
 
     const updatedTasks = tasks.map((task) =>
-      task.id === editingTask.id ? { ...task, text: editText.trim(), isFrog: isFrogTask } : task
+      task.id === editingTask.id ? { 
+        ...task, 
+        text: editText.trim(), 
+        isFrog: isFrogTask,
+        isImportant: isImportant,
+        isUrgent: isUrgent
+      } : task
     ).sort((a, b) => {
       if (a.isFrog && !b.isFrog) return -1;
       if (!a.isFrog && b.isFrog) return 1;
@@ -136,6 +153,8 @@ const TaskScreen = ({ navigation }) => {
     saveTasks(updatedTasks);
     setEditModalVisible(false);
     setIsFrogTask(false);
+    setIsImportant(false);
+    setIsUrgent(false);
   };
 
   // 删除任务
@@ -183,6 +202,8 @@ const TaskScreen = ({ navigation }) => {
       setModalVisible(false);
       setNewTaskText('');
       setIsFrogTask(false);
+      setIsImportant(false);
+      setIsUrgent(false);
     });
   };
 
@@ -208,23 +229,74 @@ const TaskScreen = ({ navigation }) => {
         >
           {item.text}
         </Text>
+        <View style={styles.taskTagsContainer}>
+          {item.isFrog && (
+            <View style={[styles.taskTag, styles.frogTag]}>
+              <FrogIcon width={14} height={14} fill="#FFFFFF" />
+              <Text style={styles.taskTagText}>Priority</Text>
+            </View>
+          )}
+          {item.isImportant && (
+            <View style={[styles.taskTag, styles.importantTag]}>
+              <MaterialIcons name="star" size={14} color="#FFFFFF" />
+              <Text style={styles.taskTagText}>Important</Text>
+            </View>
+          )}
+          {item.isUrgent && (
+            <View style={[styles.taskTag, styles.urgentTag]}>
+              <MaterialIcons name="alarm" size={14} color="#FFFFFF" />
+              <Text style={styles.taskTagText}>Urgent</Text>
+            </View>
+          )}
+        </View>
       </TouchableOpacity>
     </View>
   );
 
-  // 渲染“标记为蛙”按钮
-  const renderFrogButton = () => (
-    <View style={styles.frogToggle}>
+  // 渲染标签按钮
+  const renderTagButtons = () => (
+    <View style={styles.tagButtonsContainer}>
       <TouchableOpacity
         style={[
-          styles.frogButton,
+          styles.tagButton,
           isFrogTask && styles.frogButtonActive,
         ]}
         onPress={() => setIsFrogTask(!isFrogTask)}
       >
-        <Text style={styles.frogButtonText}>Frog</Text>
+        <FrogIcon 
+          width={20} 
+          height={20} 
+          fill={isFrogTask ? "#000000" : "#FFFFFF"} 
+        />
       </TouchableOpacity>
-      <Text style={styles.frogText}>Mark as Frog</Text>
+      
+      <TouchableOpacity
+        style={[
+          styles.tagButton,
+          isImportant && styles.tagButtonActive,
+        ]}
+        onPress={() => setIsImportant(!isImportant)}
+      >
+        <MaterialIcons 
+          name="star" 
+          size={20} 
+          color={isImportant ? "#000000" : "#FFFFFF"} 
+        />
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        style={[
+          styles.tagButton,
+          isUrgent && styles.tagButtonActive,
+        ]}
+        onPress={() => setIsUrgent(!isUrgent)}
+      >
+        <MaterialIcons 
+          name="alarm" 
+          size={20} 
+          color={isUrgent ? "#000000" : "#FFFFFF"} 
+        />
+      </TouchableOpacity>
     </View>
   );
 
@@ -294,7 +366,7 @@ const TaskScreen = ({ navigation }) => {
                   <TextInput
                     ref={inputRef}
                     style={styles.modalInput}
-                    placeholder="Add a task…"
+                    placeholder="Add a task..."
                     placeholderTextColor="#666666"
                     value={newTaskText}
                     onChangeText={setNewTaskText}
@@ -302,7 +374,7 @@ const TaskScreen = ({ navigation }) => {
                     returnKeyType="done"
                     onSubmitEditing={addTask}
                   />
-                  {renderFrogButton()}
+                  {renderTagButtons()}
                   <View style={styles.modalButtons}>
                     <TouchableOpacity
                       style={styles.modalButton}
@@ -346,7 +418,7 @@ const TaskScreen = ({ navigation }) => {
                     returnKeyType="done"
                     onSubmitEditing={saveEditedTask}
                   />
-                  {renderFrogButton()}
+                  {renderTagButtons()}
                   <View style={styles.modalButtons}>
                     <TouchableOpacity
                       style={styles.modalButton}
@@ -414,12 +486,11 @@ const styles = StyleSheet.create({
   taskItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#000000',
+    backgroundColor: '#111111',
     paddingVertical: 15,
     paddingHorizontal: 20,
     marginBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333333',
+    borderRadius: 8,
   },
   checkboxContainer: {
     marginRight: 15,
@@ -441,13 +512,43 @@ const styles = StyleSheet.create({
   taskText: {
     color: '#FFFFFF',
     fontSize: 16,
+    marginBottom: 6,
   },
   taskTextCompleted: {
     color: '#666666',
     textDecorationLine: 'line-through',
   },
   taskTextFrog: {
-    fontWeight: 'bold', // 标记为“蛙”的任务加粗显示
+    fontWeight: 'bold', // 标记为"蛙"的任务加粗显示
+    // color: '#2E8B57', // 青蛙任务文本显示为绿色
+  },
+  taskTagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  taskTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#333333',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    marginRight: 6,
+    marginBottom: 4,
+  },
+  frogTag: {
+    backgroundColor: '#2E8B57', // 添加青蛙标签的绿色背景
+  },
+  importantTag: {
+    backgroundColor: '#3D2645',
+  },
+  urgentTag: {
+    backgroundColor: '#832232',
+  },
+  taskTagText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    marginLeft: 4,
   },
   emptyContainer: {
     flex: 1,
@@ -538,12 +639,12 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
     paddingHorizontal: 20,
   },
-  frogToggle: {
+  tagButtonsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 20,
+    justifyContent: 'space-around',
   },
-  frogButton: {
+  tagButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -552,20 +653,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
     borderWidth: 1,
     borderColor: '#666666',
-    marginRight: 10,
+  },
+  tagButtonActive: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
   },
   frogButtonActive: {
     backgroundColor: '#FFFFFF',
     borderColor: '#FFFFFF',
-  },
-  frogButtonText: {
-    color: '#666666',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  frogText: {
-    color: '#FFFFFF',
-    fontSize: 14,
   },
 });
 
