@@ -12,11 +12,14 @@ import {
   Keyboard,
   Modal,
   Animated,
+  Platform,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons, AntDesign, Feather } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import FrogIcon from './assets/frog.svg';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const TaskScreen = ({ navigation }) => {
   const [tasks, setTasks] = useState([]);
@@ -28,6 +31,17 @@ const TaskScreen = ({ navigation }) => {
   const [isFrogTask, setIsFrogTask] = useState(false); // 标记为"蛙"状态
   const [isImportant, setIsImportant] = useState(false); // 重要标签
   const [isUrgent, setIsUrgent] = useState(false); // 紧急标签
+  const [isTimeTagged, setIsTimeTagged] = useState(false); // 时间标签
+  const [hasReminder, setHasReminder] = useState(false); // 提醒通知标签
+  const [reminderTime, setReminderTime] = useState(15); // 提前通知时间（分钟），默认15分钟
+  const [showReminderOptions, setShowReminderOptions] = useState(false); // 是否显示提醒选项
+  const [taskTime, setTaskTime] = useState(() => {
+    const defaultTime = new Date();
+    defaultTime.setMinutes(30, 0, 0); // 设置默认分钟为30分
+    return defaultTime;
+  }); // 任务时间
+  const [showTimePicker, setShowTimePicker] = useState(false); // 是否显示时间选择器
+  const [timeLabel, setTimeLabel] = useState('');
   
   const inputRef = useRef(null);
   const editInputRef = useRef(null);
@@ -58,11 +72,40 @@ const TaskScreen = ({ navigation }) => {
     try {
       const savedTasks = await AsyncStorage.getItem('tasks');
       if (savedTasks) {
-        setTasks(JSON.parse(savedTasks));
+        const parsedTasks = JSON.parse(savedTasks);
+        // 按照标签优先级排序：青蛙 > 紧急 > 重要 > 无标签
+        const sortedTasks = sortTasksByPriority(parsedTasks);
+        setTasks(sortedTasks);
       }
     } catch (error) {
       console.log('Error loading tasks:', error);
     }
+  };
+
+  // 按照标签优先级排序任务
+  const sortTasksByPriority = (tasksToSort) => {
+    return [...tasksToSort].sort((a, b) => {
+      // 首先按照完成状态排序
+      if (a.completed !== b.completed) {
+        return a.completed - b.completed;
+      }
+      
+      // 然后按照标签优先级排序
+      // 青蛙标签最高优先级
+      if (a.isFrog && !b.isFrog) return -1;
+      if (!a.isFrog && b.isFrog) return 1;
+      
+      // 紧急标签次高优先级
+      if (a.isUrgent && !b.isUrgent) return -1;
+      if (!a.isUrgent && b.isUrgent) return 1;
+      
+      // 重要标签第三优先级
+      if (a.isImportant && !b.isImportant) return -1;
+      if (!a.isImportant && b.isImportant) return 1;
+      
+      // 默认按照创建时间排序（ID通常是时间戳）
+      return parseInt(a.id) - parseInt(b.id);
+    });
   };
 
   // 保存任务到存储
@@ -78,43 +121,63 @@ const TaskScreen = ({ navigation }) => {
   const addTask = () => {
     if (newTaskText.trim() === '') return;
 
+    // 如果显示了时间选择器，确保时间标签被激活
+    if (showTimePicker) {
+      setIsTimeTagged(true);
+    }
+
+    // 如果设置了提醒但没有设置时间，提示用户
+    if (hasReminder && !isTimeTagged && !showTimePicker) {
+      Alert.alert(
+        "Reminder Setup",
+        "You need to set a task time first to add a reminder",
+        [
+          { text: "OK", onPress: () => handleTimeTagPress() }
+        ]
+      );
+      return;
+    }
+
     const newTask = {
       id: Date.now().toString(),
       text: newTaskText.trim(),
       completed: false,
-      createdAt: new Date().toISOString(),
-      isFrog: isFrogTask, // 保存"蛙"状态
-      isImportant: isImportant, // 保存重要状态
-      isUrgent: isUrgent, // 保存紧急状态
+      isFrog: isFrogTask,
+      isImportant: isImportant,
+      isUrgent: isUrgent,
+      isTimeTagged: isTimeTagged || showTimePicker, // 如果时间选择器显示，则认为已标记时间
+      taskTime: (isTimeTagged || showTimePicker) ? taskTime.toISOString() : null,
+      hasReminder: hasReminder,
+      reminderTime: reminderTime, // 提前通知时间（分钟）
+      notifyAtDeadline: true, // 在截止时间到达时通知
     };
 
-    const updatedTasks = [newTask, ...tasks].sort((a, b) => {
-      if (a.isFrog && !b.isFrog) return -1; // 蛙任务优先
-      if (!a.isFrog && b.isFrog) return 1;
-      return a.completed - b.completed; // 未完成任务在上
-    });
-
-    setTasks(updatedTasks);
-    saveTasks(updatedTasks);
+    const updatedTasks = [...tasks, newTask];
+    const sortedTasks = sortTasksByPriority(updatedTasks);
+    setTasks(sortedTasks);
+    saveTasks(sortedTasks);
     setNewTaskText('');
     setIsFrogTask(false);
     setIsImportant(false);
     setIsUrgent(false);
-    closeModal();
+    setIsTimeTagged(false);
+    setShowTimePicker(false);
+    setHasReminder(false);
+    setReminderTime(15);
+    setShowReminderOptions(false);
+    setTaskTime(new Date());
+    setModalVisible(false);
   };
 
   // 切换任务完成状态
   const toggleComplete = (id) => {
     const updatedTasks = tasks.map((task) =>
       task.id === id ? { ...task, completed: !task.completed } : task
-    ).sort((a, b) => {
-      if (a.isFrog && !b.isFrog) return -1;
-      if (!a.isFrog && b.isFrog) return 1;
-      return a.completed - b.completed;
-    });
-
-    setTasks(updatedTasks);
-    saveTasks(updatedTasks);
+    );
+    
+    const sortedTasks = sortTasksByPriority(updatedTasks);
+    setTasks(sortedTasks);
+    saveTasks(sortedTasks);
   };
 
   // 打开编辑模态框
@@ -124,6 +187,15 @@ const TaskScreen = ({ navigation }) => {
     setIsFrogTask(task.isFrog || false);
     setIsImportant(task.isImportant || false);
     setIsUrgent(task.isUrgent || false);
+    setIsTimeTagged(task.isTimeTagged || false);
+    setHasReminder(task.hasReminder || false);
+    setReminderTime(task.reminderTime || 15);
+    setShowReminderOptions(false); // 确保初始不显示提醒选项
+    if (task.isTimeTagged && task.taskTime) {
+      setTaskTime(new Date(task.taskTime));
+    } else {
+      setTaskTime(new Date());
+    }
     setEditModalVisible(true);
 
     setTimeout(() => {
@@ -133,28 +205,44 @@ const TaskScreen = ({ navigation }) => {
 
   // 保存编辑后的任务
   const saveEditedTask = () => {
-    if (editText.trim() === '') return;
+    if (!editingTask || editText.trim() === '') return;
+
+    // 如果设置了提醒但没有设置时间，提示用户
+    if (hasReminder && !isTimeTagged) {
+      Alert.alert(
+        "Reminder Setup",
+        "You need to set a task time first to add a reminder",
+        [
+          { text: "OK", onPress: () => {
+            setIsTimeTagged(true);
+            return;
+          }}
+        ]
+      );
+      return;
+    }
 
     const updatedTasks = tasks.map((task) =>
-      task.id === editingTask.id ? { 
-        ...task, 
-        text: editText.trim(), 
-        isFrog: isFrogTask,
-        isImportant: isImportant,
-        isUrgent: isUrgent
-      } : task
-    ).sort((a, b) => {
-      if (a.isFrog && !b.isFrog) return -1;
-      if (!a.isFrog && b.isFrog) return 1;
-      return a.completed - b.completed;
-    });
-
-    setTasks(updatedTasks);
-    saveTasks(updatedTasks);
-    setEditModalVisible(false);
-    setIsFrogTask(false);
-    setIsImportant(false);
-    setIsUrgent(false);
+      task.id === editingTask.id
+        ? {
+            ...task,
+            text: editText.trim(),
+            isFrog: isFrogTask,
+            isImportant: isImportant,
+            isUrgent: isUrgent,
+            isTimeTagged: isTimeTagged,
+            taskTime: isTimeTagged ? taskTime.toISOString() : null,
+            hasReminder: hasReminder,
+            reminderTime: reminderTime,
+            notifyAtDeadline: true,
+          }
+        : task
+    );
+    
+    const sortedTasks = sortTasksByPriority(updatedTasks);
+    setTasks(sortedTasks);
+    saveTasks(sortedTasks);
+    closeEditModal();
   };
 
   // 删除任务
@@ -166,6 +254,19 @@ const TaskScreen = ({ navigation }) => {
 
   // 打开创建任务模态框
   const openModal = () => {
+    // 重置所有状态
+    setNewTaskText('');
+    setIsFrogTask(false);
+    setIsImportant(false);
+    setIsUrgent(false);
+    setIsTimeTagged(false);
+    setTaskTime(new Date());
+    setShowTimePicker(false);
+    setShowReminderOptions(false);
+    setHasReminder(false);
+    setReminderTime(15);
+    
+    // 显示模态框
     setModalVisible(true);
     Animated.timing(modalScaleAnim, {
       toValue: 1,
@@ -204,7 +305,93 @@ const TaskScreen = ({ navigation }) => {
       setIsFrogTask(false);
       setIsImportant(false);
       setIsUrgent(false);
+      setIsTimeTagged(false);
+      setTaskTime(new Date());
+      setShowTimePicker(false);
+      setShowReminderOptions(false);
+      setHasReminder(false);
+      setReminderTime(0);
     });
+  };
+
+  // 关闭编辑模态框
+  const closeEditModal = () => {
+    setEditModalVisible(false);
+    setEditText('');
+    setIsFrogTask(false);
+    setIsImportant(false);
+    setIsUrgent(false);
+    setIsTimeTagged(false);
+    setTaskTime(new Date());
+    setShowTimePicker(false);
+    setShowReminderOptions(false);
+    setHasReminder(false);
+    setReminderTime(0);
+  };
+
+  // 处理时间变更
+  const onTimeChange = (event, selectedTime) => {
+    if (Platform.OS === 'android') {
+      setShowTimePicker(false);
+    }
+    
+    if (selectedTime) {
+      setTaskTime(selectedTime);
+      setIsTimeTagged(true);
+    }
+  };
+
+  // 处理时间标签点击
+  const handleTimeTagPress = () => {
+    // 更新时间为当前小时和30分钟
+    const currentTime = new Date();
+    currentTime.setMinutes(30, 0, 0);
+    setTaskTime(currentTime);
+    
+    if (showTimePicker) {
+      // 如果时间选择器已经显示，点击后关闭选择器并取消标签
+      setShowTimePicker(false);
+      setIsTimeTagged(false);
+    } else if (isTimeTagged) {
+      // 如果已经有时间标签但选择器未显示，点击后取消标签
+      setIsTimeTagged(false);
+      setShowTimePicker(false);
+    } else {
+      // 如果没有时间标签，点击后显示选择器并激活标签
+      setShowTimePicker(true);
+      setIsTimeTagged(true);
+    }
+  };
+
+  // 处理提醒标签点击
+  const handleReminderPress = () => {
+    // 如果没有设置时间，先提示设置时间
+    if (!isTimeTagged && !showTimePicker) {
+      Alert.alert(
+        "Reminder Setup",
+        "You need to set a task time first to add a reminder",
+        [
+          { text: "Set Time", onPress: () => handleTimeTagPress() },
+          { text: "Cancel", style: "cancel" }
+        ]
+      );
+      return;
+    }
+    
+    if (showReminderOptions) {
+      setShowReminderOptions(false);
+    } else if (hasReminder) {
+      setHasReminder(false);
+    } else {
+      setShowReminderOptions(true);
+    }
+  };
+
+  // 选择提醒时间
+  const selectReminderTime = (minutes) => {
+    setReminderTime(minutes);
+    setHasReminder(true);
+    setShowReminderOptions(false);
   };
 
   // 渲染任务项
@@ -244,8 +431,24 @@ const TaskScreen = ({ navigation }) => {
           )}
           {item.isUrgent && (
             <View style={[styles.taskTag, styles.urgentTag]}>
-              <MaterialIcons name="alarm" size={14} color="#FFFFFF" />
+              <Feather name="alert-circle" size={14} color="#FFFFFF" />
               <Text style={styles.taskTagText}>Urgent</Text>
+            </View>
+          )}
+          {item.isTimeTagged && item.taskTime && (
+            <View style={[styles.taskTag, styles.timeTag]}>
+              <Ionicons name="time-outline" size={14} color="#FFFFFF" />
+              <Text style={styles.taskTagText}>
+                {new Date(item.taskTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+              </Text>
+            </View>
+          )}
+          {item.hasReminder && (
+            <View style={[styles.taskTag, styles.reminderTag]}>
+              <MaterialIcons name="notifications" size={14} color="#FFFFFF" />
+              <Text style={styles.taskTagText}>
+                {item.reminderTime} min
+              </Text>
             </View>
           )}
         </View>
@@ -291,10 +494,38 @@ const TaskScreen = ({ navigation }) => {
         ]}
         onPress={() => setIsUrgent(!isUrgent)}
       >
-        <MaterialIcons 
-          name="alarm" 
+        <Feather 
+          name="alert-circle" 
           size={20} 
           color={isUrgent ? "#000000" : "#FFFFFF"} 
+        />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[
+          styles.tagButton,
+          isTimeTagged && styles.tagButtonActive,
+        ]}
+        onPress={handleTimeTagPress}
+      >
+        <Ionicons 
+          name="time-outline" 
+          size={20} 
+          color={isTimeTagged ? "#000000" : "#FFFFFF"} 
+        />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[
+          styles.tagButton,
+          hasReminder && styles.tagButtonActive,
+        ]}
+        onPress={handleReminderPress}
+      >
+        <MaterialIcons 
+          name="notifications" 
+          size={20} 
+          color={hasReminder ? "#000000" : "#FFFFFF"} 
         />
       </TouchableOpacity>
     </View>
@@ -374,6 +605,46 @@ const TaskScreen = ({ navigation }) => {
                     returnKeyType="done"
                     onSubmitEditing={addTask}
                   />
+                  {showTimePicker && (
+                    <View style={styles.timePickerContainer}>
+                      <DateTimePicker
+                        value={taskTime}
+                        mode="time"
+                        is24Hour={true}
+                        display="spinner"
+                        onChange={onTimeChange}
+                        textColor="#FFFFFF"
+                        themeVariant="dark"
+                        style={styles.timePicker}
+                        minuteInterval={15}
+                      />
+                    </View>
+                  )}
+                  {showReminderOptions && (
+                    <View style={styles.reminderOptionsContainer}>
+                      <Text style={styles.reminderOptionsTitle}>Select Reminder Time</Text>
+                      <View style={styles.reminderButtonsContainer}>
+                        <TouchableOpacity
+                          style={[styles.reminderButton, reminderTime === 15 && styles.reminderButtonActive]}
+                          onPress={() => selectReminderTime(15)}
+                        >
+                          <Text style={styles.reminderButtonText}>15 min</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.reminderButton, reminderTime === 30 && styles.reminderButtonActive]}
+                          onPress={() => selectReminderTime(30)}
+                        >
+                          <Text style={styles.reminderButtonText}>30 min</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.reminderButton, reminderTime === 60 && styles.reminderButtonActive]}
+                          onPress={() => selectReminderTime(60)}
+                        >
+                          <Text style={styles.reminderButtonText}>1 hour</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
                   {renderTagButtons()}
                   <View style={styles.modalButtons}>
                     <TouchableOpacity
@@ -401,9 +672,9 @@ const TaskScreen = ({ navigation }) => {
         visible={editModalVisible}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setEditModalVisible(false)}
+        onRequestClose={closeEditModal}
       >
-        <TouchableWithoutFeedback onPress={() => setEditModalVisible(false)}>
+        <TouchableWithoutFeedback onPress={closeEditModal}>
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
               <View style={styles.modalContainer}>
@@ -412,26 +683,66 @@ const TaskScreen = ({ navigation }) => {
                   <TextInput
                     ref={editInputRef}
                     style={styles.modalInput}
+                    placeholder="Edit task..."
+                    placeholderTextColor="#666666"
                     value={editText}
                     onChangeText={setEditText}
                     autoFocus={true}
-                    returnKeyType="done"
-                    onSubmitEditing={saveEditedTask}
                   />
+                  {showTimePicker && (
+                    <View style={styles.timePickerContainer}>
+                      <DateTimePicker
+                        value={taskTime}
+                        mode="time"
+                        is24Hour={true}
+                        display="spinner"
+                        onChange={onTimeChange}
+                        textColor="#FFFFFF"
+                        themeVariant="dark"
+                        style={styles.timePicker}
+                        minuteInterval={15}
+                      />
+                    </View>
+                  )}
+                  {showReminderOptions && (
+                    <View style={styles.reminderOptionsContainer}>
+                      <Text style={styles.reminderOptionsTitle}>Select Reminder Time</Text>
+                      <View style={styles.reminderButtonsContainer}>
+                        <TouchableOpacity
+                          style={[styles.reminderButton, reminderTime === 15 && styles.reminderButtonActive]}
+                          onPress={() => selectReminderTime(15)}
+                        >
+                          <Text style={styles.reminderButtonText}>15 min</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.reminderButton, reminderTime === 30 && styles.reminderButtonActive]}
+                          onPress={() => selectReminderTime(30)}
+                        >
+                          <Text style={styles.reminderButtonText}>30 min</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.reminderButton, reminderTime === 60 && styles.reminderButtonActive]}
+                          onPress={() => selectReminderTime(60)}
+                        >
+                          <Text style={styles.reminderButtonText}>1 hour</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
                   {renderTagButtons()}
                   <View style={styles.modalButtons}>
                     <TouchableOpacity
                       style={styles.modalButton}
                       onPress={() => {
                         deleteTask(editingTask?.id);
-                        setEditModalVisible(false);
+                        closeEditModal();
                       }}
                     >
                       <Text style={styles.deleteButtonText}>Delete</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.modalButton}
-                      onPress={() => setEditModalVisible(false)}
+                      onPress={closeEditModal}
                     >
                       <Text style={styles.cancelButtonText}>Cancel</Text>
                     </TouchableOpacity>
@@ -544,6 +855,9 @@ const styles = StyleSheet.create({
   },
   urgentTag: {
     backgroundColor: '#832232',
+  },
+  timeTag: {
+    backgroundColor: '#555555', // 时间标签的灰色背景
   },
   taskTagText: {
     color: '#FFFFFF',
@@ -661,6 +975,67 @@ const styles = StyleSheet.create({
   frogButtonActive: {
     backgroundColor: '#FFFFFF',
     borderColor: '#FFFFFF',
+  },
+  timePickerContainer: {
+    backgroundColor: '#222',
+    borderRadius: 8,
+    padding: 0,
+    marginBottom: 15,
+    alignItems: 'center',
+    height: 140, // 固定高度，约3行
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  timePicker: {
+    width: Platform.OS === 'ios' ? '100%' : 150,
+    height: Platform.OS === 'ios' ? 140 : 120,
+  },
+  timeConfirmButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#CCCCCC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timeConfirmText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  reminderTag: {
+    backgroundColor: '#9C27B0', // 紫色背景
+  },
+  reminderOptionsContainer: {
+    backgroundColor: '#222',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 15,
+  },
+  reminderOptionsTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  reminderButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  reminderButton: {
+    backgroundColor: '#333',
+    padding: 10,
+    borderRadius: 5,
+    flex: 1,
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  reminderButtonActive: {
+    backgroundColor: '#9C27B0', // 紫色背景
+  },
+  reminderButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
   },
 });
 
