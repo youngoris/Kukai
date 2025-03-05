@@ -21,8 +21,10 @@ import * as Location from 'expo-location';
 import JournalEditScreen from './JournalEditScreen';
 import { MaterialIcons } from '@expo/vector-icons';
 import googleDriveService from './services/GoogleDriveService';
+import notificationService from './services/NotificationService';
 import { WEATHER_API, CACHE, ERROR_TYPES, STORAGE_KEYS } from './constants/Config';
 import useWeather from './utils/useWeather'; // 导入天气Hook
+import NotificationHistoryScreen from './NotificationHistoryScreen';
 
 const { width, height } = Dimensions.get('window');
 const Stack = createStackNavigator();
@@ -418,99 +420,70 @@ const HomeScreen = ({ navigation }) => {
 // 自定义导航容器组件
 const AppNavigator = () => {
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName="Home"
-        screenOptions={({ route, navigation }) => ({
-          headerShown: false,
-          cardStyle: { backgroundColor: '#000' },
-          animationEnabled: true,
-          gestureEnabled: route.name !== 'Home' && route.name !== 'Settings',
-          gestureDirection: route.name === 'Home' ? 'horizontal-inverted' : 'horizontal',
-          gestureResponseDistance: {
-            horizontal: width * 0.5,
-          },
-          cardStyleInterpolator: ({ current, layouts, next }) => {
-            // 检查是否是返回到 Home 屏幕的导航
-            const isGoingHome = next?.route?.name === 'Home' || route.name === 'Home';
-            
-            // 如果是返回到 Home，使用相反的动画方向
-            if (isGoingHome) {
-              return {
-                cardStyle: {
-                  transform: [
-                    {
-                      translateX: current.progress.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [-layouts.screen.width, 0],
-                      }),
-                    },
-                  ],
-                },
-              };
-            }
-            
-            // 默认从右向左的动画
+    <Stack.Navigator
+      initialRouteName="Home"
+      screenOptions={({ route, navigation }) => ({
+        headerShown: false,
+        cardStyle: { backgroundColor: '#000' },
+        animationEnabled: true,
+        gestureEnabled: route.name !== 'Home' && route.name !== 'Settings',
+        gestureDirection: route.name === 'Home' ? 'horizontal-inverted' : 'horizontal',
+        gestureResponseDistance: {
+          horizontal: width * 0.5,
+        },
+        cardStyleInterpolator: ({ current, layouts, next }) => {
+          // 检查是否是返回到 Home 屏幕的导航
+          const isGoingHome = next?.route?.name === 'Home' || route.name === 'Home';
+          
+          // 如果是返回到 Home，使用相反的动画方向
+          if (isGoingHome) {
             return {
               cardStyle: {
                 transform: [
                   {
                     translateX: current.progress.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [layouts.screen.width, 0],
+                      outputRange: [-layouts.screen.width, 0],
                     }),
                   },
                 ],
               },
             };
-          },
-        })}
-      >
-        <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen 
-          name="Meditation" 
-          component={MeditationScreen} 
-          options={{
-            gestureEnabled: true,
-          }}
-        />
-        <Stack.Screen 
-          name="Task" 
-          component={TaskScreen}
-        />
-        <Stack.Screen 
-          name="Focus" 
-          component={FocusScreen}
-        />
-        <Stack.Screen 
-          name="Summary" 
-          component={SummaryScreen}
-        />
-        <Stack.Screen 
-          name="Journal" 
-          component={JournalScreen}
-        />
-        <Stack.Screen 
-          name="Settings" 
-          component={SettingsScreen} 
-          options={{
-            gestureEnabled: false, // 禁用设置页面的手势导航
-          }}
-        />
-        <Stack.Screen 
-          name="JournalEdit" 
-          component={JournalEditScreen} 
-          options={{ headerShown: false }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+          }
+          
+          // 默认从右向左的动画
+          return {
+            cardStyle: {
+              transform: [
+                {
+                  translateX: current.progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [layouts.screen.width, 0],
+                  }),
+                },
+              ],
+            },
+          };
+        },
+      })}
+    >
+      <Stack.Screen name="Home" component={HomeScreen} />
+      <Stack.Screen name="Meditation" component={MeditationScreen} />
+      <Stack.Screen name="Task" component={TaskScreen} />
+      <Stack.Screen name="Focus" component={FocusScreen} />
+      <Stack.Screen name="Summary" component={SummaryScreen} />
+      <Stack.Screen name="Journal" component={JournalScreen} />
+      <Stack.Screen name="JournalEdit" component={JournalEditScreen} />
+      <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="NotificationHistory" component={NotificationHistoryScreen} />
+    </Stack.Navigator>
   );
 };
 
 // 主应用组件
 export default function App() {
   // Load fonts
-  let [fontsLoaded] = useFonts({
+  const [fontsLoaded] = useFonts({
     Roboto_300Light,
     Roboto_400Regular, 
     Roboto_500Medium,
@@ -538,6 +511,32 @@ export default function App() {
     initializeGoogleDrive();
   }, []);
 
+  // 创建导航引用
+  const navigationRef = useRef(null);
+  
+  // 初始化通知服务
+  useEffect(() => {
+    notificationService.initialize().then(initialized => {
+      if (initialized) {
+        console.log('Notification system initialized successfully');
+      } else {
+        console.log('Notification system initialization failed, permissions may have been denied');
+      }
+    });
+    
+    // 清理通知监听器
+    return () => {
+      notificationService.cleanup();
+    };
+  }, []);
+  
+  // 设置导航引用
+  useEffect(() => {
+    if (navigationRef.current) {
+      notificationService.setNavigationRef(navigationRef.current);
+    }
+  }, [navigationRef.current]);
+
   // Wait for fonts to load
   if (!fontsLoaded) {
     return <AppLoading />;
@@ -547,7 +546,9 @@ export default function App() {
     <>
       <StatusBar hidden={true} />
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <AppNavigator />
+        <NavigationContainer ref={navigationRef}>
+          <AppNavigator />
+        </NavigationContainer>
       </GestureHandlerRootView>
     </>
   );

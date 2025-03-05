@@ -20,6 +20,7 @@ import { MaterialIcons, Ionicons, AntDesign, Feather } from '@expo/vector-icons'
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import FrogIcon from './assets/frog.svg';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import notificationService from './services/NotificationService';
 
 const TaskScreen = ({ navigation }) => {
   const [tasks, setTasks] = useState([]);
@@ -118,7 +119,7 @@ const TaskScreen = ({ navigation }) => {
   };
 
   // 添加新任务
-  const addTask = () => {
+  const addTask = async () => {
     if (newTaskText.trim() === '') return;
 
     // 如果显示了时间选择器，确保时间标签被激活
@@ -155,7 +156,18 @@ const TaskScreen = ({ navigation }) => {
     const updatedTasks = [...tasks, newTask];
     const sortedTasks = sortTasksByPriority(updatedTasks);
     setTasks(sortedTasks);
-    saveTasks(sortedTasks);
+    await saveTasks(sortedTasks);
+    
+    // 如果任务有提醒，调度通知
+    if (newTask.hasReminder && newTask.isTimeTagged && newTask.taskTime) {
+      try {
+        const notificationId = await notificationService.scheduleTaskNotification(newTask);
+        console.log('Task notification scheduled, ID:', notificationId);
+      } catch (error) {
+        console.error('Failed to schedule task notification:', error);
+      }
+    }
+    
     setNewTaskText('');
     setIsFrogTask(false);
     setIsImportant(false);
@@ -170,14 +182,23 @@ const TaskScreen = ({ navigation }) => {
   };
 
   // 切换任务完成状态
-  const toggleComplete = (id) => {
+  const toggleComplete = async (id) => {
+    const taskToToggle = tasks.find(task => task.id === id);
+    const isCompleting = !taskToToggle.completed;
+    
     const updatedTasks = tasks.map((task) =>
       task.id === id ? { ...task, completed: !task.completed } : task
     );
     
     const sortedTasks = sortTasksByPriority(updatedTasks);
     setTasks(sortedTasks);
-    saveTasks(sortedTasks);
+    await saveTasks(sortedTasks);
+    
+    // 如果任务被标记为完成，取消其通知
+    if (isCompleting && taskToToggle.hasReminder && taskToToggle.isTimeTagged && taskToToggle.taskTime) {
+      await notificationService.cancelTaskNotification(id);
+      console.log('Task completed, notification cancelled');
+    }
   };
 
   // 打开编辑模态框
@@ -204,52 +225,70 @@ const TaskScreen = ({ navigation }) => {
   };
 
   // 保存编辑后的任务
-  const saveEditedTask = () => {
-    if (!editingTask || editText.trim() === '') return;
-
+  const saveEditedTask = async () => {
+    if (editText.trim() === '') return;
+    
     // 如果设置了提醒但没有设置时间，提示用户
     if (hasReminder && !isTimeTagged) {
       Alert.alert(
         "Reminder Setup",
         "You need to set a task time first to add a reminder",
         [
-          { text: "OK", onPress: () => {
-            setIsTimeTagged(true);
-            return;
-          }}
+          { text: "OK", onPress: () => handleTimeTagPress() }
         ]
       );
       return;
     }
 
+    // 取消原有任务的通知（如果有）
+    if (editingTask.hasReminder && editingTask.isTimeTagged && editingTask.taskTime) {
+      await notificationService.cancelTaskNotification(editingTask.id);
+    }
+    
+    const updatedTask = {
+      ...editingTask,
+      text: editText.trim(),
+      isFrog: isFrogTask,
+      isImportant: isImportant,
+      isUrgent: isUrgent,
+      isTimeTagged: isTimeTagged,
+      taskTime: isTimeTagged ? taskTime.toISOString() : null,
+      hasReminder: hasReminder,
+      reminderTime: reminderTime,
+    };
+
     const updatedTasks = tasks.map((task) =>
-      task.id === editingTask.id
-        ? {
-            ...task,
-            text: editText.trim(),
-            isFrog: isFrogTask,
-            isImportant: isImportant,
-            isUrgent: isUrgent,
-            isTimeTagged: isTimeTagged,
-            taskTime: isTimeTagged ? taskTime.toISOString() : null,
-            hasReminder: hasReminder,
-            reminderTime: reminderTime,
-            notifyAtDeadline: true,
-          }
-        : task
+      task.id === editingTask.id ? updatedTask : task
     );
     
     const sortedTasks = sortTasksByPriority(updatedTasks);
     setTasks(sortedTasks);
-    saveTasks(sortedTasks);
-    closeEditModal();
+    await saveTasks(sortedTasks);
+    
+    // 如果更新后的任务有提醒，重新调度通知
+    if (updatedTask.hasReminder && updatedTask.isTimeTagged && updatedTask.taskTime) {
+      try {
+        const notificationId = await notificationService.scheduleTaskNotification(updatedTask);
+        console.log('Task notification updated, ID:', notificationId);
+      } catch (error) {
+        console.error('Failed to update task notification:', error);
+      }
+    }
+    
+    setEditModalVisible(false);
   };
 
   // 删除任务
-  const deleteTask = (id) => {
+  const deleteTask = async (id) => {
+    // 取消任务的通知（如果有）
+    const taskToDelete = tasks.find(task => task.id === id);
+    if (taskToDelete && taskToDelete.hasReminder && taskToDelete.isTimeTagged && taskToDelete.taskTime) {
+      await notificationService.cancelTaskNotification(id);
+    }
+    
     const filteredTasks = tasks.filter((task) => task.id !== id);
     setTasks(filteredTasks);
-    saveTasks(filteredTasks);
+    await saveTasks(filteredTasks);
   };
 
   // 打开创建任务模态框

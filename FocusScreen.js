@@ -15,6 +15,7 @@ import * as Progress from 'react-native-progress';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { COLORS } from './constants/DesignSystem';
+import notificationService from './services/NotificationService';
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -277,16 +278,18 @@ export default function FocusScreen({ navigation }) {
       isLongBreak = true;
     }
     
-    await Notifications.presentNotificationAsync({
-      content: {
-        title: isBreak ? 'Break Time Ended' : 'Focus Time Ended',
-        body: isBreak
-          ? 'Your break is over! Ready to start another focus session?'
-          : isLongBreak 
-            ? `Great work! You've completed ${longBreakInterval} focus sessions. Time for a longer break!`
-            : 'Focus complete! Time to take a break or continue?',
-        sound: true,
-      },
+    const title = isBreak ? 'Break Time Ended' : 'Focus Time Ended';
+    const body = isBreak
+      ? 'Break is over! Ready to start another focus session?'
+      : isLongBreak 
+        ? `Great job! You've completed ${longBreakInterval} focus sessions. Time for a longer break!`
+        : 'Focus complete! Take a break or continue?';
+    
+    // Use notification service to send immediate notification
+    await notificationService.sendImmediateNotification(title, body, {
+      screen: 'Focus',
+      isBreak: isBreak,
+      isLongBreak: isLongBreak
     });
   };
 

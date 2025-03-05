@@ -21,6 +21,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import CloudBackupSection from './components/CloudBackupSection';
+import notificationService from './services/NotificationService';
 
 const SettingsScreen = ({ navigation }) => {
   // Meditation Settings
@@ -44,6 +45,10 @@ const SettingsScreen = ({ navigation }) => {
   const [journalReminderTime, setJournalReminderTime] = useState(new Date(new Date().setHours(21, 0, 0, 0)));
   const [selectedJournalTemplate, setSelectedJournalTemplate] = useState('default');
   
+  // 冥想设置
+  const [meditationReminder, setMeditationReminder] = useState(false);
+  const [meditationReminderTime, setMeditationReminderTime] = useState(new Date(new Date().setHours(8, 30, 0, 0)));
+  
   // General Settings
   const [darkMode, setDarkMode] = useState(true);
   const [appTheme, setAppTheme] = useState('dark');
@@ -53,6 +58,8 @@ const SettingsScreen = ({ navigation }) => {
   
   // UI States
   const [isTimePickerVisible, setTimePickerVisible] = useState(false);
+  const [currentTimePickerMode, setCurrentTimePickerMode] = useState('journalReminder'); // 'journalReminder' 或 'meditationReminder'
+  const [tempSelectedTime, setTempSelectedTime] = useState(null); // 临时存储用户选择的时间
   const [isExportModalVisible, setExportModalVisible] = useState(false);
   const [exportPassword, setExportPassword] = useState('');
   
@@ -149,6 +156,15 @@ const SettingsScreen = ({ navigation }) => {
   // New state for CloudBackupSection visibility
   const [showCloudBackup, setShowCloudBackup] = useState(false);
   
+  // 添加新的通知设置状态
+  const [taskNotifications, setTaskNotifications] = useState(true);
+  const [notificationSound, setNotificationSound] = useState('default');
+  const [quietHoursEnabled, setQuietHoursEnabled] = useState(false);
+  const [quietHoursStart, setQuietHoursStart] = useState(new Date().setHours(22, 0, 0, 0));
+  const [quietHoursEnd, setQuietHoursEnd] = useState(new Date().setHours(7, 0, 0, 0));
+  const [showQuietHoursStartPicker, setShowQuietHoursStartPicker] = useState(false);
+  const [showQuietHoursEndPicker, setShowQuietHoursEndPicker] = useState(false);
+  
   useEffect(() => {
     loadSettings();
     checkNotificationPermissions();
@@ -183,7 +199,8 @@ const SettingsScreen = ({ navigation }) => {
     includeWeather, includeLocation, markdownSupport, journalReminder,
     journalReminderTime, selectedJournalTemplate,
     darkMode, appTheme, fontSizeScale, notificationsEnabled, syncEnabled,
-    settingsChanged
+    taskNotifications, notificationSound, quietHoursEnabled, quietHoursStart, quietHoursEnd,
+    meditationReminder, meditationReminderTime
   ]);
   
   // 自动保存设置的函数
@@ -211,12 +228,23 @@ const SettingsScreen = ({ navigation }) => {
         journalReminderTime: journalReminderTime.toISOString(),
         selectedJournalTemplate,
         
+        // 冥想提醒设置
+        meditationReminder,
+        meditationReminderTime: meditationReminderTime.toISOString(),
+        
         // General settings
         darkMode,
         appTheme,
         fontSizeScale,
         notificationsEnabled,
-        syncEnabled
+        syncEnabled,
+        
+        // 加载通知设置
+        taskNotifications,
+        notificationSound,
+        quietHoursEnabled,
+        quietHoursStart: quietHoursStart.toString(),
+        quietHoursEnd: quietHoursEnd.toString(),
       };
       
       console.log('Auto-saving settings:', settings);
@@ -225,7 +253,32 @@ const SettingsScreen = ({ navigation }) => {
       // 设置日志提醒通知（如果启用）
       if (journalReminder && notificationsEnabled) {
         await scheduleJournalReminder();
+      } else {
+        await notificationService.scheduleJournalReminder(0, 0, false);
       }
+      
+      // 设置冥想提醒通知（如果启用）
+      if (meditationReminder && notificationsEnabled) {
+        await scheduleMeditationReminder();
+      } else {
+        await notificationService.scheduleMeditationReminder(0, 0, false);
+      }
+      
+      // 保存通知设置
+      await AsyncStorage.setItem('taskNotifications', JSON.stringify(taskNotifications));
+      await AsyncStorage.setItem('notificationSound', notificationSound);
+      await AsyncStorage.setItem('quietHoursEnabled', JSON.stringify(quietHoursEnabled));
+      await AsyncStorage.setItem('quietHoursStart', quietHoursStart.toString());
+      await AsyncStorage.setItem('quietHoursEnd', quietHoursEnd.toString());
+      
+      // 更新通知服务配置
+      await notificationService.updateConfig({
+        taskNotifications,
+        notificationSound,
+        quietHoursEnabled,
+        quietHoursStart: new Date(quietHoursStart),
+        quietHoursEnd: new Date(quietHoursEnd)
+      });
     } catch (error) {
       console.error('Error auto-saving settings:', error);
     }
@@ -274,12 +327,44 @@ const SettingsScreen = ({ navigation }) => {
         }
         setSelectedJournalTemplate(parsedSettings.selectedJournalTemplate || 'default');
         
+        // 加载冥想提醒设置
+        setMeditationReminder(parsedSettings.meditationReminder || false);
+        if (parsedSettings.meditationReminderTime) {
+          setMeditationReminderTime(new Date(parsedSettings.meditationReminderTime));
+        }
+        
         // General settings
         setDarkMode(parsedSettings.darkMode !== false);
         setAppTheme(parsedSettings.appTheme || 'dark');
         setFontSizeScale(parsedSettings.fontSizeScale || 'medium');
         setNotificationsEnabled(parsedSettings.notificationsEnabled !== false);
         setSyncEnabled(parsedSettings.syncEnabled || false);
+        
+        // 加载通知设置
+        const taskNotificationsValue = await AsyncStorage.getItem('taskNotifications');
+        if (taskNotificationsValue !== null) {
+          setTaskNotifications(JSON.parse(taskNotificationsValue));
+        }
+        
+        const notificationSoundValue = await AsyncStorage.getItem('notificationSound');
+        if (notificationSoundValue !== null) {
+          setNotificationSound(notificationSoundValue);
+        }
+        
+        const quietHoursEnabledValue = await AsyncStorage.getItem('quietHoursEnabled');
+        if (quietHoursEnabledValue !== null) {
+          setQuietHoursEnabled(JSON.parse(quietHoursEnabledValue));
+        }
+        
+        const quietHoursStartValue = await AsyncStorage.getItem('quietHoursStart');
+        if (quietHoursStartValue !== null) {
+          setQuietHoursStart(parseInt(quietHoursStartValue));
+        }
+        
+        const quietHoursEndValue = await AsyncStorage.getItem('quietHoursEnd');
+        if (quietHoursEndValue !== null) {
+          setQuietHoursEnd(parseInt(quietHoursEndValue));
+        }
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -310,6 +395,10 @@ const SettingsScreen = ({ navigation }) => {
         journalReminderTime: journalReminderTime.toISOString(),
         selectedJournalTemplate,
         
+        // 冥想提醒设置
+        meditationReminder,
+        meditationReminderTime: meditationReminderTime.toISOString(),
+        
         // General settings
         darkMode,
         appTheme,
@@ -325,39 +414,78 @@ const SettingsScreen = ({ navigation }) => {
       if (journalReminder && notificationsEnabled) {
         await scheduleJournalReminder();
       } else {
-        await Notifications.cancelAllScheduledNotificationsAsync();
+        await notificationService.scheduleJournalReminder(0, 0, false);
       }
       
-      Alert.alert('Settings Saved', 'Your preferences have been updated.');
+      // 设置冥想提醒通知（如果启用）
+      if (meditationReminder && notificationsEnabled) {
+        await scheduleMeditationReminder();
+      } else {
+        await notificationService.scheduleMeditationReminder(0, 0, false);
+      }
+      
+      // 保存通知设置
+      await AsyncStorage.setItem('taskNotifications', JSON.stringify(taskNotifications));
+      await AsyncStorage.setItem('notificationSound', notificationSound);
+      await AsyncStorage.setItem('quietHoursEnabled', JSON.stringify(quietHoursEnabled));
+      await AsyncStorage.setItem('quietHoursStart', quietHoursStart.toString());
+      await AsyncStorage.setItem('quietHoursEnd', quietHoursEnd.toString());
+      
+      // 更新通知服务配置
+      await notificationService.updateConfig({
+        taskNotifications,
+        notificationSound,
+        quietHoursEnabled,
+        quietHoursStart: new Date(quietHoursStart),
+        quietHoursEnd: new Date(quietHoursEnd)
+      });
+      
+      // 延迟显示保存成功的提示，避免与可能的通知冲突
+      setTimeout(() => {
+        Alert.alert('设置已保存', '您的偏好设置已更新。');
+      }, 1000);
     } catch (error) {
       console.error('Error saving settings:', error);
-      Alert.alert('Error', 'Could not save settings. Please try again.');
+      Alert.alert('错误', '无法保存设置。请重试。');
     }
   };
   
   const scheduleJournalReminder = async () => {
     try {
-      await Notifications.cancelAllScheduledNotificationsAsync();
-      
       if (journalReminder && notificationsEnabled) {
         const hours = journalReminderTime.getHours();
         const minutes = journalReminderTime.getMinutes();
         
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'Journal Reminder',
-            body: 'Time to record your thoughts and feelings for today.',
-            sound: true,
-          },
-          trigger: {
-            hour: hours,
-            minute: minutes,
-            repeats: true,
-          },
-        });
+        // 使用通知服务调度日志提醒
+        await notificationService.scheduleJournalReminder(hours, minutes, true);
+        console.log('Journal reminder scheduled for:', hours, ':', minutes);
+      } else {
+        // 如果禁用了提醒，取消调度
+        await notificationService.scheduleJournalReminder(0, 0, false);
+        console.log('Journal reminder disabled');
       }
     } catch (error) {
-      console.error('Error scheduling reminder:', error);
+      console.error('Error scheduling journal reminder:', error);
+    }
+  };
+  
+  // 调度冥想提醒
+  const scheduleMeditationReminder = async () => {
+    try {
+      if (meditationReminder && notificationsEnabled) {
+        const hours = meditationReminderTime.getHours();
+        const minutes = meditationReminderTime.getMinutes();
+        
+        // 使用通知服务调度冥想提醒
+        await notificationService.scheduleMeditationReminder(hours, minutes, true);
+        console.log('Meditation reminder scheduled for:', hours, ':', minutes);
+      } else {
+        // 如果禁用了提醒，取消调度
+        await notificationService.scheduleMeditationReminder(0, 0, false);
+        console.log('Meditation reminder disabled');
+      }
+    } catch (error) {
+      console.error('Error scheduling meditation reminder:', error);
     }
   };
   
@@ -436,19 +564,30 @@ const SettingsScreen = ({ navigation }) => {
   
   // Function to open dropdown modal
   const openOptionModal = (options, currentVal, setterFunction, title) => {
+    // 确保options是一个数组
+    if (!Array.isArray(options) || options.length === 0) {
+      console.error('Error: options must be a non-empty array', options);
+      Alert.alert('Error', 'An error occurred. Please try again later.');
+      return;
+    }
+    
+    // 确保setterFunction是一个函数
     if (typeof setterFunction !== 'function') {
       console.error('Error: setterFunction is not a function', setterFunction);
       Alert.alert('Error', 'An error occurred. Please try again later.');
       return;
     }
     
+    // 确保title是一个字符串
+    const modalTitle = typeof title === 'string' ? title : 'Select an option';
+    
     setCurrentOptions(options);
     setCurrentValue(currentVal);
     setCurrentSetter(() => (newValue) => {
       setterFunction(newValue);
-      setSettingsChanged(true); // 标记设置已更改
+      setSettingsChanged(true); // Mark settings as changed
     });
-    setCurrentModalTitle(title);
+    setCurrentModalTitle(modalTitle);
     setOptionModalVisible(true);
   };
   
@@ -476,8 +615,14 @@ const SettingsScreen = ({ navigation }) => {
           return setAppTheme;
         case 'Font Size':
           return setFontSizeScale;
+        case 'Notification Sound':
+          return setNotificationSound;
         default:
-          return null;
+          console.warn(`No setter found for label: ${label}`);
+          // 返回一个空函数而不是null，避免类型错误
+          return (val) => {
+            console.warn(`Attempted to set value for unknown setting: ${label}`, val);
+          };
       }
     };
     
@@ -557,11 +702,30 @@ const SettingsScreen = ({ navigation }) => {
   
   // 修改时间选择器处理函数
   const handleTimeChange = (event, selectedTime) => {
-    setTimePickerVisible(false);
     if (selectedTime) {
-      setJournalReminderTime(selectedTime);
-      setSettingsChanged(true); // 标记设置已更改
+      // 只更新临时状态，不立即应用
+      setTempSelectedTime(selectedTime);
     }
+  };
+  
+  // 添加确认时间的函数
+  const confirmTimeSelection = () => {
+    if (tempSelectedTime) {
+      if (currentTimePickerMode === 'journalReminder') {
+        setJournalReminderTime(tempSelectedTime);
+      } else if (currentTimePickerMode === 'meditationReminder') {
+        setMeditationReminderTime(tempSelectedTime);
+      }
+      setSettingsChanged(true);
+    }
+    setTimePickerVisible(false);
+    setTempSelectedTime(null);
+  };
+  
+  // 取消时间选择
+  const cancelTimeSelection = () => {
+    setTimePickerVisible(false);
+    setTempSelectedTime(null);
   };
   
   // 处理备份完成后的操作
@@ -621,6 +785,24 @@ const SettingsScreen = ({ navigation }) => {
     Alert.alert('Send Feedback', 'Thank you for your feedback, it helps us improve the app.');
   };
   
+  // 处理静音时段开始时间变更
+  const handleQuietHoursStartChange = (event, selectedTime) => {
+    setShowQuietHoursStartPicker(false);
+    if (selectedTime) {
+      setQuietHoursStart(selectedTime.getTime());
+      autoSaveSettings();
+    }
+  };
+  
+  // 处理静音时段结束时间变更
+  const handleQuietHoursEndChange = (event, selectedTime) => {
+    setShowQuietHoursEndPicker(false);
+    if (selectedTime) {
+      setQuietHoursEnd(selectedTime.getTime());
+      autoSaveSettings();
+    }
+  };
+  
   return (
     <SafeAreaView style={[styles.container, appTheme === 'light' && styles.lightContainer]}>
       <View style={[styles.header, appTheme === 'light' && styles.lightHeader]}>
@@ -654,6 +836,23 @@ const SettingsScreen = ({ navigation }) => {
             soundThemes,
             'Sound Theme',
             'Choose your preferred background sound'
+          )}
+          
+          {renderSettingSwitch(
+            meditationReminder,
+            setMeditationReminder,
+            'Meditation Reminder',
+            'Set a daily reminder for your meditation practice'
+          )}
+          
+          {meditationReminder && renderTimeSetting(
+            meditationReminderTime,
+            () => {
+              setCurrentTimePickerMode('meditationReminder');
+              setTimePickerVisible(true);
+            },
+            'Reminder Time',
+            'Time to remind you for your daily meditation practice'
           )}
         </View>
         
@@ -745,7 +944,10 @@ const SettingsScreen = ({ navigation }) => {
           
           {journalReminder && renderTimeSetting(
             journalReminderTime,
-            () => setTimePickerVisible(true),
+            () => {
+              setCurrentTimePickerMode('journalReminder');
+              setTimePickerVisible(true);
+            },
             'Reminder Time',
             'Time to remind you to write in your journal daily'
           )}
@@ -793,6 +995,112 @@ const SettingsScreen = ({ navigation }) => {
             setSyncEnabled,
             'Data Sync',
             'Sync your data across devices'
+          )}
+        </View>
+        
+        {/* 通知设置部分 */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Notification Settings</Text>
+          
+          {renderSettingSwitch(
+            notificationsEnabled,
+            (value) => {
+              setNotificationsEnabled(value);
+              autoSaveSettings();
+            },
+            'Enable Notifications',
+            'Allow the app to send notification reminders'
+          )}
+          
+          {notificationsEnabled && (
+            <>
+              {renderActionButton(
+                () => navigation.navigate('NotificationHistory'),
+                'Notification History',
+                'notifications',
+                'View all past notifications'
+              )}
+              
+              {renderSettingSwitch(
+                journalReminder,
+                (value) => {
+                  setJournalReminder(value);
+                  autoSaveSettings();
+                },
+                'Journal Reminder',
+                'Remind you to record your journal at a set time'
+              )}
+              
+              {journalReminder && renderTimeSetting(
+                journalReminderTime,
+                () => {
+                  setCurrentTimePickerMode('journalReminder');
+                  setTimePickerVisible(true);
+                },
+                'Journal Reminder Time',
+                'Choose when to receive daily journal reminders'
+              )}
+              
+              {renderSettingSwitch(
+                taskNotifications,
+                (value) => {
+                  setTaskNotifications(value);
+                  autoSaveSettings();
+                },
+                'Task Reminders',
+                'Remind you before tasks start'
+              )}
+              
+              {renderSettingSwitch(
+                focusNotifications,
+                (value) => {
+                  setFocusNotifications(value);
+                  autoSaveSettings();
+                },
+                'Focus Mode Notifications',
+                'Notify you when focus sessions end'
+              )}
+              
+              {renderDropdownOption(
+                notificationSound,
+                [
+                  { label: 'Default', value: 'default' },
+                  { label: 'Gentle', value: 'gentle' },
+                  { label: 'Alert', value: 'alert' },
+                  { label: 'None', value: 'none' }
+                ],
+                'Notification Sound',
+                'Choose notification alert sound'
+              )}
+              
+              {renderSettingSwitch(
+                quietHoursEnabled,
+                (value) => {
+                  setQuietHoursEnabled(value);
+                  autoSaveSettings();
+                },
+                'Quiet Hours',
+                'Disable notification sounds during specific hours'
+              )}
+              
+              {quietHoursEnabled && (
+                <>
+                  {renderTimeSetting(
+                    new Date(quietHoursStart),
+                    () => setShowQuietHoursStartPicker(true),
+                    'Quiet Hours Start',
+                    'Set when quiet hours begin'
+                  )}
+                  
+                  {renderTimeSetting(
+                    new Date(quietHoursEnd),
+                    () => setShowQuietHoursEndPicker(true),
+                    'Quiet Hours End',
+                    'Set when quiet hours end'
+                  )}
+                </>
+              )}
+            </>
           )}
         </View>
         
@@ -913,24 +1221,36 @@ const SettingsScreen = ({ navigation }) => {
           transparent={true}
           visible={isTimePickerVisible}
           animationType="fade"
-          onRequestClose={() => setTimePickerVisible(false)}
+          onRequestClose={cancelTimeSelection}
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Choose Reminder Time</Text>
-              <DateTimePicker
-                value={journalReminderTime}
-                mode="time"
-                display="spinner"
-                onChange={handleTimeChange}
-                style={styles.timePicker}
-              />
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setTimePickerVisible(false)}
-              >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Select Reminder Time</Text>
+              <View style={styles.timePickerContainer}>
+                <DateTimePicker
+                  value={tempSelectedTime || (currentTimePickerMode === 'journalReminder' ? journalReminderTime : meditationReminderTime)}
+                  mode="time"
+                  display="spinner"
+                  onChange={handleTimeChange}
+                  style={styles.timePicker}
+                  textColor="#FFFFFF"
+                  themeVariant="dark"
+                />
+              </View>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={cancelTimeSelection}
+                >
+                  <Text style={styles.modalButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.confirmButton]}
+                  onPress={confirmTimeSelection}
+                >
+                  <Text style={{color: '#333', fontSize: 16, fontWeight: '600'}}>Confirm</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </Modal>
@@ -977,6 +1297,28 @@ const SettingsScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+      
+      {/* 静音时段开始时间选择器 */}
+      {showQuietHoursStartPicker && (
+        <DateTimePicker
+          value={new Date(quietHoursStart)}
+          mode="time"
+          is24Hour={true}
+          display="default"
+          onChange={handleQuietHoursStartChange}
+        />
+      )}
+      
+      {/* 静音时段结束时间选择器 */}
+      {showQuietHoursEndPicker && (
+        <DateTimePicker
+          value={new Date(quietHoursEnd)}
+          mode="time"
+          is24Hour={true}
+          display="default"
+          onChange={handleQuietHoursEndChange}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -1166,6 +1508,7 @@ const styles = StyleSheet.create({
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 10,
   },
   modalButton: {
     flex: 1,
@@ -1175,32 +1518,36 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   cancelButton: {
-    backgroundColor: '#333',
+    backgroundColor: '#444',
   },
   confirmButton: {
-    backgroundColor: '#444',
+    backgroundColor: '#FFFFFF',
+    flex: 1,
+    marginLeft: 10,
+    borderRadius: 8,
   },
   modalButtonText: {
     color: '#FFF',
     fontSize: 16,
     fontWeight: '500',
   },
-  timePicker: {
+  timePickerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
     width: '100%',
     backgroundColor: '#222',
-    marginBottom: 20,
-  },
-  modalCancelButton: {
-    backgroundColor: '#333',
-    padding: 12,
-    alignItems: 'center',
     borderRadius: 8,
-    marginHorizontal: 5,
+    marginBottom: 15,
+    overflow: 'hidden',
   },
-  modalCancelButtonText: {
-    color: '#FFF',
+  timePicker: {
+    height: 200,
+    width: '100%',
+  },
+  confirmButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   cloudBackupContainer: {
     marginTop: 10,
