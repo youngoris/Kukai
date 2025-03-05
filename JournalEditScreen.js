@@ -17,6 +17,7 @@ import { MaterialIcons, Feather, Ionicons, MaterialCommunityIcons } from '@expo/
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import Markdown from 'react-native-markdown-display'; // 导入 Markdown 组件
+import useWeather from './utils/useWeather'; // 导入天气Hook
 
 const JournalEditScreen = ({ navigation, route }) => {
   const { savedJournal, date, viewOnly = false, location: routeLocation, weather: routeWeather, temperature: routeTemperature, mood: routeMood } = route.params;
@@ -30,21 +31,25 @@ const JournalEditScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [locationError, setLocationError] = useState(null);
 
-  // 监听键盘事件
+  // 使用自定义Hook获取天气数据，但不自动获取
+  const { 
+    fetchWeather: fetchWeatherData,
+    getWeatherIcon
+  } = useWeather({ autoFetch: false });
+
+  // 键盘监听器
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
       (event) => {
-        const keyboardHeight = event.endCoordinates.height;
-        console.log('Keyboard shown, height:', keyboardHeight);
         setKeyboardVisible(true);
-        setKeyboardHeight(keyboardHeight);
+        setKeyboardHeight(event.endCoordinates.height);
       }
     );
+    
     const keyboardDidHideListener = Keyboard.addListener(
       'keyboardDidHide',
       () => {
-        console.log('Keyboard hidden');
         setKeyboardVisible(false);
         setKeyboardHeight(0);
       }
@@ -56,97 +61,28 @@ const JournalEditScreen = ({ navigation, route }) => {
     };
   }, []);
 
-  // 修改获取天气信息的部分，添加从API提取位置信息
-  const getWeatherAndLocation = async (latitude, longitude) => {
-    try {
-      const API_KEY = '847915028262f4981a07546eb43696ce';
-      const response = await fetch(
-        `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&units=metric&appid=${API_KEY}`
-      );
-      
-      if (!response.ok) {
-        throw new Error('Weather data fetch failed');
-      }
-      
-      const weatherData = await response.json();
-      const temp = Math.round(weatherData.main.temp);
-      const weatherCondition = weatherData.weather[0].main;
-      const city = weatherData.name;
-      const country = weatherData.sys.country;
-      const locationFromWeather = city || '';
-      
-      setTemperature(temp);
-      setWeather(weatherCondition);
-      if (!location) {
-        setLocation(locationFromWeather);
-      }
-      
-      return {
-        weather: weatherCondition,
-        temperature: temp,
-        location: locationFromWeather
-      };
-    } catch (error) {
-      console.error('获取天气数据失败:', error);
-      return null;
-    }
-  };
-
-  // 修改位置获取函数以使用缓存的天气数据
-  const getLocationAndWeather = async () => {
+  // 获取位置和天气数据
+  const getLocationAndWeather = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      // 首先尝试从 AsyncStorage 获取缓存的天气数据
-      const savedWeatherData = await AsyncStorage.getItem('currentWeatherData');
+      // 使用useWeather Hook获取天气数据
+      const weatherResult = await fetchWeatherData(forceRefresh);
       
-      if (savedWeatherData) {
-        const parsedWeatherData = JSON.parse(savedWeatherData);
-        setWeather(parsedWeatherData.weather);
-        setTemperature(parsedWeatherData.temperature);
-        setLocation(parsedWeatherData.location);
-        setLoading(false);
-        return;
-      }
-      
-      // 如果没有缓存数据，则获取位置和天气
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setLocationError('Permission to access location was denied');
-        setLoading(false);
-        return;
-      }
-      
-      const locationData = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = locationData.coords;
-      
-      const weatherInfo = await getWeatherAndLocation(latitude, longitude);
-      
-      const geoResponse = await Location.reverseGeocodeAsync({
-        latitude,
-        longitude
-      });
-      
-      if (geoResponse && geoResponse.length > 0 && !weatherInfo?.location) {
-        const geo = geoResponse[0];
-        let locationString = '';
-        
-        if (geo.city) {
-          locationString = geo.city;
-        } else if (geo.region) {
-          locationString = geo.region;
-        }
-        
-        if (geo.country && locationString) {
-          locationString += `, ${geo.country}`;
-        } else if (geo.country) {
-          locationString = geo.country;
-        }
-        
-        setLocation(locationString);
+      if (weatherResult && !weatherResult.error) {
+        // 设置天气数据，确保格式一致性
+        setWeather(weatherResult.weather);
+        setTemperature(weatherResult.temperature);
+        setLocation(weatherResult.location);
+      } else if (weatherResult && weatherResult.error) {
+        setLocationError(weatherResult.error);
       }
     } catch (error) {
       console.error('Error getting location:', error);
-      setLocationError('Unable to fetch location');
+      setLocationError({
+        type: 'UNKNOWN_ERROR',
+        message: 'Unable to fetch location',
+        details: error.message
+      });
     } finally {
       setLoading(false);
     }
@@ -187,16 +123,19 @@ const JournalEditScreen = ({ navigation, route }) => {
       // 否则尝试从 AsyncStorage 加载或获取新数据
       await loadJournalMeta();
       
-      // 如果没有位置或天气数据，则尝试获取
-      if (!location || !weather) {
-        await getLocationAndWeather();
-      } else {
-        setLoading(false);
-      }
+      // 修改：即使有位置或天气数据，也尝试获取最新数据
+      // 但不强制刷新，如果缓存有效则使用缓存
+      await getLocationAndWeather(false);
     };
     
     initialize();
   }, []);
+
+  // 添加刷新天气数据的函数
+  const refreshWeatherData = async () => {
+    if (viewOnly) return; // 在查看模式下不刷新
+    await getLocationAndWeather(true); // 强制刷新
+  };
 
   // 保存日志
   const saveJournal = async () => {
@@ -254,32 +193,21 @@ const JournalEditScreen = ({ navigation, route }) => {
     }
   };
 
-  // 获取天气图标
-  const getWeatherIcon = (weatherType) => {
-    switch(weatherType) {
-      case 'Sunny': return 'sunny-outline';
-      case 'Cloudy': return 'cloud-outline';
-      case 'Rainy': return 'rainy-outline';
-      case 'Storm': return 'thunderstorm-outline';
-      case 'Snow': return 'snow-outline';
-      case 'Clear': return 'moon-outline';
-      default: return 'partly-sunny-outline';
-    }
-  };
-
   // 获取心情图标
   const getMoodIcon = (moodType) => {
     switch(moodType) {
-      case 'happy': return 'emoticon-happy-outline';
-      case 'calm': return 'emoticon-neutral-outline';
+      case 'happy': return 'emoticon-outline';
       case 'sad': return 'emoticon-sad-outline';
-      default: return null;
+      case 'angry': return 'emoticon-angry-outline';
+      case 'neutral': return 'emoticon-neutral-outline';
+      case 'excited': return 'emoticon-excited-outline';
+      default: return 'emoticon-outline';
     }
   };
 
   // 选择心情
   const selectMood = (selectedMood) => {
-    setMood(mood === selectedMood ? null : selectedMood);
+    setMood(selectedMood);
   };
 
   // 自定义Markdown解析器配置
@@ -588,19 +516,45 @@ const markdownRules = {
               
               {weather && temperature ? (
                 <View style={styles.infoItem}>
-                  <Ionicons name={getWeatherIcon(weather)} size={16} color="#AAAAAA" />
-                  <Text style={styles.infoText} numberOfLines={1}>
+                  <MaterialCommunityIcons name={`weather-${getWeatherIcon(weather)}`} size={16} color="#AAAAAA" />
+                  <Text style={styles.infoText} numberOfLines={1} ellipsizeMode="tail">
                     {weather}, {temperature}°C
                   </Text>
+                  {!viewOnly && (
+                    <TouchableOpacity 
+                      onPress={refreshWeatherData}
+                      style={styles.refreshButton}
+                    >
+                      <Feather name="refresh-cw" size={14} color="#AAAAAA" />
+                    </TouchableOpacity>
+                  )}
                 </View>
               ) : weather ? (
                 <View style={styles.infoItem}>
-                  <Ionicons name={getWeatherIcon(weather)} size={16} color="#AAAAAA" />
-                  <Text style={styles.infoText} numberOfLines={1}>
+                  <MaterialCommunityIcons name={`weather-${getWeatherIcon(weather)}`} size={16} color="#AAAAAA" />
+                  <Text style={styles.infoText} numberOfLines={1} ellipsizeMode="tail">
                     {weather}
                   </Text>
+                  {!viewOnly && (
+                    <TouchableOpacity 
+                      onPress={refreshWeatherData}
+                      style={styles.refreshButton}
+                    >
+                      <Feather name="refresh-cw" size={14} color="#AAAAAA" />
+                    </TouchableOpacity>
+                  )}
                 </View>
-              ) : null}
+              ) : (
+                !viewOnly && (
+                  <TouchableOpacity 
+                    onPress={refreshWeatherData}
+                    style={styles.infoItem}
+                  >
+                    <Feather name="cloud" size={16} color="#AAAAAA" />
+                    <Text style={styles.infoText}>Update weather</Text>
+                  </TouchableOpacity>
+                )
+              )}
             </View>
 
             {/* 预览模式下保持一致的布局 */}
@@ -690,16 +644,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     alignItems: 'center', // 垂直居中
     flexShrink: 1, // 允许收缩
+    flexWrap: 'nowrap', // 防止换行
+    maxWidth: '80%', // 限制最大宽度
   },
   infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 20,
+    marginRight: 10,
+    flexShrink: 1, // 允许收缩
   },
   infoText: {
     color: '#CCCCCC',
-    marginLeft: 8,
+    marginLeft: 5,
     fontSize: 14,
+    flexShrink: 1, // 允许文本收缩
+    maxWidth: 180, // 限制最大宽度
   },
   loadingText: {
     color: '#AAAAAA',
@@ -724,14 +683,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dateMoodIcon: {
-    marginLeft: 10,
+    marginLeft: 5,
   },
   moodSelector: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   moodItem: {
-    marginLeft: 10,
+    marginLeft: 5,
     padding: 3,
   },
   contentScrollView: {
@@ -742,6 +701,10 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     lineHeight: 24,
+  },
+  refreshButton: {
+    marginLeft: 8,
+    padding: 3,
   },
 });
 

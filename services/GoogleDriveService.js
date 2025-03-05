@@ -3,14 +3,14 @@ import * as FileSystem from 'expo-file-system';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import * as Crypto from 'expo-crypto';
-import { zip, unzip } from 'react-native-zip-archive';
+// import { zip, unzip } from 'react-native-zip-archive';
 
 // Ensure WebBrowser can complete the authentication session
 WebBrowser.maybeCompleteAuthSession();
 
 // Google API Configuration
 const GOOGLE_API_CONFIG = {
-  // Replace with your actual client IDs
+  // Replace with actual client IDs
   expoClientId: 'YOUR_EXPO_CLIENT_ID',
   iosClientId: 'YOUR_IOS_CLIENT_ID',
   androidClientId: 'YOUR_ANDROID_CLIENT_ID',

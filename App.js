@@ -21,6 +21,8 @@ import * as Location from 'expo-location';
 import JournalEditScreen from './JournalEditScreen';
 import { MaterialIcons } from '@expo/vector-icons';
 import googleDriveService from './services/GoogleDriveService';
+import { WEATHER_API, CACHE, ERROR_TYPES, STORAGE_KEYS } from './constants/Config';
+import useWeather from './utils/useWeather'; // 导入天气Hook
 
 const { width, height } = Dimensions.get('window');
 const Stack = createStackNavigator();
@@ -94,16 +96,19 @@ const HomeScreen = ({ navigation }) => {
   const isFirstLoad = useRef(true);
   const previousTimeOfDay = useRef(timeOfDay);
   
-  const [weather, setWeather] = useState(null);
-  const [weatherError, setWeatherError] = useState(null);
-  const [location, setLocation] = useState(null);
-  const [isLoadingWeather, setIsLoadingWeather] = useState(true);
+  // 使用自定义Hook获取天气数据
+  const { 
+    weather, 
+    temperature, 
+    location, 
+    isLoading: isLoadingWeather, 
+    error: weatherError,
+    getWeatherIcon,
+    getErrorIcon
+  } = useWeather();
   
   // 在HomeScreen组件中添加一个ref来跟踪是否是初始加载
   const isInitialMount = useRef(true);
-  
-  // 使用ref追踪坐标变化
-  const previousCoords = useRef(null);
   
   // 加载已完成任务状态
   useEffect(() => {
@@ -296,116 +301,15 @@ const HomeScreen = ({ navigation }) => {
     };
   };
   
-  // Add this function to map OpenWeather icon codes to MaterialCommunityIcons
-  const getWeatherIcon = (iconCode) => {
-    const weatherIcons = {
-      '01d': 'weather-sunny',
-      '01n': 'weather-night',
-      '02d': 'weather-partly-cloudy',
-      '02n': 'weather-night-partly-cloudy',
-      '03d': 'weather-cloudy',
-      '03n': 'weather-cloudy',
-      '04d': 'weather-cloudy',
-      '04n': 'weather-cloudy',
-      '09d': 'weather-pouring',
-      '09n': 'weather-pouring',
-      '10d': 'weather-rainy',
-      '10n': 'weather-rainy',
-      '11d': 'weather-lightning',
-      '11n': 'weather-lightning',
-      '13d': 'weather-snowy',
-      '13n': 'weather-snowy',
-      '50d': 'weather-fog',
-      '50n': 'weather-fog',
-    };
-
-    return weatherIcons[iconCode] || 'weather-cloudy';
-  };
-  
-  // 修改天气获取功能
-  useEffect(() => {
-    const fetchWeather = async () => {
-      try {
-        // 首先检查 AsyncStorage 中是否有最近的天气数据
-        const savedWeatherData = await AsyncStorage.getItem('currentWeatherData');
-        
-        if (savedWeatherData) {
-          const parsedWeatherData = JSON.parse(savedWeatherData);
-          const savedTimestamp = new Date(parsedWeatherData.timestamp);
-          const currentTime = new Date();
-          
-          // 如果天气数据不超过3小时，直接使用缓存的数据
-          if ((currentTime - savedTimestamp) < 3 * 60 * 60 * 1000) {
-            console.log('使用缓存的天气数据');
-            setWeather(parsedWeatherData.data);
-            setIsLoadingWeather(false);
-            return;
-          }
-        }
-        
-        setIsLoadingWeather(true);
-        setWeatherError(null);
-        
-        // Request location permission
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setWeatherError('Location permission denied');
-          console.log('Location permission denied');
-          setIsLoadingWeather(false);
-          return;
-        }
-
-        // Get current location
-        const location = await Location.getCurrentPositionAsync({});
-        if (!location) {
-          throw new Error('Unable to get location information');
-        }
-        
-        setLocation(location);
-        console.log('位置获取成功:', location.coords.latitude, location.coords.longitude);
-
-        // 使用OpenWeather API获取天气数据
-        const apiKey = '847915028262f4981a07546eb43696ce';
-        const url = `https://api.openweathermap.org/data/2.5/weather?lat=${location.coords.latitude}&lon=${location.coords.longitude}&units=metric&appid=${apiKey}`;
-        
-        console.log('正在请求天气数据:', url);
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('天气API响应错误:', response.status, errorText);
-          throw new Error(`天气数据获取失败: ${response.status}`);
-        }
-        
-        const weatherData = await response.json();
-        console.log('天气数据获取成功:', weatherData);
-        setWeather(weatherData);
-
-        // 保存天气数据到AsyncStorage
-        if (weatherData) {
-          await AsyncStorage.setItem('currentWeatherData', JSON.stringify({
-            weather: weatherData.weather[0].main,
-            temperature: Math.round(weatherData.main.temp),
-            location: weatherData.name,
-            timestamp: new Date().toISOString(),
-            data: weatherData
-          }));
-        }
-      } catch (error) {
-        console.error('获取天气时出错:', error.message);
-        setWeatherError(`无法获取天气: ${error.message}`);
-      } finally {
-        setIsLoadingWeather(false);
-      }
-    };
-
-    // 只在应用启动时获取一次天气数据，而不是基于位置变化
-    fetchWeather();
+  // 修改天气错误显示逻辑
+  const getWeatherErrorIcon = () => {
+    if (!weatherError) return 'weather-cloudy-alert';
     
-    // 移除基于位置变化的检查和定时刷新
-    // 不再需要 weatherInterval
-  }, []); // 依赖数组为空，确保只在组件挂载时执行一次
-  
+    const errorIcon = getErrorIcon();
+    // 如果错误图标不是以'weather-'开头，则添加前缀
+    return errorIcon.startsWith('weather-') ? errorIcon : `weather-${errorIcon}`;
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* 顶部日期 */}
@@ -420,7 +324,7 @@ const HomeScreen = ({ navigation }) => {
         ) : weatherError ? (
           <View style={styles.weatherContainer}>
             <MaterialCommunityIcons 
-              name="weather-cloudy-alert"
+              name={getWeatherErrorIcon()}
               size={22}
               color="#ff6b6b"
               style={styles.weatherIcon}
@@ -430,13 +334,13 @@ const HomeScreen = ({ navigation }) => {
         ) : weather && (
           <View style={styles.weatherContainer}>
             <MaterialCommunityIcons 
-              name={getWeatherIcon(weather.weather[0].icon)}
+              name={`weather-${getWeatherIcon(weather.icon)}`}
               size={22}
               color="#fff"
               style={styles.weatherIcon}
             />
             <Text style={styles.weatherText}>
-              {Math.round(weather.main.temp)}°C
+              {temperature}°C
             </Text>
           </View>
         )}
