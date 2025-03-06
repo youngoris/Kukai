@@ -78,14 +78,14 @@ const MeditationScreen = ({ navigation }) => {
   
   // New state variables
   const [customDuration, setCustomDuration] = useState(10); // Default custom duration
-  const [selectedSoundTheme, setSelectedSoundTheme] = useState('silence'); // 默认设置为静音
+  const [selectedSoundTheme, setSelectedSoundTheme] = useState('silence'); // Default set to silent
   
   // Load settings from AsyncStorage when screen focuses
   useFocusEffect(
     useCallback(() => {
       const loadMeditationSettings = async () => {
         try {
-          // 使用userSettings作为存储键名以匹配SettingsScreen.js
+          // Use userSettings as storage key to match SettingsScreen.js
           const settingsData = await AsyncStorage.getItem('userSettings');
           if (settingsData) {
             const parsedSettings = JSON.parse(settingsData);

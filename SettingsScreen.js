@@ -638,7 +638,6 @@ const SettingsScreen = ({ navigation }) => {
           <Text style={[styles.settingValue, appTheme === 'light' && styles.lightText]}>
             {selectedOption ? selectedOption.label : 'Select'}
           </Text>
-          <MaterialIcons name="chevron-right" size={22} color="#666666" />
         </View>
       </TouchableOpacity>
     );
@@ -678,7 +677,6 @@ const SettingsScreen = ({ navigation }) => {
         <Text style={[styles.timeText, appTheme === 'light' && styles.lightText]}>
           {value.getHours().toString().padStart(2, '0')}:{value.getMinutes().toString().padStart(2, '0')}
         </Text>
-        <MaterialIcons name="access-time" size={20} color="#AAAAAA" style={styles.timeIcon} />
       </View>
     </TouchableOpacity>
   );
@@ -689,13 +687,17 @@ const SettingsScreen = ({ navigation }) => {
       onPress={onPress}
     >
       <View style={styles.actionButtonContent}>
-        <MaterialIcons name={icon} size={22} color={destructive ? "#F55" : "#FFFFFF"} />
         <View style={styles.actionButtonTextContainer}>
-          <Text style={[styles.actionButtonLabel, destructive && styles.dangerButtonText]}>{label}</Text>
+          <Text style={[
+            styles.actionButtonLabel, 
+            appTheme === 'light' && styles.lightText,
+            destructive && styles.dangerButtonText
+          ]}>
+            {label}
+          </Text>
           {description && <Text style={styles.actionButtonDescription}>{description}</Text>}
         </View>
       </View>
-      <MaterialIcons name="chevron-right" size={22} color="#666666" />
     </TouchableOpacity>
   );
   
@@ -834,7 +836,6 @@ const SettingsScreen = ({ navigation }) => {
           <Text style={[styles.settingValue, appTheme === 'light' && styles.lightText]}>
             {selectedLabel}
           </Text>
-          <MaterialIcons name="chevron-right" size={22} color="#666666" />
         </View>
       </TouchableOpacity>
     );
@@ -1141,16 +1142,16 @@ const SettingsScreen = ({ navigation }) => {
             'Sync your data across devices'
           )}
           
-          {/* Google Drive Backup */}
+          {/* Cloud Backup */}
           {renderActionButton(
             () => {
               // Show the CloudBackupSection as a modal or navigate to a dedicated screen
               // For now, we'll just toggle the visibility of the CloudBackupSection
               setShowCloudBackup(!showCloudBackup);
             },
-            'Google Drive Backup',
-            'cloud',
-            'Backup and sync data with Google Drive'
+            'Cloud Backup',
+            null,
+            'Backup and sync your app data'
           )}
           
           {showCloudBackup && (
@@ -1477,10 +1478,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   actionButtonTextContainer: {
-    marginLeft: 12,
+    marginLeft: 0,
   },
   actionButtonLabel: {
-    color: '#FFFFFF',
+    color: '#CCC',
     fontSize: 16,
   },
   actionButtonDescription: {

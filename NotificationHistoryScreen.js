@@ -16,7 +16,7 @@ const NotificationHistoryScreen = ({ navigation }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 加载通知历史记录
+  // Load notification history
   const loadNotifications = async () => {
     setLoading(true);
     try {
@@ -30,7 +30,7 @@ const NotificationHistoryScreen = ({ navigation }) => {
     }
   };
 
-  // 标记通知为已读
+  // Mark notification as read
   const markAsRead = async (notificationId) => {
     try {
       await notificationService.markNotificationAsRead(notificationId);
@@ -44,7 +44,7 @@ const NotificationHistoryScreen = ({ navigation }) => {
     }
   };
 
-  // 清除所有通知
+  // Clear all notifications
   const clearAllNotifications = () => {
     Alert.alert(
       'Clear All Notifications',
@@ -68,20 +68,20 @@ const NotificationHistoryScreen = ({ navigation }) => {
     );
   };
 
-  // 处理通知点击
+  // Handle notification click
   const handleNotificationPress = (notification) => {
-    // 标记为已读
+    // Mark as read
     if (!notification.read) {
       markAsRead(notification.id);
     }
     
-    // 如果通知包含导航信息，导航到相应界面
+    // If notification contains navigation info, navigate to appropriate screen
     if (notification.data && notification.data.screen) {
       navigation.navigate(notification.data.screen);
     }
   };
 
-  // 格式化时间
+  // Format time
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -107,7 +107,7 @@ const NotificationHistoryScreen = ({ navigation }) => {
     }
   };
 
-  // 获取通知类型图标
+  // Get notification type icon
   const getNotificationIcon = (notification) => {
     if (!notification.data || !notification.data.notificationType) {
       return <Ionicons name="notifications" size={24} color={COLORS.PRIMARY} />;
@@ -128,11 +128,11 @@ const NotificationHistoryScreen = ({ navigation }) => {
     }
   };
 
-  // 初始加载
+  // Initial loading
   useEffect(() => {
     loadNotifications();
     
-    // 添加导航焦点监听器，每次进入页面时刷新数据
+    // Add navigation focus listener to refresh data every time the page is entered
     const unsubscribe = navigation.addListener('focus', () => {
       loadNotifications();
     });
@@ -140,7 +140,7 @@ const NotificationHistoryScreen = ({ navigation }) => {
     return unsubscribe;
   }, [navigation]);
 
-  // 渲染通知项
+  // Render notification item
   const renderNotificationItem = ({ item }) => (
     <TouchableOpacity
       style={[
@@ -163,10 +163,10 @@ const NotificationHistoryScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
-  // 渲染空状态
+  // Render empty state
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Ionicons name="notifications-off" size={64} color="#ccc" />
+      <Ionicons name="notifications-off" size={64} color="#666" />
       <Text style={styles.emptyStateText}>No Notifications</Text>
       <Text style={styles.emptyStateSubtext}>When you receive notifications, they will appear here</Text>
     </View>
@@ -179,7 +179,7 @@ const NotificationHistoryScreen = ({ navigation }) => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#000" />
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Notification History</Text>
         {notifications.length > 0 && (
@@ -208,7 +208,7 @@ const NotificationHistoryScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#000000',
   },
   header: {
     flexDirection: 'row',
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#222222',
   },
   backButton: {
     padding: 8,
@@ -225,6 +225,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
+    color: '#FFFFFF',
   },
   clearButton: {
     padding: 8,
@@ -237,11 +238,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    backgroundColor: '#fff',
+    borderBottomColor: '#222222',
+    backgroundColor: '#121212',
   },
   unreadNotification: {
-    backgroundColor: '#f0f8ff',
+    backgroundColor: '#1A1A1A',
   },
   notificationIcon: {
     marginRight: 16,
@@ -252,48 +253,47 @@ const styles = StyleSheet.create({
   },
   notificationTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   notificationBody: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+    color: '#CCCCCC',
+    marginBottom: 6,
   },
   notificationTime: {
     fontSize: 12,
-    color: '#999',
+    color: '#888888',
   },
   unreadIndicator: {
     width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: COLORS.PRIMARY,
-    alignSelf: 'center',
     marginLeft: 8,
-  },
-  emptyListContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    alignSelf: 'center',
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    padding: 20,
   },
   emptyStateText: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '500',
+    color: '#FFFFFF',
     marginTop: 16,
-    color: '#666',
   },
   emptyStateSubtext: {
     fontSize: 14,
-    color: '#999',
     textAlign: 'center',
+    color: '#888888',
     marginTop: 8,
+  },
+  emptyListContent: {
+    flexGrow: 1,
   },
 });
 

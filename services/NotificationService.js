@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// 配置通知处理程序
+// Configure notification handler
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -11,10 +11,10 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// 全局导航引用，用于通知点击后导航
+// Global navigation reference, used for navigation after notification click
 let navigationRef = null;
 
-// 默认配置
+// Default configuration
 const DEFAULT_CONFIG = {
   taskNotifications: true,
   notificationSound: 'default',
@@ -28,26 +28,26 @@ class NotificationService {
     this.config = { ...DEFAULT_CONFIG };
   }
   
-  // 设置导航引用
+  // Set navigation reference
   setNavigationRef(ref) {
     navigationRef = ref;
   }
   
-  // 更新配置
+  // Update configuration
   async updateConfig(newConfig) {
     this.config = {
       ...this.config,
       ...newConfig
     };
     
-    // 保存配置到存储
+    // Save configuration to storage
     await AsyncStorage.setItem('notificationConfig', JSON.stringify(this.config));
     
     console.log('Notification configuration updated:', this.config);
     return this.config;
   }
   
-  // 加载配置
+  // Load configuration
   async loadConfig() {
     try {
       const configJson = await AsyncStorage.getItem('notificationConfig');
@@ -65,7 +65,7 @@ class NotificationService {
     return this.config;
   }
   
-  // 检查是否在静音时段
+  // Check if in quiet hours
   isInQuietHours() {
     if (!this.config.quietHoursEnabled) {
       return false;
@@ -80,7 +80,7 @@ class NotificationService {
     const endDate = new Date(this.config.quietHoursEnd);
     const endTime = endDate.getHours() * 60 + endDate.getMinutes();
     
-    // 处理跨天的情况
+    // Handle cross-day situation
     if (startTime > endTime) {
       return currentTime >= startTime || currentTime <= endTime;
     } else {
@@ -88,14 +88,14 @@ class NotificationService {
     }
   }
   
-  // 获取通知声音
+  // Get notification sound
   getNotificationSound() {
-    // 如果在静音时段，返回null（无声）
+    // If in quiet hours, return null (silent)
     if (this.isInQuietHours()) {
       return null;
     }
     
-    // 根据配置返回声音
+    // Return sound based on configuration
     switch (this.config.notificationSound) {
       case 'none':
         return null;
@@ -105,22 +105,22 @@ class NotificationService {
         return Platform.OS === 'ios' ? 'alert.wav' : 'alert';
       case 'default':
       default:
-        return true; // 使用默认声音
+        return true; // Use default sound
     }
   }
   
-  // 请求通知权限
+  // Request notification permissions
   async requestPermissions() {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     
-    // 如果没有权限，请求权限
+    // If no permission, request permission
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
     
-    // 在iOS上，需要额外请求通知权限
+    // On iOS, additional notification permission is needed
     if (Platform.OS === 'ios') {
       await Notifications.setNotificationCategoryAsync('default', [
         {
@@ -145,15 +145,15 @@ class NotificationService {
     return finalStatus === 'granted';
   }
   
-  // 检查通知权限
+  // Check notification permissions
   async checkPermissions() {
     const { status } = await Notifications.getPermissionsAsync();
     return status === 'granted';
   }
   
-  // 调度任务提醒通知
+  // Schedule task reminder notification
   async scheduleTaskNotification(task) {
-    // 如果任务通知被禁用，不调度通知
+    // If task notification is disabled, do not schedule notification
     if (!this.config.taskNotifications) {
       return null;
     }
@@ -163,20 +163,20 @@ class NotificationService {
     }
     
     try {
-      // 计算通知时间
+      // Calculate notification time
       const taskTime = new Date(task.taskTime);
       const reminderMinutes = task.reminderTime || 15;
       const notificationTime = new Date(taskTime.getTime() - reminderMinutes * 60 * 1000);
       
-      // 如果通知时间已过，则不调度
+      // If notification time has passed, do not schedule
       if (notificationTime <= new Date()) {
         return null;
       }
       
-      // 获取通知声音
+      // Get notification sound
       const sound = this.getNotificationSound();
       
-      // 创建通知
+      // Create notification
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Task Reminder',
@@ -187,13 +187,13 @@ class NotificationService {
             notificationType: 'taskReminder'
           },
           sound,
-          // 在iOS上添加通知操作按钮
+          // Add notification action button on iOS
           categoryIdentifier: Platform.OS === 'ios' ? 'default' : undefined,
         },
         trigger: notificationTime,
       });
       
-      // 添加到历史记录
+      // Add to history
       await this.addNotificationToHistory({
         request: {
           content: {
@@ -208,7 +208,7 @@ class NotificationService {
         }
       }, false);
       
-      // 保存通知ID与任务ID的映射关系
+      // Save notification ID to task ID mapping
       await this.saveNotificationMapping(task.id, notificationId);
       
       return notificationId;
@@ -218,7 +218,7 @@ class NotificationService {
     }
   }
   
-  // 取消任务通知
+  // Cancel task notification
   async cancelTaskNotification(taskId) {
     try {
       const notificationId = await this.getNotificationIdForTask(taskId);
@@ -231,45 +231,45 @@ class NotificationService {
     }
   }
   
-  // 调度日志提醒通知
+  // Schedule journal reminder notification
   async scheduleJournalReminder(hours, minutes, enabled) {
     try {
-      // 取消所有现有的日志提醒通知
+      // Cancel all existing journal reminder notifications
       const existingNotifications = await AsyncStorage.getItem('journalReminderNotificationId');
       if (existingNotifications) {
         try {
           const notificationId = JSON.parse(existingNotifications);
-          // 确保 notificationId 是字符串而不是数组
+          // Ensure notificationId is string, not array
           if (typeof notificationId === 'string') {
             await Notifications.cancelScheduledNotificationAsync(notificationId);
           } else if (Array.isArray(notificationId)) {
-            // 如果是数组，尝试取第一个元素
+            // If array, try to take first element
             await Notifications.cancelScheduledNotificationAsync(notificationId[0]);
           } else {
             console.log('Invalid journal notification ID format:', notificationId);
           }
         } catch (cancelError) {
           console.error('Error canceling journal notification:', cancelError);
-          // 继续执行，不要因为取消失败而阻止创建新通知
+          // Continue execution, do not prevent creating new notification due to cancel failure
         }
       }
       
       if (!enabled) return;
       
-      // 获取通知声音
+      // Get notification sound
       const sound = this.getNotificationSound();
       
-      // 检查当前时间是否已经过了今天的设定时间
+      // Check if current time has passed today's set time
       const now = new Date();
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
       const isPastTriggerTimeToday = (currentHour > hours) || (currentHour === hours && currentMinute >= minutes);
       
-      // 计算下一次触发时间
+      // Calculate next trigger time
       let triggerDate = new Date();
-      triggerDate.setHours(hours, minutes, 0, 0); // 设置小时、分钟、秒、毫秒
+      triggerDate.setHours(hours, minutes, 0, 0); // Set hours, minutes, seconds, milliseconds
       
-      // 如果当前时间已经过了今天的触发时间，设置为明天
+      // If current time has passed today's trigger time, set for tomorrow
       if (isPastTriggerTimeToday) {
         triggerDate.setDate(triggerDate.getDate() + 1);
       }
@@ -291,7 +291,7 @@ class NotificationService {
       
       await AsyncStorage.setItem('journalReminderNotificationId', JSON.stringify(notificationId));
       
-      // 不再添加到历史记录，避免触发即时通知
+      // Do not add to history, avoid triggering immediate notification
       // await this.addNotificationToHistory({
       //   request: {
       //     content: {
@@ -311,45 +311,45 @@ class NotificationService {
     }
   }
   
-  // 调度冥想提醒通知
+  // Schedule meditation reminder notification
   async scheduleMeditationReminder(hours, minutes, enabled) {
     try {
-      // 取消所有现有的冥想提醒通知
+      // Cancel all existing meditation reminder notifications
       const existingNotifications = await AsyncStorage.getItem('meditationReminderNotificationId');
       if (existingNotifications) {
         try {
           const notificationId = JSON.parse(existingNotifications);
-          // 确保 notificationId 是字符串而不是数组
+          // Ensure notificationId is string, not array
           if (typeof notificationId === 'string') {
             await Notifications.cancelScheduledNotificationAsync(notificationId);
           } else if (Array.isArray(notificationId)) {
-            // 如果是数组，尝试取第一个元素
+            // If array, try to take first element
             await Notifications.cancelScheduledNotificationAsync(notificationId[0]);
           } else {
             console.log('Invalid meditation notification ID format:', notificationId);
           }
         } catch (cancelError) {
           console.error('Error canceling meditation notification:', cancelError);
-          // 继续执行，不要因为取消失败而阻止创建新通知
+          // Continue execution, do not prevent creating new notification due to cancel failure
         }
       }
       
       if (!enabled) return;
       
-      // 获取通知声音
+      // Get notification sound
       const sound = this.getNotificationSound();
       
-      // 检查当前时间是否已经过了今天的设定时间
+      // Check if current time has passed today's set time
       const now = new Date();
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
       const isPastTriggerTimeToday = (currentHour > hours) || (currentHour === hours && currentMinute >= minutes);
       
-      // 计算下一次触发时间
+      // Calculate next trigger time
       let triggerDate = new Date();
-      triggerDate.setHours(hours, minutes, 0, 0); // 设置小时、分钟、秒、毫秒
+      triggerDate.setHours(hours, minutes, 0, 0); // Set hours, minutes, seconds, milliseconds
       
-      // 如果当前时间已经过了今天的触发时间，设置为明天
+      // If current time has passed today's trigger time, set for tomorrow
       if (isPastTriggerTimeToday) {
         triggerDate.setDate(triggerDate.getDate() + 1);
       }
@@ -371,7 +371,7 @@ class NotificationService {
       
       await AsyncStorage.setItem('meditationReminderNotificationId', JSON.stringify(notificationId));
       
-      // 不再添加到历史记录，避免触发即时通知
+      // Do not add to history, avoid triggering immediate notification
       // await this.addNotificationToHistory({
       //   request: {
       //     content: {
@@ -391,174 +391,167 @@ class NotificationService {
     }
   }
   
-  // 发送即时通知（用于专注模式结束等场景）
+  // Send immediate notification (used for focus mode end scenarios)
   async sendImmediateNotification(title, body, data = {}) {
-    // 获取通知声音
+    // Get notification sound
     const sound = this.getNotificationSound();
     
-    const notification = await Notifications.scheduleNotificationAsync({
+    const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title,
         body,
-        data: {
-          ...data,
-          notificationType: 'immediate'
-        },
+        data,
         sound,
       },
-      trigger: null, // 立即发送
+      trigger: null, // Send immediately
     });
     
-    // 添加到历史记录，但不发送额外的即时通知
+    // Add to history, but do not send additional immediate notification
     await this.addNotificationToHistory({
       request: {
+        identifier: notificationId,
         content: {
           title,
           body,
-          data: {
-            ...data,
-            notificationType: 'immediate'
-          }
-        }
+          data
+        },
+        trigger: null
       }
-    }, false);
+    }, true);
     
-    return notification;
+    return notificationId;
   }
   
-  // 保存通知ID与任务ID的映射关系
+  // Save notification ID to task ID mapping
   async saveNotificationMapping(taskId, notificationId) {
     try {
-      const mappingsJson = await AsyncStorage.getItem('notificationMappings');
-      const mappings = mappingsJson ? JSON.parse(mappingsJson) : {};
-      mappings[taskId] = notificationId;
-      await AsyncStorage.setItem('notificationMappings', JSON.stringify(mappings));
+      const mappingData = await AsyncStorage.getItem('notificationTaskMapping') || '{}';
+      const mapping = JSON.parse(mappingData);
+      mapping[taskId] = notificationId;
+      await AsyncStorage.setItem('notificationTaskMapping', JSON.stringify(mapping));
     } catch (error) {
-      console.error('Failed to save notification mapping:', error);
+      console.error('Error saving notification mapping:', error);
     }
   }
   
-  // 获取任务对应的通知ID
+  // Get notification ID for task
   async getNotificationIdForTask(taskId) {
     try {
-      const mappingsJson = await AsyncStorage.getItem('notificationMappings');
-      const mappings = mappingsJson ? JSON.parse(mappingsJson) : {};
-      return mappings[taskId];
+      const mappingData = await AsyncStorage.getItem('notificationTaskMapping') || '{}';
+      const mapping = JSON.parse(mappingData);
+      return mapping[taskId];
     } catch (error) {
-      console.error('Failed to get notification ID:', error);
+      console.error('Error getting notification ID for task:', error);
       return null;
     }
   }
   
-  // 移除通知映射
+  // Remove notification mapping
   async removeNotificationMapping(taskId) {
     try {
-      const mappingsJson = await AsyncStorage.getItem('notificationMappings');
-      const mappings = mappingsJson ? JSON.parse(mappingsJson) : {};
-      delete mappings[taskId];
-      await AsyncStorage.setItem('notificationMappings', JSON.stringify(mappings));
+      const mappingData = await AsyncStorage.getItem('notificationTaskMapping') || '{}';
+      const mapping = JSON.parse(mappingData);
+      delete mapping[taskId];
+      await AsyncStorage.setItem('notificationTaskMapping', JSON.stringify(mapping));
     } catch (error) {
-      console.error('Failed to remove notification mapping:', error);
+      console.error('Error removing notification mapping:', error);
     }
   }
   
-  // 初始化通知系统
+  // Initialize notification system
   async initialize() {
-    // 加载配置
-    await this.loadConfig();
-    
-    const hasPermission = await this.checkPermissions();
-    if (!hasPermission) {
-      const granted = await this.requestPermissions();
-      if (!granted) {
-        console.log('User denied notification permissions');
-        return false;
+    // Load configuration
+    try {
+      const savedConfig = await AsyncStorage.getItem('notificationConfig');
+      if (savedConfig) {
+        this.config = { ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) };
       }
+      
+      // Set notification response handler
+      this.responseListener = Notifications.addNotificationResponseReceivedListener(
+        this.handleNotificationResponse
+      );
+      
+      return await this.requestPermissions();
+    } catch (error) {
+      console.error('Error initializing notification service:', error);
+      return false;
     }
-    
-    // 设置通知响应处理程序
-    this.notificationResponseListener = Notifications.addNotificationResponseReceivedListener(
-      this.handleNotificationResponse
-    );
-    
-    return true;
   }
   
-  // 清理通知监听器
+  // Clean up notification listener
   cleanup() {
-    if (this.notificationResponseListener) {
-      Notifications.removeNotificationSubscription(this.notificationResponseListener);
+    if (this.responseListener) {
+      Notifications.removeNotificationSubscription(this.responseListener);
     }
   }
   
-  // 处理通知响应
+  // Handle notification response
   handleNotificationResponse = async (response) => {
-    const data = response.notification.request.content.data;
+    const { notification } = response;
     
-    // 添加到历史记录，但不发送额外的即时通知
-    const historyItem = await this.addNotificationToHistory(response.notification, false);
+    // Add to history, but do not send additional immediate notification
+    await this.addNotificationToHistory(notification, false);
     
-    // 标记为已读
-    if (historyItem) {
-      await this.markNotificationAsRead(historyItem.id);
-    }
+    // Mark as read
+    await this.markNotificationAsRead(notification.request.identifier);
     
-    // 如果没有导航引用，无法导航
+    // If no navigation reference, cannot navigate
     if (!navigationRef) {
       console.log('Notification clicked processing: Navigation reference not set');
       return;
     }
     
-    console.log('User clicked notification:', data);
+    console.log('User clicked notification:', notification.request.content.data);
     
-    // 处理通知操作按钮
-    if (response.actionIdentifier === 'complete' && data.taskId) {
-      // 处理"完成"按钮点击
-      console.log('User clicked complete button, task ID:', data.taskId);
-      await this.completeTaskFromNotification(data.taskId);
-    } else if (response.actionIdentifier === 'snooze' && data.taskId) {
-      // 处理"稍后提醒"按钮点击
-      console.log('User clicked snooze button, task ID:', data.taskId);
-      await this.snoozeTaskFromNotification(data.taskId);
-    } else if (data.screen) {
-      // 导航到指定屏幕
-      navigationRef.navigate(data.screen);
+    // Handle notification action button
+    if (response.actionIdentifier === 'complete' && notification.request.content.data.taskId) {
+      // Handle "Complete" button click
+      console.log('User clicked complete button, task ID:', notification.request.content.data.taskId);
+      await this.completeTaskFromNotification(notification.request.content.data.taskId);
+    } else if (response.actionIdentifier === 'snooze' && notification.request.content.data.taskId) {
+      // Handle "Snooze" button click
+      console.log('User clicked snooze button, task ID:', notification.request.content.data.taskId);
+      await this.snoozeTaskFromNotification(notification.request.content.data.taskId);
+    } else if (notification.request.content.data.screen) {
+      // Navigate to specified screen
+      navigationRef.navigate(notification.request.content.data.screen);
       
-      // 如果是任务通知，可以进一步处理
-      if (data.taskId) {
-        console.log('Navigated to task screen, task ID:', data.taskId);
-        // 这里可以添加更多处理逻辑，如高亮显示特定任务
+      // If it's a task notification, further processing can be done
+      if (notification.request.content.data.taskId) {
+        console.log('Navigated to task screen, task ID:', notification.request.content.data.taskId);
+        // Additional processing logic can be added here, such as highlighting specific task
       }
     }
   }
   
-  // 从通知中完成任务
+  // Complete task from notification
   async completeTaskFromNotification(taskId) {
     try {
-      // 获取所有任务
+      // Get all tasks
       const tasksJson = await AsyncStorage.getItem('tasks');
       if (!tasksJson) return;
       
       const tasks = JSON.parse(tasksJson);
       
-      // 查找并更新任务，添加完成时间戳
+      // Find and update task, add completion timestamp
       const updatedTasks = tasks.map(task => 
         task.id === taskId 
           ? { 
               ...task, 
               completed: true,
-              completedAt: new Date().toISOString() // 添加完成时间戳
+              completedAt: new Date().toISOString() // Add completion timestamp
             } 
           : task
       );
       
-      // 保存更新后的任务
+      // Save updated tasks
       await AsyncStorage.setItem('tasks', JSON.stringify(updatedTasks));
       
-      // 取消任务通知
+      // Cancel task notification
       await this.cancelTaskNotification(taskId);
       
-      // 发送确认通知
+      // Send confirmation notification
       await this.sendImmediateNotification(
         'Task Completed',
         'Task has been marked as completed',
@@ -571,28 +564,28 @@ class NotificationService {
     }
   }
   
-  // 从通知中稍后提醒任务
+  // Snooze task from notification
   async snoozeTaskFromNotification(taskId) {
     try {
-      // 获取所有任务
+      // Get all tasks
       const tasksJson = await AsyncStorage.getItem('tasks');
       if (!tasksJson) return;
       
       const tasks = JSON.parse(tasksJson);
       
-      // 查找任务
+      // Find task
       const task = tasks.find(t => t.id === taskId);
       if (!task) return;
       
-      // 取消原有通知
+      // Cancel existing notification
       await this.cancelTaskNotification(taskId);
       
-      // 计算新的提醒时间（15分钟后）
+      // Calculate new reminder time (15 minutes later)
       const snoozeMinutes = 15;
       const now = new Date();
       const newNotificationTime = new Date(now.getTime() + snoozeMinutes * 60 * 1000);
       
-      // 创建新通知
+      // Create new notification
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Snoozed Task Reminder',
@@ -609,7 +602,7 @@ class NotificationService {
         trigger: newNotificationTime,
       });
       
-      // 保存通知ID与任务ID的映射关系
+      // Save notification ID to task ID mapping
       await this.saveNotificationMapping(task.id, notificationId);
       
       console.log('Task snoozed from notification:', taskId);
@@ -618,10 +611,10 @@ class NotificationService {
     }
   }
   
-  // 添加通知到历史记录
+  // Add notification to history
   async addNotificationToHistory(notification, sendImmediateNotification = false) {
     try {
-      // 检查是否是设置更新触发的通知，如果是则不添加到历史记录
+      // Check if it's a settings-related notification triggered update, if so, do not add to history
       if (notification.request.content.data && 
           (notification.request.content.data.notificationType === 'journalReminder' || 
            notification.request.content.data.notificationType === 'meditationReminder') &&
@@ -630,11 +623,11 @@ class NotificationService {
         return null;
       }
       
-      // 获取现有历史记录
+      // Get existing history
       const historyJson = await AsyncStorage.getItem('notificationHistory');
       const history = historyJson ? JSON.parse(historyJson) : [];
       
-      // 创建历史记录项
+      // Create history item
       const historyItem = {
         id: Date.now().toString(),
         title: notification.request.content.title,
@@ -644,15 +637,15 @@ class NotificationService {
         read: false
       };
       
-      // 添加到历史记录
-      const updatedHistory = [historyItem, ...history].slice(0, 50); // 只保留最近50条
+      // Add to history
+      const updatedHistory = [historyItem, ...history].slice(0, 50); // Only keep recent 50 items
       
-      // 保存历史记录
+      // Save history
       await AsyncStorage.setItem('notificationHistory', JSON.stringify(updatedHistory));
       
-      // 如果需要，发送即时通知
+      // If needed, send immediate notification
       if (sendImmediateNotification) {
-        // 这里可以添加发送即时通知的逻辑，但我们现在不需要
+        // Additional logic can be added here for sending immediate notification
         console.log('Immediate notification option is enabled but not sending one');
       }
       
@@ -663,7 +656,7 @@ class NotificationService {
     }
   }
   
-  // 获取通知历史记录
+  // Get notification history
   async getNotificationHistory() {
     try {
       const historyJson = await AsyncStorage.getItem('notificationHistory');
@@ -674,7 +667,7 @@ class NotificationService {
     }
   }
   
-  // 标记通知为已读
+  // Mark notification as read
   async markNotificationAsRead(notificationId) {
     try {
       const historyJson = await AsyncStorage.getItem('notificationHistory');
@@ -682,19 +675,19 @@ class NotificationService {
       
       const history = JSON.parse(historyJson);
       
-      // 更新通知状态
+      // Update notification status
       const updatedHistory = history.map(item => 
         item.id === notificationId ? { ...item, read: true } : item
       );
       
-      // 保存更新后的历史记录
+      // Save updated history
       await AsyncStorage.setItem('notificationHistory', JSON.stringify(updatedHistory));
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
     }
   }
   
-  // 清除通知历史记录
+  // Clear notification history
   async clearNotificationHistory() {
     try {
       await AsyncStorage.removeItem('notificationHistory');

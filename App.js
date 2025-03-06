@@ -23,7 +23,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import googleDriveService from './services/GoogleDriveService';
 import notificationService from './services/NotificationService';
 import { WEATHER_API, CACHE, ERROR_TYPES, STORAGE_KEYS } from './constants/Config';
-import useWeather from './utils/useWeather'; // 导入天气Hook
+import useWeather from './utils/useWeather'; // Import weather Hook
 import NotificationHistoryScreen from './NotificationHistoryScreen';
 
 const { width, height } = Dimensions.get('window');
@@ -80,7 +80,7 @@ const quotes = {
   ]
 };
 
-// 主页面组件
+// Main screen component
 const HomeScreen = ({ navigation }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [timeOfDay, setTimeOfDay] = useState('morning'); // 'morning', 'day', 'evening'
@@ -94,11 +94,11 @@ const HomeScreen = ({ navigation }) => {
     journal: false
   });
   
-  // 添加一个标记，用于识别是首次加载还是返回
+  // Add a flag to track if it's first load or return
   const isFirstLoad = useRef(true);
   const previousTimeOfDay = useRef(timeOfDay);
   
-  // 使用自定义Hook获取天气数据
+  // Use custom Hook to get weather data
   const { 
     weather, 
     temperature, 
@@ -109,56 +109,53 @@ const HomeScreen = ({ navigation }) => {
     getErrorIcon
   } = useWeather();
   
-  // 在HomeScreen组件中添加一个ref来跟踪是否是初始加载
+  // Add a ref in HomeScreen component to track if it's initial load
   const isInitialMount = useRef(true);
   
-  // 加载已完成任务状态
-  useEffect(() => {
-    const loadCompletedTasks = async () => {
-      try {
-        // 获取今天的日期字符串作为键
-        const today = new Date().toISOString().split('T')[0];
-        const savedData = await AsyncStorage.getItem(`completed_${today}`);
+  // Load completed tasks state
+  const loadCompletedTasks = async () => {
+    try {
+      // Get today's date string as key
+      const today = new Date().toISOString().split('T')[0];
+      
+      const savedTasks = await AsyncStorage.getItem('completedTasks');
+      if (savedTasks) {
+        const parsedTasks = JSON.parse(savedTasks);
         
-        if (savedData) {
-          setCompletedTasks(JSON.parse(savedData));
+        // If it's a new day, reset all task states
+        if (!parsedTasks[today]) {
+          const newState = { [today]: {} };
+          setCompletedTasks(newState);
         } else {
-          // 如果是新的一天，重置所有任务状态
-          const resetState = {
-            meditation: false,
-            task: false,
-            focus: false,
-            summary: false,
-            journal: false
-          };
-          setCompletedTasks(resetState);
-          await AsyncStorage.setItem(`completed_${today}`, JSON.stringify(resetState));
+          setCompletedTasks(parsedTasks);
         }
-      } catch (error) {
-        console.error('Error loading completed tasks:', error);
+      } else {
+        // Initialize with today's empty object
+        const newState = { [today]: {} };
+        setCompletedTasks(newState);
       }
-    };
-    
-    loadCompletedTasks();
-  }, []);
+    } catch (error) {
+      console.error('Error loading completed tasks:', error);
+    }
+  };
   
-  // 保存已完成任务状态
+  // Save completed tasks state
   const saveCompletedTasks = async (newState) => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      await AsyncStorage.setItem(`completed_${today}`, JSON.stringify(newState));
+      await AsyncStorage.setItem('completedTasks', JSON.stringify(newState));
     } catch (error) {
       console.error('Error saving completed tasks:', error);
     }
   };
   
-  // 更新时间
+  // Update time
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
       setCurrentTime(now);
       
-      // 判断一天中的时段
+      // Determine the time of day
       const hours = now.getHours();
       let newTimeOfDay;
       
@@ -178,55 +175,55 @@ const HomeScreen = ({ navigation }) => {
     return () => clearInterval(interval);
   }, [timeOfDay]);
   
-  // 设置名言 - 更新动画效果为直接淡入
+  // Set quote - Update animation effect to direct fade in
   useEffect(() => {
-    // 根据时间选择名言类别
+    // Select quote based on time of day
     const quoteList = quotes[timeOfDay];
-    // 随机选择一条名言
+    // Randomly select a quote
     const randomIndex = Math.floor(Math.random() * quoteList.length);
     
-    // 首次加载时直接设置不做动画
+    // First load directly set without animation
     if (isFirstLoad.current) {
       setQuote(quoteList[randomIndex]);
-      fadeAnim.setValue(1); // 直接设置为可见
+      fadeAnim.setValue(1); // Directly set to visible
       isFirstLoad.current = false;
     } 
     else if (previousTimeOfDay.current !== timeOfDay) {
-      // 时段变化时更新引用 - 直接更新而不是先淡出再淡入
+      // Time change update reference - Directly update instead of fade out then fade in
       
-      // 立即将旧引用隐藏并更新内容
+      // Immediately hide old reference and update content
       fadeAnim.setValue(0);
       setQuote(quoteList[randomIndex]);
       
-      // 直接淡入新引用
+      // Directly fade in new reference
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800, // 使用略短的时间
+        duration: 800, // Use slightly shorter time
         useNativeDriver: true,
-        easing: Easing.out(Easing.cubic), // 使用更平滑的缓动函数
+        easing: Easing.out(Easing.cubic), // Use smoother easing function
       }).start();
     }
     
-    // 更新前一个时段引用
+    // Update previous time reference
     previousTimeOfDay.current = timeOfDay;
   }, [timeOfDay]);
   
-  // 将 useFocusEffect 添加到组件中
+  // Add useFocusEffect to component
   useFocusEffect(
     useCallback(() => {
-      // 从其他屏幕返回时，只有在需要时才刷新引用
+      // From other screens, refresh reference only when needed
       if (!isFirstLoad.current && fadeAnim._value < 1) {
-        // 如果由于某种原因引用是不可见的，确保它变为可见
+        // If reference is invisible for some reason, ensure it becomes visible
         fadeAnim.setValue(1);
       }
       
       return () => {
-        // 此处可以放置清理代码（如果需要）
+        // Place cleanup code here (if needed)
       };
     }, [])
   );
   
-  // 格式化日期
+  // Format date
   const formatDate = () => {
     return currentTime.toLocaleDateString('en-US', { 
       year: 'numeric', 
@@ -235,15 +232,15 @@ const HomeScreen = ({ navigation }) => {
     });
   };
   
-  // 处理功能访问
+  // Handle function access
   const handleFunctionAccess = (taskName) => {
-    // 记录功能访问状态
+    // Record function access status
     const newCompletedTasks = { ...completedTasks };
     newCompletedTasks[taskName] = true;
     setCompletedTasks(newCompletedTasks);
     saveCompletedTasks(newCompletedTasks);
     
-    // 导航到相应页面
+    // Navigate to corresponding page
     switch(taskName) {
       case 'meditation':
         navigation.navigate('Meditation');
@@ -268,53 +265,53 @@ const HomeScreen = ({ navigation }) => {
     }
   };
   
-  // 获取当前应该高亮的功能
+  // Get current highlighted function
   const getCurrentHighlightedFunction = () => {
     const hours = currentTime.getHours();
     
-    // 早上时段 (6:00-12:00)
+    // Morning time (6:00-12:00)
     if (hours >= 6 && hours < 12) {
       if (!completedTasks.meditation) return 'MEDITATION';
       if (!completedTasks.task) return 'TASK';
       return 'FOCUS';
     }
     
-    // 白天时段 (12:00-18:00)
+    // Day time (12:00-18:00)
     if (hours >= 12 && hours < 18) {
       return 'FOCUS';
     }
     
-    // 晚上时段 (18:00-6:00)
+    // Evening time (18:00-6:00)
     if (!completedTasks.summary) return 'SUMMARY';
     return 'JOURNAL';
   };
   
   
-  // 获取菜单项样式
+  // Get menu item style
   const getMenuItemStyle = (menuName) => {
     const normalizedMenuName = menuName.toLowerCase();
     const isHighlighted = getCurrentHighlightedFunction() === menuName;
     const isCompleted = completedTasks[normalizedMenuName];
     
-    // 只使用透明度来区分状态，不使用颜色
+    // Use opacity to distinguish state, not color
     return {
       opacity: isHighlighted ? 1 : isCompleted ? 0.4 : 0.6,
-      color: '#fff' // 所有菜单项都使用白色
+      color: '#fff' // All menu items use white
     };
   };
   
-  // 修改天气错误显示逻辑
+  // Modify weather error display logic
   const getWeatherErrorIcon = () => {
     if (!weatherError) return 'weather-cloudy-alert';
     
     const errorIcon = getErrorIcon();
-    // 如果错误图标不是以'weather-'开头，则添加前缀
+    // If error icon is not prefixed with 'weather-', add prefix
     return errorIcon.startsWith('weather-') ? errorIcon : `weather-${errorIcon}`;
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* 顶部日期 */}
+      {/* Top date */}
       <View style={styles.headerContainer}>
         <Text style={styles.dateText}>{formatDate()}</Text>
         
@@ -348,12 +345,12 @@ const HomeScreen = ({ navigation }) => {
         )}
       </View>
       
-      {/* 名言显示 */}
+      {/* Quote display */}
       <Animated.View style={[styles.quoteContainer, { opacity: fadeAnim }]}>
         <Text style={styles.quoteText}>"{quote}"</Text>
       </Animated.View>
       
-      {/* 主菜单 - 绝对定位在屏幕中心 */}
+      {/* Main menu - Absolute positioning in screen center */}
       <View style={styles.menuContainer}>
         <TouchableOpacity 
           style={styles.menuItem}
@@ -401,7 +398,7 @@ const HomeScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
       
-      {/* 设置按钮 - 底部中央 */}
+      {/* Settings button - Bottom center */}
       <View style={styles.settingsContainer}>
         <TouchableOpacity 
           style={styles.settingsButton}
@@ -417,7 +414,7 @@ const HomeScreen = ({ navigation }) => {
   );
 };
 
-// 自定义导航容器组件
+// Custom navigation container component
 const AppNavigator = () => {
   return (
     <Stack.Navigator
@@ -432,10 +429,10 @@ const AppNavigator = () => {
           horizontal: width * 0.5,
         },
         cardStyleInterpolator: ({ current, layouts, next }) => {
-          // 检查是否是返回到 Home 屏幕的导航
+          // Check if navigating back to Home screen
           const isGoingHome = next?.route?.name === 'Home' || route.name === 'Home';
           
-          // 如果是返回到 Home，使用相反的动画方向
+          // If going back to Home, use opposite animation direction
           if (isGoingHome) {
             return {
               cardStyle: {
@@ -451,7 +448,7 @@ const AppNavigator = () => {
             };
           }
           
-          // 默认从右向左的动画
+          // Default right to left animation
           return {
             cardStyle: {
               transform: [
@@ -480,7 +477,7 @@ const AppNavigator = () => {
   );
 };
 
-// 主应用组件
+// Main application component
 export default function App() {
   // Load fonts
   const [fontsLoaded] = useFonts({
@@ -511,10 +508,10 @@ export default function App() {
     initializeGoogleDrive();
   }, []);
 
-  // 创建导航引用
+  // Create navigation reference
   const navigationRef = useRef(null);
   
-  // 初始化通知服务
+  // Initialize notification service
   useEffect(() => {
     notificationService.initialize().then(initialized => {
       if (initialized) {
@@ -524,13 +521,13 @@ export default function App() {
       }
     });
     
-    // 清理通知监听器
+    // Clean up notification listener
     return () => {
       notificationService.cleanup();
     };
   }, []);
   
-  // 设置导航引用
+  // Set navigation reference
   useEffect(() => {
     if (navigationRef.current) {
       notificationService.setNavigationRef(navigationRef.current);

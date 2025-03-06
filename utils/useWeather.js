@@ -4,16 +4,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WEATHER_API, CACHE, ERROR_TYPES, STORAGE_KEYS } from '../constants/Config';
 
 /**
- * 自定义Hook - 天气数据获取
- * @param {Object} options 配置选项
- * @param {boolean} options.autoFetch 是否自动获取天气数据
- * @param {number} options.refreshInterval 自动刷新间隔（毫秒）
- * @returns {Object} 天气数据和控制函数
+ * Custom Hook - Weather data fetching
+ * @param {Object} options Configuration options
+ * @param {boolean} options.autoFetch Whether to automatically fetch weather data
+ * @param {number} options.refreshInterval Auto refresh interval (milliseconds)
+ * @returns {Object} Weather data and control functions
  */
 export default function useWeather(options = {}) {
   const { 
     autoFetch = true, 
-    refreshInterval = 60 * 60 * 1000 // 默认1小时
+    refreshInterval = 60 * 60 * 1000 // Default 1 hour
   } = options;
   
   const [weather, setWeather] = useState(null);
@@ -21,19 +21,19 @@ export default function useWeather(options = {}) {
   const [location, setLocation] = useState(null);
   const [isLoading, setIsLoading] = useState(autoFetch);
   const [error, setError] = useState(null);
-  const [source, setSource] = useState(null); // 'cache' 或 'api'
+  const [source, setSource] = useState(null); // 'cache' or 'api'
   
   /**
-   * 获取天气数据
-   * @param {boolean} forceRefresh 是否强制刷新
-   * @returns {Promise<Object|null>} 天气数据或null
+   * Get weather data
+   * @param {boolean} forceRefresh Whether to force refresh
+   * @returns {Promise<Object|null>} Weather data or null
    */
   const fetchWeather = useCallback(async (forceRefresh = false) => {
     try {
       setIsLoading(true);
       setError(null);
       
-      // 如果不是强制刷新，尝试从缓存获取
+      // If not forced refresh, try to get from cache
       if (!forceRefresh) {
         const savedWeatherData = await AsyncStorage.getItem(STORAGE_KEYS.WEATHER_DATA);
         const savedLocationCoords = await AsyncStorage.getItem(STORAGE_KEYS.LAST_LOCATION);
@@ -43,9 +43,9 @@ export default function useWeather(options = {}) {
           const savedTimestamp = new Date(parsedWeatherData.timestamp);
           const currentTime = new Date();
           
-          // 如果天气数据不超过配置的缓存时间，直接使用缓存的数据
+          // If weather data is not older than the configured cache duration, use cached data
           if ((currentTime - savedTimestamp) < CACHE.WEATHER_CACHE_DURATION) {
-            console.log('使用缓存的天气数据');
+            console.log('Using cached weather data');
             setWeather({
               main: parsedWeatherData.weather,
               icon: parsedWeatherData.icon || 'weather-partly-cloudy'
@@ -55,16 +55,16 @@ export default function useWeather(options = {}) {
             setSource('cache');
             setIsLoading(false);
             
-            // 检查位置是否发生显著变化，如果是则刷新数据
+            // Check if location has changed significantly, if so refresh data
             if (savedLocationCoords && !forceRefresh) {
               try {
-                // 获取当前位置
+                // Get current location
                 const { status } = await Location.requestForegroundPermissionsAsync();
                 if (status === 'granted') {
                   const currentLocation = await Location.getCurrentPositionAsync({});
                   const parsedLastLocation = JSON.parse(savedLocationCoords);
                   
-                  // 计算距离变化
+                  // Calculate distance change
                   const distance = calculateDistance(
                     currentLocation.coords.latitude,
                     currentLocation.coords.longitude,
@@ -72,7 +72,7 @@ export default function useWeather(options = {}) {
                     parsedLastLocation.longitude
                   );
                   
-                  // 如果位置变化小于配置的阈值，使用缓存数据
+                  // If location change is less than the configured threshold, use cached data
                   if (distance <= CACHE.LOCATION_CHANGE_THRESHOLD / 1000) {
                     return {
                       weather: parsedWeatherData.weather,
@@ -82,11 +82,11 @@ export default function useWeather(options = {}) {
                       icon: parsedWeatherData.icon
                     };
                   }
-                  // 否则继续执行获取新数据的逻辑
+                  // Otherwise continue with fetching new data
                 }
               } catch (locationError) {
-                console.error('检查位置变化时出错:', locationError);
-                // 如果不是强制刷新，出错时继续使用缓存数据
+                console.error('Error checking location change:', locationError);
+                // If not forced refresh, continue using cached data on error
                 if (!forceRefresh) {
                   return {
                     weather: parsedWeatherData.weather,
@@ -110,26 +110,26 @@ export default function useWeather(options = {}) {
         }
       }
       
-      // 请求位置权限
+      // Request location permission
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         const permissionError = {
           type: ERROR_TYPES.PERMISSION,
-          message: '位置权限被拒绝',
-          details: '无法获取天气数据，请在设置中允许位置权限'
+          message: 'Location permission denied',
+          details: 'Unable to get weather data, please allow location permission in settings'
         };
         setError(permissionError);
         setIsLoading(false);
         return { error: permissionError };
       }
       
-      // 获取当前位置
+      // Get current location
       const locationData = await Location.getCurrentPositionAsync({});
       if (!locationData) {
         const locationError = {
           type: ERROR_TYPES.LOCATION,
-          message: '无法获取位置信息',
-          details: '请确保位置服务已开启'
+          message: 'Unable to get location information',
+          details: 'Please ensure location services are enabled'
         };
         setError(locationError);
         setIsLoading(false);
@@ -138,30 +138,30 @@ export default function useWeather(options = {}) {
       
       const { latitude, longitude } = locationData.coords;
       
-      // 保存位置信息用于后续比较
+      // Save location information for future comparison
       await AsyncStorage.setItem(STORAGE_KEYS.LAST_LOCATION, JSON.stringify({
         latitude,
         longitude,
         timestamp: new Date().toISOString()
       }));
       
-      // 使用OpenWeather API获取天气数据
+      // Use OpenWeather API to get weather data
       const url = `${WEATHER_API.BASE_URL}/weather?lat=${latitude}&lon=${longitude}&units=${WEATHER_API.UNITS}&appid=${WEATHER_API.API_KEY}`;
       
-      // 添加超时处理
+      // Add timeout handling
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds timeout
       
       const response = await fetch(url, { signal: controller.signal });
       clearTimeout(timeoutId);
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('天气API响应错误:', response.status, errorText);
+        console.error('Weather API response error:', response.status, errorText);
         
         const apiError = {
           type: ERROR_TYPES.API,
-          message: `天气数据获取失败: ${response.status}`,
+          message: `Failed to get weather data: ${response.status}`,
           details: errorText
         };
         setError(apiError);
@@ -171,7 +171,7 @@ export default function useWeather(options = {}) {
       
       const weatherData = await response.json();
       
-      // 设置状态
+      // Set states
       const weatherMain = weatherData.weather[0].main;
       const weatherIcon = weatherData.weather[0].icon;
       const temp = Math.round(weatherData.main.temp);
@@ -185,7 +185,7 @@ export default function useWeather(options = {}) {
       setLocation(locationName);
       setSource('api');
       
-      // 保存天气数据到AsyncStorage
+      // Save weather data to AsyncStorage
       await AsyncStorage.setItem(STORAGE_KEYS.WEATHER_DATA, JSON.stringify({
         weather: weatherMain,
         icon: weatherIcon,
@@ -205,18 +205,18 @@ export default function useWeather(options = {}) {
         icon: weatherIcon
       };
     } catch (error) {
-      console.error('获取天气数据时出错:', error);
+      console.error('Error getting weather data:', error);
       
-      // 区分网络错误和其他错误
+      // Distinguish between network errors and other errors
       let errorType = ERROR_TYPES.UNKNOWN;
-      let errorMessage = `无法获取天气: ${error.message}`;
+      let errorMessage = `Unable to get weather: ${error.message}`;
       
       if (error.name === 'AbortError') {
         errorType = ERROR_TYPES.NETWORK;
-        errorMessage = '网络请求超时，无法获取天气数据';
+        errorMessage = 'Network request timeout, unable to get weather data';
       } else if (error.message.includes('network')) {
         errorType = ERROR_TYPES.NETWORK;
-        errorMessage = '网络连接错误，无法获取天气数据';
+        errorMessage = 'Network connection error, unable to get weather data';
       }
       
       const weatherError = {
@@ -232,9 +232,9 @@ export default function useWeather(options = {}) {
     }
   }, []);
   
-  // 计算两点之间的距离（公里）
+  // Calculate distance between two points (kilometers)
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // 地球半径（公里）
+    const R = 6371; // Earth radius (kilometers)
     const dLat = deg2rad(lat2 - lat1);
     const dLon = deg2rad(lon2 - lon1);
     const a = 
@@ -246,23 +246,23 @@ export default function useWeather(options = {}) {
     return distance;
   };
   
-  // 角度转弧度
+  // Convert degrees to radians
   const deg2rad = (deg) => {
     return deg * (Math.PI/180);
   };
   
-  // 获取天气图标名称
+  // Get weather icon name
   const getWeatherIcon = (iconCode) => {
-    // 如果iconCode是对象，尝试获取icon属性
+    // If iconCode is an object, try to get the icon property
     if (typeof iconCode === 'object' && iconCode !== null) {
       iconCode = iconCode.icon || iconCode.main || '';
     }
     
-    // 转换为字符串并处理
+    // Convert to string and process
     iconCode = String(iconCode || '');
     
     const weatherIcons = {
-      // OpenWeather API图标代码
+      // OpenWeather API icon codes
       '01d': 'sunny',
       '01n': 'night',
       '02d': 'partly-cloudy',
@@ -282,7 +282,7 @@ export default function useWeather(options = {}) {
       '50d': 'fog',
       '50n': 'fog',
       
-      // 天气状况名称
+      // Weather condition names
       'Sunny': 'sunny',
       'Clear': 'sunny',
       'Partly Cloudy': 'partly-cloudy',
@@ -310,23 +310,23 @@ export default function useWeather(options = {}) {
       'Windy': 'windy',
     };
     
-    // 尝试匹配完整的iconCode
+    // Try to match the complete iconCode
     if (weatherIcons[iconCode]) {
       return weatherIcons[iconCode];
     }
     
-    // 如果没有匹配，尝试部分匹配（例如，"Clear Sky" 应该匹配 "Clear"）
+    // If no match, try partial matching (e.g., "Clear Sky" should match "Clear")
     for (const key in weatherIcons) {
       if (iconCode.toLowerCase().includes(key.toLowerCase())) {
         return weatherIcons[key];
       }
     }
     
-    // 默认图标
+    // Default icon
     return 'partly-cloudy';
   };
   
-  // 获取天气错误图标名称
+  // Get weather error icon name
   const getErrorIcon = () => {
     if (!error) return 'cloudy-alert';
     
@@ -344,15 +344,15 @@ export default function useWeather(options = {}) {
     }
   };
   
-  // 自动获取天气数据
+  // Automatically fetch weather data
   useEffect(() => {
     if (autoFetch) {
       fetchWeather();
       
-      // 添加定时刷新
+      // Add timed refresh
       if (refreshInterval > 0) {
         const interval = setInterval(() => {
-          fetchWeather(false); // 不强制刷新，让缓存和位置变化逻辑决定是否需要刷新
+          fetchWeather(false); // Don't force refresh, let cache and location change logic decide if refresh is needed
         }, refreshInterval);
         
         return () => clearInterval(interval);

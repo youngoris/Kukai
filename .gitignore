@@ -35,5 +35,5 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-# 环境变量文件
+# Environment variable files
 .env

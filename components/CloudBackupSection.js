@@ -385,8 +385,6 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionTitle}>Cloud Backup</Text>
-      
       {isLoading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#FFFFFF" />
@@ -416,7 +414,7 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
         >
           <MaterialIcons 
             name={isAuthenticated ? "link-off" : "link"} 
-            size={16} 
+            size={14} 
             color="#FFFFFF" 
             style={styles.actionButtonIcon} 
           />
@@ -534,8 +532,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#111',
     borderRadius: 10,
-    padding: 15,
+    padding: 10,
     marginBottom: 10,
+    height: 60,
   },
   settingContent: {
     flex: 1,
@@ -553,12 +552,12 @@ const styles = StyleSheet.create({
   },
   settingDescription: {
     color: '#888',
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: 11,
+    marginTop: 2,
   },
   actionButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 5,
     flexDirection: 'row',
     alignItems: 'center',
@@ -575,7 +574,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: '#FFF',
-    fontSize: 14,
+    fontSize: 12,
   },
   infoItem: {
     flexDirection: 'row',

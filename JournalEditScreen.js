@@ -20,9 +20,9 @@ import {
 import { MaterialIcons, Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import Markdown from 'react-native-markdown-display'; // 导入 Markdown 组件
-import useWeather from './utils/useWeather'; // 导入天气Hook
-import { getTemplateContent } from './constants/JournalTemplates'; // 导入模板功能
+import Markdown from 'react-native-markdown-display'; // Import Markdown component
+import useWeather from './utils/useWeather'; // Import weather Hook
+import { getTemplateContent } from './constants/JournalTemplates'; // Import template functionality
 
 const JournalEditScreen = ({ navigation, route }) => {
   const { savedJournal, date, viewOnly = false, location: routeLocation, weather: routeWeather, temperature: routeTemperature, mood: routeMood } = route.params;
@@ -35,16 +35,16 @@ const JournalEditScreen = ({ navigation, route }) => {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [loading, setLoading] = useState(true);
   const [locationError, setLocationError] = useState(null);
-  const [showTemplateMenu, setShowTemplateMenu] = useState(false); // 添加模板菜单状态
-  const [currentTemplate, setCurrentTemplate] = useState('default'); // 添加当前使用的模板状态
+  const [showTemplateMenu, setShowTemplateMenu] = useState(false); // Add template menu state
+  const [currentTemplate, setCurrentTemplate] = useState('default'); // Add current template state
 
-  // 使用自定义Hook获取天气数据，但不自动获取
+  // Use custom Hook to get weather data, but don't fetch automatically
   const { 
     fetchWeather: fetchWeatherData,
     getWeatherIcon
   } = useWeather({ autoFetch: false });
 
-  // 键盘监听器
+  // Keyboard listener
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
@@ -68,15 +68,15 @@ const JournalEditScreen = ({ navigation, route }) => {
     };
   }, []);
 
-  // 获取位置和天气数据
+  // Get location and weather data
   const getLocationAndWeather = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      // 使用useWeather Hook获取天气数据
+      // Use useWeather Hook to get weather data
       const weatherResult = await fetchWeatherData(forceRefresh);
       
       if (weatherResult && !weatherResult.error) {
-        // 设置天气数据，确保格式一致性
+        // Set weather data, ensure format consistency
         setWeather(weatherResult.weather);
         setTemperature(weatherResult.temperature);
         setLocation(weatherResult.location);
@@ -95,7 +95,7 @@ const JournalEditScreen = ({ navigation, route }) => {
     }
   };
 
-  // 修改 useEffect，优先使用传递的参数
+  // Modify useEffect, prioritize passed parameters
   useEffect(() => {
     const loadJournalMeta = async () => {
       try {
@@ -118,7 +118,7 @@ const JournalEditScreen = ({ navigation, route }) => {
 
     const initialize = async () => {
       if (viewOnly) {
-        // 如果是查看模式，使用传入的数据
+        // If in view mode, use passed data
         setLocation(routeLocation || '');
         setWeather(routeWeather || '');
         setTemperature(routeTemperature || null);
@@ -127,20 +127,20 @@ const JournalEditScreen = ({ navigation, route }) => {
         return;
       }
       
-      // 否则尝试从 AsyncStorage 加载或获取新数据
+      // Otherwise, try to load or get new data from AsyncStorage
       await loadJournalMeta();
       
-      // 如果是新日记（没有现有内容），检查是否需要应用模板
+      // If it's a new journal (no existing content), check if a template needs to be applied
       if (!savedJournal || savedJournal.trim() === '') {
         const settings = await AsyncStorage.getItem('userSettings');
         if (settings) {
           const parsedSettings = JSON.parse(settings);
           if (parsedSettings.selectedJournalTemplate && parsedSettings.selectedJournalTemplate !== 'default') {
-            // 检查是否为已删除的模板
+            // Check if it's a deleted template
             if (parsedSettings.selectedJournalTemplate === 'morning') {
               setCurrentTemplate('default');
             } else {
-              // 应用选定的模板
+              // Apply selected template
               const templateContent = getTemplateContent(parsedSettings.selectedJournalTemplate);
               if (templateContent) {
                 setJournalText(templateContent);
@@ -148,7 +148,7 @@ const JournalEditScreen = ({ navigation, route }) => {
               }
             }
           } else if (parsedSettings.selectedJournalTemplate === 'custom') {
-            // 应用自定义模板
+            // Apply custom template
             const customTemplate = await AsyncStorage.getItem('customJournalTemplate');
             if (customTemplate) {
               setJournalText(customTemplate);
@@ -160,21 +160,21 @@ const JournalEditScreen = ({ navigation, route }) => {
         }
       }
       
-      // 修改：即使有位置或天气数据，也尝试获取最新数据
-      // 但不强制刷新，如果缓存有效则使用缓存
+      // Modify: Even if there's location or weather data, try to get latest data
+      // But don't force refresh, use cache if valid
       await getLocationAndWeather(false);
     };
     
     initialize();
   }, []);
 
-  // 添加刷新天气数据的函数
+  // Add function to refresh weather data
   const refreshWeatherData = async () => {
-    if (viewOnly) return; // 在查看模式下不刷新
-    await getLocationAndWeather(true); // 强制刷新
+    if (viewOnly) return; // Don't refresh in view mode
+    await getLocationAndWeather(true); // Force refresh
   };
 
-  // 保存日志
+  // Save journal
   const saveJournal = async () => {
     if (journalText.trim() === '') {
       Alert.alert("Error", "Journal content cannot be empty");
@@ -219,10 +219,10 @@ const JournalEditScreen = ({ navigation, route }) => {
       await AsyncStorage.setItem('journal', JSON.stringify(journals));
       await AsyncStorage.setItem(`journal_${date}`, journalText.trim());
       
-      // 保存后跳转到预览模式
+      // After saving, go to preview mode
       navigation.setParams({
         viewOnly: true,
-        fromSave: true // 标记是从保存操作过来的
+        fromSave: true // Mark as coming from save operation
       });
     } catch (error) {
       console.error('Failed to save journal:', error);
@@ -230,7 +230,7 @@ const JournalEditScreen = ({ navigation, route }) => {
     }
   };
 
-  // 获取心情图标
+  // Get mood icon
   const getMoodIcon = (moodType) => {
     switch(moodType) {
       case 'happy': return 'emoticon-outline';
@@ -242,12 +242,12 @@ const JournalEditScreen = ({ navigation, route }) => {
     }
   };
 
-  // 选择心情
+  // Select mood
   const selectMood = (selectedMood) => {
     setMood(selectedMood);
   };
 
-  // 自定义Markdown解析器配置
+  // Custom Markdown parser configuration
   const markdownParserOptions = {
     typographer: true,
     breaks: true,
@@ -255,20 +255,20 @@ const JournalEditScreen = ({ navigation, route }) => {
     linkify: true,
   };
 
-  // 处理引用块内容
+  // Process blockquote content
   const processBlockquoteContent = (content) => {
     if (!content) return '';
-    // 移除引用块前面的 '>' 符号
+    // Remove '>' symbol from blockquote
     return content.replace(/^>\s*/gm, '').trim();
   };
 
-  // 自定义图片处理函数
+  // Custom image processing function
   const handleImageUri = (uri) => {
     console.log('Processing image URI:', uri);
     return uri;
   };
 
-// Markdown 样式
+// Markdown styles
 const markdownStyles = {
   body: {
     color: '#FFF',
@@ -276,7 +276,7 @@ const markdownStyles = {
     lineHeight: 24,
     fontFamily: Platform.OS === 'ios' ? 'PingFang SC' : 'sans-serif',
   },
-  // 标题 - 使用 heading1, heading2 等键名
+  // Title - Use heading1, heading2, etc. keys
   heading1: {
     color: '#FFF',
     fontSize: 28,
@@ -327,14 +327,14 @@ const markdownStyles = {
     marginVertical: 4,
     lineHeight: 22,
   },
-  // 其他元素
+  // Other elements
   paragraph: {
     color: '#FFF',
     fontSize: 16,
     lineHeight: 24,
     marginVertical: 8,
   },
-  // 修改列表项样式
+  // Modify list item styles
   bullet_list: {
     marginLeft: 10,
     marginVertical: 8,
@@ -343,7 +343,7 @@ const markdownStyles = {
     marginLeft: 10,
     marginVertical: 8,
   },
-  // React Native Markdown Display使用这些键名
+  // React Native Markdown Display uses these keys
   bullet_list_item: {
     color: '#FFF', 
     fontSize: 16,
@@ -473,7 +473,7 @@ const markdownStyles = {
   },
 };
 
-// 创建自定义渲染规则
+// Create custom rendering rules
 const markdownRules = {
   heading1: (node, children, parent, styles) => (
     <View key={node.key} style={{ width: '100%' }}>
@@ -508,13 +508,13 @@ const markdownRules = {
     </View>
   ),
   image: (node, children, parent, styles) => {
-    // 从node中提取属性
+    // Extract attributes from node
     const { src, alt } = node.attributes || {};
     
-    // 调试信息
+    // Debug information
     console.log('Image node:', { src, alt });
     
-    // 确保图片URL是有效的
+    // Ensure image URL is valid
     if (!src) {
       console.log('Image source is empty');
       return null;
@@ -554,15 +554,15 @@ const markdownRules = {
     );
   },
   blockquote: (node, children, parent, styles) => {
-    // 确保引用块内容正确显示
+    // Ensure blockquote content is displayed correctly
     console.log('Blockquote node:', node);
     
-    // 尝试从node中提取内容
+    // Try to extract content from node
     let content = '';
     if (node.content) {
       content = processBlockquoteContent(node.content);
     } else if (node.children && node.children.length > 0) {
-      // 尝试从子节点中提取内容
+      // Try to extract content from child nodes
       content = node.children.map(child => {
         if (typeof child === 'string') return child;
         return child.content || '';
@@ -580,7 +580,7 @@ const markdownRules = {
           </Text>
         ) : (
           <Text style={{color: '#CCC', fontStyle: 'italic'}}>
-            引用内容
+            Quote content
           </Text>
         )}
       </View>
@@ -622,10 +622,10 @@ const markdownRules = {
   },
 };
 
-// 在显示前预处理Markdown
+// Preprocess Markdown before displaying
 useEffect(() => {
   if (viewOnly && journalText) {
-    // 查找所有图片标记
+    // Find all image markers
     const imgRegex = /!\[(.*?)\]\((.*?)\)/g;
     const matches = [...journalText.matchAll(imgRegex)];
     
@@ -639,16 +639,16 @@ useEffect(() => {
   }
 }, [viewOnly, journalText]);
 
-  // 添加应用模板的函数
+  // Add function to apply template
   const applyTemplate = async (templateId) => {
-    if (viewOnly) return; // 在查看模式下不应用模板
+    if (viewOnly) return; // Don't apply template in view mode
     
-    // 防止应用已删除的模板
+    // Prevent applying deleted templates
     if (templateId === 'morning') {
       return;
     }
     
-    // 如果当前编辑器有内容，提示确认
+    // If current editor has content, prompt for confirmation
     if (journalText.trim() !== '') {
       Alert.alert(
         'Apply Template',
@@ -673,7 +673,7 @@ useEffect(() => {
         ]
       );
     } else {
-      // 如果没有内容，直接应用
+      // If no content, apply directly
       if (templateId === 'custom') {
         applyCustomTemplate();
       } else {
@@ -687,7 +687,7 @@ useEffect(() => {
     }
   };
   
-  // 应用自定义模板的辅助函数
+  // Helper function to apply custom template
   const applyCustomTemplate = async () => {
     try {
       const customTemplate = await AsyncStorage.getItem('customJournalTemplate');
@@ -700,7 +700,7 @@ useEffect(() => {
     }
   };
   
-  // 添加模板菜单渲染函数
+  // Add template menu rendering function
   const renderTemplateMenu = () => {
     if (!showTemplateMenu) return null;
     
@@ -746,14 +746,14 @@ useEffect(() => {
     <SafeAreaView style={styles.container}>
       <StatusBar hidden />
       
-      {/* 顶部导航栏 */}
+      {/* Top navigation bar */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => {
           if (viewOnly) {
-            // 在预览模式下，返回按钮使用goBack()而非navigate
+            // In view mode, use goBack() instead of navigate
             navigation.goBack();
           } else {
-            // 在编辑模式下，正常返回
+            // Normal return in edit mode
             navigation.goBack();
           }
         }}>
@@ -786,10 +786,10 @@ useEffect(() => {
         )}
       </View>
       
-      {/* 模板菜单 */}
+      {/* Template menu */}
       {renderTemplateMenu()}
       
-      {/* 日期和心情显示 - 仅在查看模式显示 */}
+      {/* Date and mood display - Only show in view mode */}
       {viewOnly && (
         <View style={styles.dateContainer}>
           <View style={styles.dateRow}>
@@ -813,7 +813,7 @@ useEffect(() => {
         </View>
       )}
       
-      {/* 主要输入/展示区域 */}
+      {/* Main input/display area */}
       {viewOnly ? (
         <ScrollView style={styles.contentScrollView} contentContainerStyle={{paddingBottom: 20}}>
           <Markdown 
@@ -852,7 +852,7 @@ useEffect(() => {
         </ScrollView>
       )}
       
-      {/* 底部显示区域 */}
+      {/* Bottom display area */}
       <View style={[
         styles.infoBar, 
         keyboardVisible && !viewOnly ? {
@@ -925,7 +925,7 @@ useEffect(() => {
               )}
             </View>
 
-            {/* 预览模式下保持一致的布局 */}
+            {/* Keep consistent layout in preview mode */}
             {viewOnly ? (
               <View style={{width: 90, height: 26}} />
             ) : (
@@ -1000,33 +1000,33 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#222',
     padding: 15,
-    minHeight: 60, // 保持最小高度
+    minHeight: 60, 
   },
   infoContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between', // 两端对齐
-    alignItems: 'center', // 垂直居中
+    justifyContent: 'space-between', 
+    alignItems: 'center',
     width: '100%',
   },
   metaInfoContainer: {
     flexDirection: 'row', 
-    alignItems: 'center', // 垂直居中
-    flexShrink: 1, // 允许收缩
-    flexWrap: 'nowrap', // 防止换行
-    maxWidth: '80%', // 限制最大宽度
+    alignItems: 'center', 
+    flexShrink: 1, 
+    flexWrap: 'nowrap', 
+    maxWidth: '80%', 
   },
   infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginRight: 10,
-    flexShrink: 1, // 允许收缩
+    flexShrink: 1, 
   },
   infoText: {
     color: '#CCCCCC',
     marginLeft: 5,
     fontSize: 14,
-    flexShrink: 1, // 允许文本收缩
-    maxWidth: 180, // 限制最大宽度
+    flexShrink: 1, 
+    maxWidth: 180, 
   },
   loadingText: {
     color: '#AAAAAA',
@@ -1104,7 +1104,7 @@ const styles = StyleSheet.create({
   templateOptionText: {
     color: '#FFF',
     fontSize: 16,
-    marginLeft: 15, // 为圆点留出空间
+    marginLeft: 15, 
   },
   templateOverlay: {
     position: 'absolute',
