@@ -25,7 +25,15 @@ const DEFAULT_CONFIG = {
 
 class NotificationService {
   constructor() {
-    this.config = { ...DEFAULT_CONFIG };
+    this.config = {
+      ...DEFAULT_CONFIG
+    };
+    this.responseListener = null;
+    
+    // 创建通知通道（Android需要）
+    if (Platform.OS === 'android') {
+      this.createNotificationChannels();
+    }
   }
   
   // Set navigation reference
@@ -155,63 +163,163 @@ class NotificationService {
   async scheduleTaskNotification(task) {
     // If task notification is disabled, do not schedule notification
     if (!this.config.taskNotifications) {
+      console.log('Task notifications are disabled in settings');
       return null;
     }
     
-    if (!task.hasReminder || !task.reminderTime) {
+    // 验证任务是否有任务时间
+    if (!task.taskTime) {
+      console.log(`Task ${task.id} does not have a task time, skipping notification`);
       return null;
     }
     
     try {
-      // Calculate notification time
-      const taskTime = new Date(task.taskTime);
-      const reminderMinutes = task.reminderTime || 15;
-      const notificationTime = new Date(taskTime.getTime() - reminderMinutes * 60 * 1000);
+      // 获取当前时间并添加1分钟的缓冲，确保通知不会立即触发
+      const now = new Date();
+      const bufferMs = 60 * 1000; // 1分钟的缓冲
+      const nowPlusBuffer = new Date(now.getTime() + bufferMs);
       
-      // If notification time has passed, do not schedule
-      if (notificationTime <= new Date()) {
+      console.log(`Current time: ${now.toISOString()}`);
+      console.log(`Current time + buffer: ${nowPlusBuffer.toISOString()}`);
+      
+      const taskTime = new Date(task.taskTime);
+      console.log(`Task time: ${taskTime.toISOString()}`);
+      
+      // 验证任务时间有效性
+      if (isNaN(taskTime.getTime())) {
+        console.error('Invalid task time:', task.taskTime);
         return null;
       }
       
-      // Get notification sound
-      const sound = this.getNotificationSound();
+      // 如果任务时间已经过去，不创建任何通知
+      if (taskTime <= now) {
+        console.log(`Task ${task.id} time already passed (${taskTime.toLocaleString()}), no notifications will be created`);
+        return null;
+      }
       
-      // Create notification
-      const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Task Reminder',
-          body: `${task.text} will start in ${reminderMinutes} minutes`,
-          data: { 
-            taskId: task.id,
-            screen: 'Task',
-            notificationType: 'taskReminder'
-          },
-          sound,
-          // Add notification action button on iOS
-          categoryIdentifier: Platform.OS === 'ios' ? 'default' : undefined,
-        },
-        trigger: notificationTime,
-      });
+      let notificationIds = [];
       
-      // Add to history
-      await this.addNotificationToHistory({
-        request: {
-          content: {
-            title: 'Task Reminder',
-            body: `${task.text} will start in ${reminderMinutes} minutes`,
-            data: { 
-              taskId: task.id,
-              screen: 'Task',
-              notificationType: 'taskReminder'
+      // 只有当任务明确设置了提前提醒时，才创建提醒通知
+      if (task.hasReminder === true && task.reminderTime) {
+        console.log(`Task ${task.id} has reminder set to ${task.reminderTime} minutes before task time`);
+        
+        const reminderMinutes = task.reminderTime || 15;
+        const reminderTime = new Date(taskTime.getTime() - reminderMinutes * 60 * 1000);
+        
+        console.log(`Calculated reminder time: ${reminderTime.toISOString()}`);
+        
+        // 只有当提醒时间比当前时间+缓冲更晚，才创建提醒通知
+        if (reminderTime > nowPlusBuffer) {
+          const sound = this.getNotificationSound();
+          const minutesTillReminder = Math.round((reminderTime - now) / (60 * 1000));
+          const secondsTillReminder = Math.round((reminderTime - now) / 1000);
+          
+          console.log(`Scheduling reminder notification, will trigger in ${minutesTillReminder} minutes (${secondsTillReminder} seconds)`);
+          
+          try {
+            // 使用TIME_INTERVAL类型触发器代替date类型
+            console.log(`Using TIME_INTERVAL trigger type with ${secondsTillReminder} seconds delay`);
+            
+            const reminderNotificationId = await Notifications.scheduleNotificationAsync({
+              content: {
+                title: 'Task Reminder',
+                body: `${task.text} will start in ${reminderMinutes} minutes`,
+                data: { 
+                  taskId: task.id,
+                  screen: 'Task',
+                  notificationType: 'taskReminderAdvance',
+                  scheduledTime: reminderTime.toISOString(),
+                },
+                sound,
+                categoryIdentifier: Platform.OS === 'ios' ? 'default' : undefined,
+              },
+              trigger: {
+                type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+                seconds: secondsTillReminder,
+                repeats: false,
+                channelId: 'task-notifications'
+              },
+            });
+            
+            // 验证通知是否成功计划
+            const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
+            const foundNotification = scheduledNotifications.find(n => n.identifier === reminderNotificationId);
+            
+            if (foundNotification) {
+              console.log('Reminder notification successfully scheduled and verified in the system');
+            } else {
+              console.log('Warning: Reminder notification was scheduled but not found in scheduled notifications list');
             }
+            
+            // 保存提醒通知ID与任务ID的映射
+            await this.saveNotificationMapping(`${task.id}_reminder`, reminderNotificationId);
+            notificationIds.push(reminderNotificationId);
+            console.log(`Task reminder notification scheduled for ${reminderTime.toLocaleString()}, ID:`, reminderNotificationId);
+          } catch (error) {
+            console.error('Error scheduling reminder notification:', error);
           }
+        } else {
+          console.log(`Task ${task.id} reminder time too close (${reminderTime.toLocaleString()}), skipping reminder notification`);
         }
-      }, false);
+      } else {
+        console.log(`Task ${task.id} does not have reminder enabled, skipping advance reminder notification`);
+      }
       
-      // Save notification ID to task ID mapping
-      await this.saveNotificationMapping(task.id, notificationId);
+      // 只有当任务时间比当前时间+缓冲更晚，才创建任务时间通知
+      if (taskTime > nowPlusBuffer) {
+        const sound = this.getNotificationSound();
+        const minutesTillTask = Math.round((taskTime - now) / (60 * 1000));
+        const secondsTillTask = Math.round((taskTime - now) / 1000);
+        
+        console.log(`Scheduling task time notification, will trigger in ${minutesTillTask} minutes (${secondsTillTask} seconds)`);
+        
+        try {
+          // 使用TIME_INTERVAL类型触发器代替date类型
+          console.log(`Using TIME_INTERVAL trigger type with ${secondsTillTask} seconds delay`);
+          
+          const taskNotificationId = await Notifications.scheduleNotificationAsync({
+            content: {
+              title: 'Task Time',
+              body: `It's time for: ${task.text}`,
+              data: { 
+                taskId: task.id,
+                screen: 'Task',
+                notificationType: 'taskReminderTime',
+                scheduledTime: taskTime.toISOString(),
+              },
+              sound,
+              categoryIdentifier: Platform.OS === 'ios' ? 'default' : undefined,
+            },
+            trigger: {
+              type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+              seconds: secondsTillTask,
+              repeats: false,
+              channelId: 'task-notifications'
+            },
+          });
+          
+          // 验证通知是否成功计划
+          const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
+          const foundNotification = scheduledNotifications.find(n => n.identifier === taskNotificationId);
+          
+          if (foundNotification) {
+            console.log('Notification successfully scheduled and verified in the system');
+          } else {
+            console.log('Warning: Notification was scheduled but not found in scheduled notifications list');
+          }
+          
+          // 保存任务时间通知ID与任务ID的映射
+          await this.saveNotificationMapping(`${task.id}_time`, taskNotificationId);
+          notificationIds.push(taskNotificationId);
+          console.log(`Task time notification scheduled for ${taskTime.toLocaleString()}, ID:`, taskNotificationId);
+        } catch (error) {
+          console.error('Error scheduling task notification:', error);
+        }
+      } else {
+        console.log(`Task ${task.id} time too close (${taskTime.toLocaleString()}), skipping time notification`);
+      }
       
-      return notificationId;
+      return notificationIds.length > 0 ? notificationIds : null;
     } catch (error) {
       console.error('Failed to schedule task notification:', error);
       return null;
@@ -221,10 +329,28 @@ class NotificationService {
   // Cancel task notification
   async cancelTaskNotification(taskId) {
     try {
-      const notificationId = await this.getNotificationIdForTask(taskId);
-      if (notificationId) {
-        await Notifications.cancelScheduledNotificationAsync(notificationId);
+      // 取消提醒通知
+      const reminderNotificationId = await this.getNotificationIdForTask(`${taskId}_reminder`);
+      if (reminderNotificationId) {
+        await Notifications.cancelScheduledNotificationAsync(reminderNotificationId);
+        await this.removeNotificationMapping(`${taskId}_reminder`);
+        console.log(`Cancelled reminder notification for task ${taskId}`);
+      }
+      
+      // 取消任务时间通知
+      const taskNotificationId = await this.getNotificationIdForTask(`${taskId}_time`);
+      if (taskNotificationId) {
+        await Notifications.cancelScheduledNotificationAsync(taskNotificationId);
+        await this.removeNotificationMapping(`${taskId}_time`);
+        console.log(`Cancelled time notification for task ${taskId}`);
+      }
+      
+      // 兼容旧版单一通知ID的情况
+      const legacyNotificationId = await this.getNotificationIdForTask(taskId);
+      if (legacyNotificationId) {
+        await Notifications.cancelScheduledNotificationAsync(legacyNotificationId);
         await this.removeNotificationMapping(taskId);
+        console.log(`Cancelled legacy notification for task ${taskId}`);
       }
     } catch (error) {
       console.error('Failed to cancel task notification:', error);
@@ -259,23 +385,7 @@ class NotificationService {
       // Get notification sound
       const sound = this.getNotificationSound();
       
-      // Check if current time has passed today's set time
-      const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
-      const isPastTriggerTimeToday = (currentHour > hours) || (currentHour === hours && currentMinute >= minutes);
-      
-      // Calculate next trigger time
-      let triggerDate = new Date();
-      triggerDate.setHours(hours, minutes, 0, 0); // Set hours, minutes, seconds, milliseconds
-      
-      // If current time has passed today's trigger time, set for tomorrow
-      if (isPastTriggerTimeToday) {
-        triggerDate.setDate(triggerDate.getDate() + 1);
-      }
-      
-      console.log('Journal reminder scheduled for:', triggerDate.toString());
-      
+      // 使用每日重复通知，而不是单次通知
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Journal Reminder',
@@ -286,26 +396,16 @@ class NotificationService {
           },
           sound,
         },
-        trigger: triggerDate,
+        trigger: {
+          type: 'daily',
+          hour: hours,
+          minute: minutes
+        },
       });
       
       await AsyncStorage.setItem('journalReminderNotificationId', JSON.stringify(notificationId));
       
-      // Do not add to history, avoid triggering immediate notification
-      // await this.addNotificationToHistory({
-      //   request: {
-      //     content: {
-      //       title: 'Journal Reminder',
-      //       body: 'Time to record your thoughts and feelings for today.',
-      //       data: { 
-      //         screen: 'Journal',
-      //         notificationType: 'journalReminder'
-      //       }
-      //     }
-      //   }
-      // });
-      
-      console.log('Journal reminder scheduled for', hours, ':', minutes);
+      console.log('Journal reminder scheduled for daily at', hours, ':', minutes);
     } catch (error) {
       console.error('Failed to schedule journal reminder:', error);
     }
@@ -339,23 +439,7 @@ class NotificationService {
       // Get notification sound
       const sound = this.getNotificationSound();
       
-      // Check if current time has passed today's set time
-      const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
-      const isPastTriggerTimeToday = (currentHour > hours) || (currentHour === hours && currentMinute >= minutes);
-      
-      // Calculate next trigger time
-      let triggerDate = new Date();
-      triggerDate.setHours(hours, minutes, 0, 0); // Set hours, minutes, seconds, milliseconds
-      
-      // If current time has passed today's trigger time, set for tomorrow
-      if (isPastTriggerTimeToday) {
-        triggerDate.setDate(triggerDate.getDate() + 1);
-      }
-      
-      console.log('Meditation reminder scheduled for:', triggerDate.toString());
-      
+      // 使用每日重复通知，而不是单次通知
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Meditation Reminder',
@@ -366,26 +450,16 @@ class NotificationService {
           },
           sound,
         },
-        trigger: triggerDate,
+        trigger: {
+          type: 'daily',
+          hour: hours,
+          minute: minutes
+        },
       });
       
       await AsyncStorage.setItem('meditationReminderNotificationId', JSON.stringify(notificationId));
       
-      // Do not add to history, avoid triggering immediate notification
-      // await this.addNotificationToHistory({
-      //   request: {
-      //     content: {
-      //       title: 'Meditation Reminder',
-      //       body: 'Time for your daily meditation practice.',
-      //       data: { 
-      //         screen: 'Meditation',
-      //         notificationType: 'meditationReminder'
-      //       }
-      //     }
-      //   }
-      // });
-      
-      console.log('Meditation reminder scheduled for', hours, ':', minutes);
+      console.log('Meditation reminder scheduled for daily at', hours, ':', minutes);
     } catch (error) {
       console.error('Failed to schedule meditation reminder:', error);
     }
@@ -405,19 +479,6 @@ class NotificationService {
       },
       trigger: null, // Send immediately
     });
-    
-    // Add to history, but do not send additional immediate notification
-    await this.addNotificationToHistory({
-      request: {
-        identifier: notificationId,
-        content: {
-          title,
-          body,
-          data
-        },
-        trigger: null
-      }
-    }, true);
     
     return notificationId;
   }
@@ -467,6 +528,9 @@ class NotificationService {
         this.config = { ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) };
       }
       
+      // 确保通知不会立即触发
+      await this.configureNotifications();
+      
       // Set notification response handler
       this.responseListener = Notifications.addNotificationResponseReceivedListener(
         this.handleNotificationResponse
@@ -476,6 +540,27 @@ class NotificationService {
     } catch (error) {
       console.error('Error initializing notification service:', error);
       return false;
+    }
+  }
+  
+  // 配置通知系统，避免立即触发
+  async configureNotifications() {
+    try {
+      // 设置通知处理程序
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+        }),
+      });
+      
+      // 取消所有可能的立即通知
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      
+      console.log('Notification system configured');
+    } catch (error) {
+      console.error('Error configuring notifications:', error);
     }
   }
   
@@ -489,12 +574,6 @@ class NotificationService {
   // Handle notification response
   handleNotificationResponse = async (response) => {
     const { notification } = response;
-    
-    // Add to history, but do not send additional immediate notification
-    await this.addNotificationToHistory(notification, false);
-    
-    // Mark as read
-    await this.markNotificationAsRead(notification.request.identifier);
     
     // If no navigation reference, cannot navigate
     if (!navigationRef) {
@@ -551,12 +630,16 @@ class NotificationService {
       // Cancel task notification
       await this.cancelTaskNotification(taskId);
       
-      // Send confirmation notification
-      await this.sendImmediateNotification(
-        'Task Completed',
-        'Task has been marked as completed',
-        { screen: 'Task' }
-      );
+      // Send confirmation notification (modify to not use history)
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Task Completed',
+          body: 'Task has been marked as completed',
+          data: { screen: 'Task' },
+          sound: this.getNotificationSound(),
+        },
+        trigger: null, // Send immediately
+      });
       
       console.log('Task completed from notification:', taskId);
     } catch (error) {
@@ -577,13 +660,23 @@ class NotificationService {
       const task = tasks.find(t => t.id === taskId);
       if (!task) return;
       
-      // Cancel existing notification
+      // Cancel existing notifications
       await this.cancelTaskNotification(taskId);
       
       // Calculate new reminder time (15 minutes later)
       const snoozeMinutes = 15;
       const now = new Date();
-      const newNotificationTime = new Date(now.getTime() + snoozeMinutes * 60 * 1000);
+      // 增加 30 秒的缓冲，确保通知不会立即触发
+      const bufferSeconds = 30;
+      const newNotificationTime = new Date(now.getTime() + (snoozeMinutes * 60 * 1000) + (bufferSeconds * 1000));
+      const totalSeconds = snoozeMinutes * 60 + bufferSeconds;
+      
+      console.log(`Task snooze - Current time: ${now.toISOString()}`);
+      console.log(`Task snooze - New notification time: ${newNotificationTime.toISOString()}`);
+      console.log(`Task snooze - Total seconds delay: ${totalSeconds}`);
+      
+      // 使用TIME_INTERVAL类型触发器代替date类型
+      console.log(`Using TIME_INTERVAL trigger type with ${totalSeconds} seconds delay`);
       
       // Create new notification
       const notificationId = await Notifications.scheduleNotificationAsync({
@@ -594,105 +687,55 @@ class NotificationService {
             taskId: task.id,
             screen: 'Task',
             notificationType: 'taskReminder',
-            snoozed: true
+            snoozed: true,
+            scheduledTime: newNotificationTime.toISOString(),
           },
           sound: this.getNotificationSound(),
           categoryIdentifier: Platform.OS === 'ios' ? 'default' : undefined,
         },
-        trigger: newNotificationTime,
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds: totalSeconds,
+          repeats: false,
+          channelId: 'task-notifications'
+        },
       });
       
-      // Save notification ID to task ID mapping
-      await this.saveNotificationMapping(task.id, notificationId);
+      // 验证通知是否成功计划
+      const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
+      const foundNotification = scheduledNotifications.find(n => n.identifier === notificationId);
       
-      console.log('Task snoozed from notification:', taskId);
+      if (foundNotification) {
+        console.log('Snooze notification successfully scheduled and verified in the system');
+      } else {
+        console.log('Warning: Snooze notification was scheduled but not found in scheduled notifications list');
+      }
+      
+      // Save notification ID to task ID mapping - use the snoozed prefix
+      await this.saveNotificationMapping(`${task.id}_snoozed`, notificationId);
+      
+      console.log('Task snoozed from notification:', taskId, 'New notification time:', newNotificationTime.toLocaleString(), 'ID:', notificationId);
+      return notificationId;
     } catch (error) {
       console.error('Failed to snooze task from notification:', error);
-    }
-  }
-  
-  // Add notification to history
-  async addNotificationToHistory(notification, sendImmediateNotification = false) {
-    try {
-      // Check if it's a settings-related notification triggered update, if so, do not add to history
-      if (notification.request.content.data && 
-          (notification.request.content.data.notificationType === 'journalReminder' || 
-           notification.request.content.data.notificationType === 'meditationReminder') &&
-          !sendImmediateNotification) {
-        console.log('Skipping history for settings-related notification:', notification.request.content.title);
-        return null;
-      }
-      
-      // Get existing history
-      const historyJson = await AsyncStorage.getItem('notificationHistory');
-      const history = historyJson ? JSON.parse(historyJson) : [];
-      
-      // Create history item
-      const historyItem = {
-        id: Date.now().toString(),
-        title: notification.request.content.title,
-        body: notification.request.content.body,
-        data: notification.request.content.data,
-        timestamp: new Date().toISOString(),
-        read: false
-      };
-      
-      // Add to history
-      const updatedHistory = [historyItem, ...history].slice(0, 50); // Only keep recent 50 items
-      
-      // Save history
-      await AsyncStorage.setItem('notificationHistory', JSON.stringify(updatedHistory));
-      
-      // If needed, send immediate notification
-      if (sendImmediateNotification) {
-        // Additional logic can be added here for sending immediate notification
-        console.log('Immediate notification option is enabled but not sending one');
-      }
-      
-      return historyItem;
-    } catch (error) {
-      console.error('Failed to add notification to history:', error);
       return null;
     }
   }
   
-  // Get notification history
-  async getNotificationHistory() {
+  // 创建通知通道
+  async createNotificationChannels() {
     try {
-      const historyJson = await AsyncStorage.getItem('notificationHistory');
-      return historyJson ? JSON.parse(historyJson) : [];
-    } catch (error) {
-      console.error('Failed to get notification history:', error);
-      return [];
-    }
-  }
-  
-  // Mark notification as read
-  async markNotificationAsRead(notificationId) {
-    try {
-      const historyJson = await AsyncStorage.getItem('notificationHistory');
-      if (!historyJson) return;
+      await Notifications.setNotificationChannelAsync('task-notifications', {
+        name: 'Task Notifications',
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: 'default',
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
       
-      const history = JSON.parse(historyJson);
-      
-      // Update notification status
-      const updatedHistory = history.map(item => 
-        item.id === notificationId ? { ...item, read: true } : item
-      );
-      
-      // Save updated history
-      await AsyncStorage.setItem('notificationHistory', JSON.stringify(updatedHistory));
+      console.log('Successfully created notification channel: task-notifications');
     } catch (error) {
-      console.error('Failed to mark notification as read:', error);
-    }
-  }
-  
-  // Clear notification history
-  async clearNotificationHistory() {
-    try {
-      await AsyncStorage.removeItem('notificationHistory');
-    } catch (error) {
-      console.error('Failed to clear notification history:', error);
+      console.error('Failed to create notification channel:', error);
     }
   }
 }

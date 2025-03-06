@@ -24,7 +24,6 @@ import googleDriveService from './services/GoogleDriveService';
 import notificationService from './services/NotificationService';
 import { WEATHER_API, CACHE, ERROR_TYPES, STORAGE_KEYS } from './constants/Config';
 import useWeather from './utils/useWeather'; // Import weather Hook
-import NotificationHistoryScreen from './NotificationHistoryScreen';
 
 const { width, height } = Dimensions.get('window');
 const Stack = createStackNavigator();
@@ -472,7 +471,6 @@ const AppNavigator = () => {
       <Stack.Screen name="Journal" component={JournalScreen} />
       <Stack.Screen name="JournalEdit" component={JournalEditScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
-      <Stack.Screen name="NotificationHistory" component={NotificationHistoryScreen} />
     </Stack.Navigator>
   );
 };

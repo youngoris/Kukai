@@ -160,13 +160,23 @@ const TaskScreen = ({ navigation }) => {
     await saveTasks(sortedTasks);
     
     // If task has reminder, schedule notification
-    if (newTask.hasReminder && newTask.isTimeTagged && newTask.taskTime) {
+    if (newTask.isTimeTagged && newTask.taskTime) {
       try {
+        console.log(`Preparing notifications for task "${newTask.text}" (ID: ${newTask.id})`);
+        console.log(`Task time: ${new Date(newTask.taskTime).toLocaleString()}`);
+        console.log(`Has reminder: ${newTask.hasReminder}, Reminder minutes: ${newTask.reminderTime}`);
+        
         const notificationId = await notificationService.scheduleTaskNotification(newTask);
-        console.log('Task notification scheduled, ID:', notificationId);
+        if (notificationId) {
+          console.log(`Task notification(s) scheduled successfully, IDs:`, notificationId);
+        } else {
+          console.log(`No notifications were scheduled (possibly due to time constraints)`);
+        }
       } catch (error) {
         console.error('Failed to schedule task notification:', error);
       }
+    } else {
+      console.log(`Task "${newTask.text}" has no time set, skipping notifications`);
     }
     
     setNewTaskText('');
@@ -311,7 +321,7 @@ const TaskScreen = ({ navigation }) => {
     setShowTimePicker(false);
     setShowReminderOptions(false);
     setHasReminder(false);
-    setReminderTime(15);
+    setReminderTime(15); // 设置默认值为15分钟，但只有在用户选择时才实际启用
     
     // Show modal
     setModalVisible(true);
@@ -429,11 +439,15 @@ const TaskScreen = ({ navigation }) => {
     if (showReminderOptions) {
       // If reminder options are already displayed, click to close options
       setShowReminderOptions(false);
-      setHasReminder(false);
+      // 只有用户实际选择了提醒时间才设置hasReminder为true
+      if (!reminderTime) {
+        setHasReminder(false);
+      }
     } else {
       // Show reminder options
       setShowReminderOptions(true);
-      setHasReminder(true);
+      // 不自动设置hasReminder，等待用户选择具体时间
+      // setHasReminder(true);
       // Show reminder options to close time picker, to avoid interface too crowded
       setShowTimePicker(false);
     }
@@ -441,8 +455,9 @@ const TaskScreen = ({ navigation }) => {
 
   // Select reminder time
   const selectReminderTime = (minutes) => {
+    console.log(`User selected reminder time: ${minutes} minutes before task`);
     setReminderTime(minutes);
-    setHasReminder(true);
+    setHasReminder(true); // 用户明确选择了提醒时间，设置hasReminder为true
     setShowReminderOptions(false);
   };
 

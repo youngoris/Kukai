@@ -1041,33 +1041,6 @@ const SettingsScreen = ({ navigation }) => {
           
           {notificationsEnabled && (
             <>
-              {renderActionButton(
-                () => navigation.navigate('NotificationHistory'),
-                'Notification History',
-                'notifications',
-                'View all past notifications'
-              )}
-              
-              {renderSettingSwitch(
-                journalReminder,
-                (value) => {
-                  setJournalReminder(value);
-                  autoSaveSettings();
-                },
-                'Journal Reminder',
-                'Remind you to record your journal at a set time'
-              )}
-              
-              {journalReminder && renderTimeSetting(
-                journalReminderTime,
-                () => {
-                  setCurrentTimePickerMode('journalReminder');
-                  setTimePickerVisible(true);
-                },
-                'Journal Reminder Time',
-                'Choose when to receive daily journal reminders'
-              )}
-              
               {renderSettingSwitch(
                 taskNotifications,
                 (value) => {
