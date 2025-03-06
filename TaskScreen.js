@@ -14,6 +14,8 @@ import {
   Animated,
   Platform,
   Alert,
+  KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons, Ionicons, AntDesign, Feather } from '@expo/vector-icons';
@@ -187,7 +189,14 @@ const TaskScreen = ({ navigation }) => {
     const isCompleting = !taskToToggle.completed;
     
     const updatedTasks = tasks.map((task) =>
-      task.id === id ? { ...task, completed: !task.completed } : task
+      task.id === id 
+        ? { 
+            ...task, 
+            completed: !task.completed,
+            // 如果任务被标记为完成，添加完成时间戳；如果取消完成，移除完成时间戳
+            completedAt: !task.completed ? new Date().toISOString() : null
+          } 
+        : task
     );
     
     const sortedTasks = sortTasksByPriority(updatedTasks);
@@ -391,14 +400,15 @@ const TaskScreen = ({ navigation }) => {
       // 如果时间选择器已经显示，点击后关闭选择器并取消标签
       setShowTimePicker(false);
       setIsTimeTagged(false);
-    } else if (isTimeTagged) {
-      // 如果已经有时间标签但选择器未显示，点击后取消标签
-      setIsTimeTagged(false);
-      setShowTimePicker(false);
+      // 同时关闭提醒功能
+      setHasReminder(false);
+      setShowReminderOptions(false);
     } else {
-      // 如果没有时间标签，点击后显示选择器并激活标签
+      // 显示时间选择器
       setShowTimePicker(true);
       setIsTimeTagged(true);
+      // 显示时间选择器时关闭提醒选项，避免界面过于拥挤
+      setShowReminderOptions(false);
     }
   };
 
@@ -418,11 +428,15 @@ const TaskScreen = ({ navigation }) => {
     }
     
     if (showReminderOptions) {
+      // 如果提醒选项已经显示，点击后关闭选项
       setShowReminderOptions(false);
-    } else if (hasReminder) {
       setHasReminder(false);
     } else {
+      // 显示提醒选项
       setShowReminderOptions(true);
+      setHasReminder(true);
+      // 显示提醒选项时关闭时间选择器，避免界面过于拥挤
+      setShowTimePicker(false);
     }
   };
 
@@ -497,11 +511,12 @@ const TaskScreen = ({ navigation }) => {
 
   // 渲染标签按钮
   const renderTagButtons = () => (
-    <View style={styles.tagButtonsContainer}>
+    <View style={styles.tagButtonsRow}>
+      {/* 蛙图标按钮 */}
       <TouchableOpacity
         style={[
           styles.tagButton,
-          isFrogTask && styles.frogButtonActive,
+          isFrogTask && styles.tagButtonActive,
         ]}
         onPress={() => setIsFrogTask(!isFrogTask)}
       >
@@ -512,6 +527,7 @@ const TaskScreen = ({ navigation }) => {
         />
       </TouchableOpacity>
       
+      {/* Important 按钮 */}
       <TouchableOpacity
         style={[
           styles.tagButton,
@@ -526,6 +542,7 @@ const TaskScreen = ({ navigation }) => {
         />
       </TouchableOpacity>
       
+      {/* Urgent 按钮 */}
       <TouchableOpacity
         style={[
           styles.tagButton,
@@ -539,21 +556,23 @@ const TaskScreen = ({ navigation }) => {
           color={isUrgent ? "#000000" : "#FFFFFF"} 
         />
       </TouchableOpacity>
-
+      
+      {/* 时间按钮 */}
       <TouchableOpacity
         style={[
           styles.tagButton,
-          isTimeTagged && styles.tagButtonActive,
+          (isTimeTagged || showTimePicker) && styles.tagButtonActive,
         ]}
         onPress={handleTimeTagPress}
       >
         <Ionicons 
           name="time-outline" 
           size={20} 
-          color={isTimeTagged ? "#000000" : "#FFFFFF"} 
+          color={(isTimeTagged || showTimePicker) ? "#000000" : "#FFFFFF"} 
         />
       </TouchableOpacity>
-
+      
+      {/* 提醒按钮 */}
       <TouchableOpacity
         style={[
           styles.tagButton,
@@ -574,231 +593,268 @@ const TaskScreen = ({ navigation }) => {
   const completedCount = tasks.filter((task) => task.completed).length;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => navigation.navigate('Home')}
-        >
-          <Text style={styles.headerButtonText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerText}>TASK</Text>
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={openModal}
-        >
-          <Text style={styles.headerButtonText}>+</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-        {tasks.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No tasks yet</Text>
-            <Text style={styles.emptySubtext}>Add your first task to get started</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={tasks}
-            renderItem={renderTaskItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-          />
-        )}
-      </Animated.View>
-
-      {tasks.length > 0 && (
-        <View style={styles.footer}>
-          <Text style={styles.statsText}>
-            {completedCount}/{tasks.length} tasks completed
-          </Text>
+    <KeyboardAvoidingView 
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => navigation.navigate('Home')}
+          >
+            <Text style={styles.headerButtonText}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerText}>TASK</Text>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={openModal}
+          >
+            <Text style={styles.headerButtonText}>+</Text>
+          </TouchableOpacity>
         </View>
-      )}
 
-      {/* 新建任务模态框 */}
-      <Modal
-        visible={modalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={closeModal}
-      >
-        <TouchableWithoutFeedback onPress={closeModal}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-              <Animated.View
-                style={[
-                  styles.modalContainer,
-                  { transform: [{ scale: modalScaleAnim }] },
-                ]}
+        <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+          {tasks.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No tasks yet</Text>
+              <Text style={styles.emptySubtext}>Add your first task to get started</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={tasks}
+              renderItem={renderTaskItem}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.listContent}
+            />
+          )}
+        </Animated.View>
+
+        {tasks.length > 0 && (
+          <View style={styles.footer}>
+            <Text style={styles.statsText}>
+              {completedCount}/{tasks.length} tasks completed
+            </Text>
+          </View>
+        )}
+
+        {/* 新建任务模态框 */}
+        <Modal
+          visible={modalVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={closeModal}
+        >
+          <TouchableWithoutFeedback onPress={closeModal}>
+            <View style={styles.modalOverlay}>
+              <KeyboardAvoidingView 
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={{ width: '100%' }}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
               >
-                <View style={styles.modalContent}>
-                  <Text style={styles.modalTitle}>New Task</Text>
-                  <TextInput
-                    ref={inputRef}
-                    style={styles.modalInput}
-                    placeholder="Add a task..."
-                    placeholderTextColor="#666666"
-                    value={newTaskText}
-                    onChangeText={setNewTaskText}
-                    autoFocus={true}
-                    returnKeyType="done"
-                    onSubmitEditing={addTask}
-                  />
-                  {showTimePicker && (
-                    <View style={styles.timePickerContainer}>
-                      <DateTimePicker
-                        value={taskTime}
-                        mode="time"
-                        is24Hour={true}
-                        display="spinner"
-                        onChange={onTimeChange}
-                        textColor="#FFFFFF"
-                        themeVariant="dark"
-                        style={styles.timePicker}
-                        minuteInterval={15}
-                      />
-                    </View>
-                  )}
-                  {showReminderOptions && (
-                    <View style={styles.reminderOptionsContainer}>
-                      <Text style={styles.reminderOptionsTitle}>Select Reminder Time</Text>
-                      <View style={styles.reminderButtonsContainer}>
-                        <TouchableOpacity
-                          style={[styles.reminderButton, reminderTime === 15 && styles.reminderButtonActive]}
-                          onPress={() => selectReminderTime(15)}
-                        >
-                          <Text style={styles.reminderButtonText}>15 min</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.reminderButton, reminderTime === 30 && styles.reminderButtonActive]}
-                          onPress={() => selectReminderTime(30)}
-                        >
-                          <Text style={styles.reminderButtonText}>30 min</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.reminderButton, reminderTime === 60 && styles.reminderButtonActive]}
-                          onPress={() => selectReminderTime(60)}
-                        >
-                          <Text style={styles.reminderButtonText}>1 hour</Text>
-                        </TouchableOpacity>
+                <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+                  <Animated.View
+                    style={[
+                      styles.modalContainer,
+                      { transform: [{ scale: modalScaleAnim }] },
+                    ]}
+                  >
+                    <ScrollView 
+                      contentContainerStyle={{ paddingBottom: 20 }}
+                      keyboardShouldPersistTaps="handled"
+                    >
+                      <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>New Task</Text>
+                        <TextInput
+                          ref={inputRef}
+                          style={styles.modalInput}
+                          placeholder="Add a task..."
+                          placeholderTextColor="#666666"
+                          value={newTaskText}
+                          onChangeText={setNewTaskText}
+                          autoFocus={true}
+                          returnKeyType="done"
+                          onSubmitEditing={addTask}
+                          keyboardAppearance="dark"
+                        />
+                        
+                        {renderTagButtons()}
+                        
+                        {showTimePicker && (
+                          <View style={styles.timePickerContainer}>
+                            <DateTimePicker
+                              value={taskTime}
+                              mode="time"
+                              is24Hour={true}
+                              display="spinner"
+                              onChange={onTimeChange}
+                              textColor="#FFFFFF"
+                              themeVariant="dark"
+                              style={styles.timePicker}
+                              minuteInterval={15}
+                            />
+                          </View>
+                        )}
+                        
+                        {showReminderOptions && (
+                          <View style={styles.reminderOptionsContainer}>
+                            <Text style={styles.reminderOptionsTitle}>Select Reminder Time</Text>
+                            <View style={styles.reminderButtonsContainer}>
+                              <TouchableOpacity
+                                style={[styles.reminderButton, reminderTime === 15 && styles.reminderButtonActive]}
+                                onPress={() => selectReminderTime(15)}
+                              >
+                                <Text style={[styles.reminderButtonText, reminderTime === 15 && styles.reminderButtonTextActive]}>15 min</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.reminderButton, reminderTime === 30 && styles.reminderButtonActive]}
+                                onPress={() => selectReminderTime(30)}
+                              >
+                                <Text style={[styles.reminderButtonText, reminderTime === 30 && styles.reminderButtonTextActive]}>30 min</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.reminderButton, reminderTime === 60 && styles.reminderButtonActive]}
+                                onPress={() => selectReminderTime(60)}
+                              >
+                                <Text style={[styles.reminderButtonText, reminderTime === 60 && styles.reminderButtonTextActive]}>1 hour</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
+                        
+                        <View style={styles.modalButtons}>
+                          <TouchableOpacity
+                            style={styles.modalButton}
+                            onPress={closeModal}
+                          >
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.modalButton, styles.addTaskButton]}
+                            onPress={addTask}
+                          >
+                            <Text style={styles.addTaskButtonText}>Add Task</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
-                    </View>
-                  )}
-                  {renderTagButtons()}
-                  <View style={styles.modalButtons}>
-                    <TouchableOpacity
-                      style={styles.modalButton}
-                      onPress={closeModal}
-                    >
-                      <Text style={styles.cancelButtonText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.modalButton, styles.addTaskButton]}
-                      onPress={addTask}
-                    >
-                      <Text style={styles.addTaskButtonText}>Add Task</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </Animated.View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+                    </ScrollView>
+                  </Animated.View>
+                </TouchableWithoutFeedback>
+              </KeyboardAvoidingView>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
 
-      {/* 编辑任务模态框 */}
-      <Modal
-        visible={editModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={closeEditModal}
-      >
-        <TouchableWithoutFeedback onPress={closeEditModal}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-              <View style={styles.modalContainer}>
-                <View style={styles.modalContent}>
-                  <Text style={styles.modalTitle}>Edit Task</Text>
-                  <TextInput
-                    ref={editInputRef}
-                    style={styles.modalInput}
-                    placeholder="Edit task..."
-                    placeholderTextColor="#666666"
-                    value={editText}
-                    onChangeText={setEditText}
-                    autoFocus={true}
-                  />
-                  {showTimePicker && (
-                    <View style={styles.timePickerContainer}>
-                      <DateTimePicker
-                        value={taskTime}
-                        mode="time"
-                        is24Hour={true}
-                        display="spinner"
-                        onChange={onTimeChange}
-                        textColor="#FFFFFF"
-                        themeVariant="dark"
-                        style={styles.timePicker}
-                        minuteInterval={15}
-                      />
-                    </View>
-                  )}
-                  {showReminderOptions && (
-                    <View style={styles.reminderOptionsContainer}>
-                      <Text style={styles.reminderOptionsTitle}>Select Reminder Time</Text>
-                      <View style={styles.reminderButtonsContainer}>
-                        <TouchableOpacity
-                          style={[styles.reminderButton, reminderTime === 15 && styles.reminderButtonActive]}
-                          onPress={() => selectReminderTime(15)}
-                        >
-                          <Text style={styles.reminderButtonText}>15 min</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.reminderButton, reminderTime === 30 && styles.reminderButtonActive]}
-                          onPress={() => selectReminderTime(30)}
-                        >
-                          <Text style={styles.reminderButtonText}>30 min</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.reminderButton, reminderTime === 60 && styles.reminderButtonActive]}
-                          onPress={() => selectReminderTime(60)}
-                        >
-                          <Text style={styles.reminderButtonText}>1 hour</Text>
-                        </TouchableOpacity>
+        {/* 编辑任务模态框 */}
+        <Modal
+          visible={editModalVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={closeEditModal}
+        >
+          <TouchableWithoutFeedback onPress={closeEditModal}>
+            <View style={styles.modalOverlay}>
+              <KeyboardAvoidingView 
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={{ width: '100%' }}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+              >
+                <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+                  <View style={styles.modalContainer}>
+                    <ScrollView 
+                      contentContainerStyle={{ paddingBottom: 20 }}
+                      keyboardShouldPersistTaps="handled"
+                    >
+                      <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Edit Task</Text>
+                        <TextInput
+                          ref={editInputRef}
+                          style={styles.modalInput}
+                          placeholder="Edit task..."
+                          placeholderTextColor="#666666"
+                          value={editText}
+                          onChangeText={setEditText}
+                          autoFocus={true}
+                          keyboardAppearance="dark"
+                        />
+                        
+                        {renderTagButtons()}
+                        
+                        {showTimePicker && (
+                          <View style={styles.timePickerContainer}>
+                            <DateTimePicker
+                              value={taskTime}
+                              mode="time"
+                              is24Hour={true}
+                              display="spinner"
+                              onChange={onTimeChange}
+                              textColor="#FFFFFF"
+                              themeVariant="dark"
+                              style={styles.timePicker}
+                              minuteInterval={15}
+                            />
+                          </View>
+                        )}
+                        
+                        {showReminderOptions && (
+                          <View style={styles.reminderOptionsContainer}>
+                            <Text style={styles.reminderOptionsTitle}>Select Reminder Time</Text>
+                            <View style={styles.reminderButtonsContainer}>
+                              <TouchableOpacity
+                                style={[styles.reminderButton, reminderTime === 15 && styles.reminderButtonActive]}
+                                onPress={() => selectReminderTime(15)}
+                              >
+                                <Text style={[styles.reminderButtonText, reminderTime === 15 && styles.reminderButtonTextActive]}>15 min</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.reminderButton, reminderTime === 30 && styles.reminderButtonActive]}
+                                onPress={() => selectReminderTime(30)}
+                              >
+                                <Text style={[styles.reminderButtonText, reminderTime === 30 && styles.reminderButtonTextActive]}>30 min</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.reminderButton, reminderTime === 60 && styles.reminderButtonActive]}
+                                onPress={() => selectReminderTime(60)}
+                              >
+                                <Text style={[styles.reminderButtonText, reminderTime === 60 && styles.reminderButtonTextActive]}>1 hour</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
+                        
+                        <View style={styles.modalButtons}>
+                          <TouchableOpacity
+                            style={styles.modalButton}
+                            onPress={() => {
+                              deleteTask(editingTask?.id);
+                              closeEditModal();
+                            }}
+                          >
+                            <Text style={styles.deleteButtonText}>Delete</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.modalButton}
+                            onPress={closeEditModal}
+                          >
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.modalButton, styles.addTaskButton]}
+                            onPress={saveEditedTask}
+                          >
+                            <Text style={styles.addTaskButtonText}>Save</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
-                    </View>
-                  )}
-                  {renderTagButtons()}
-                  <View style={styles.modalButtons}>
-                    <TouchableOpacity
-                      style={styles.modalButton}
-                      onPress={() => {
-                        deleteTask(editingTask?.id);
-                        closeEditModal();
-                      }}
-                    >
-                      <Text style={styles.deleteButtonText}>Delete</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.modalButton}
-                      onPress={closeEditModal}
-                    >
-                      <Text style={styles.cancelButtonText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.modalButton, styles.addTaskButton]}
-                      onPress={saveEditedTask}
-                    >
-                      <Text style={styles.addTaskButtonText}>Save</Text>
-                    </TouchableOpacity>
+                    </ScrollView>
                   </View>
-                </View>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
-    </SafeAreaView>
+                </TouchableWithoutFeedback>
+              </KeyboardAvoidingView>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -934,14 +990,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   modalContainer: {
-    width: '90%',
+    width: '100%',
     backgroundColor: '#000000',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#FFFFFF',
-    overflow: 'hidden',
+    maxHeight: '93%',
   },
   modalContent: {
     padding: 20,
@@ -992,26 +1049,23 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
     paddingHorizontal: 20,
   },
-  tagButtonsContainer: {
+  tagButtonsRow: {
     flexDirection: 'row',
     marginBottom: 20,
     justifyContent: 'space-around',
   },
   tagButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000',
+    marginRight: 10,
+    backgroundColor: '#222222',
     borderWidth: 1,
-    borderColor: '#666666',
-  },
-  tagButtonActive: {
-    backgroundColor: '#FFFFFF',
     borderColor: '#FFFFFF',
   },
-  frogButtonActive: {
+  tagButtonActive: {
     backgroundColor: '#FFFFFF',
     borderColor: '#FFFFFF',
   },
@@ -1021,13 +1075,13 @@ const styles = StyleSheet.create({
     padding: 0,
     marginBottom: 15,
     alignItems: 'center',
-    height: 140, // 固定高度，约3行
+    height: 90, 
     overflow: 'hidden',
     justifyContent: 'center',
   },
   timePicker: {
     width: Platform.OS === 'ios' ? '100%' : 150,
-    height: Platform.OS === 'ios' ? 140 : 120,
+    height: Platform.OS === 'ios' ? 100 : 90,
   },
   timeConfirmButton: {
     width: 40,
@@ -1049,7 +1103,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#222',
     borderRadius: 8,
     padding: 15,
-    marginBottom: 15,
+    marginBottom: 20, // 增加底部边距，使按钮与边框距离更大
   },
   reminderOptionsTitle: {
     color: '#FFFFFF',
@@ -1070,11 +1124,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   reminderButtonActive: {
-    backgroundColor: '#9C27B0', // 紫色背景
+    backgroundColor: '#FFFFFF', // 改为白色背景
   },
   reminderButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
+  },
+  reminderButtonTextActive: {
+    color: '#000000', // 激活状态的文字为黑色
   },
 });
 

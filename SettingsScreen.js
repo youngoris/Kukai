@@ -21,7 +21,9 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import CloudBackupSection from './components/CloudBackupSection';
+import JournalTemplateManager from './components/JournalTemplateManager';
 import notificationService from './services/NotificationService';
+import { AVAILABLE_TEMPLATES } from './constants/JournalTemplates';
 
 const SettingsScreen = ({ navigation }) => {
   // Meditation Settings
@@ -89,13 +91,7 @@ const SettingsScreen = ({ navigation }) => {
   ];
   
   // Journal template options
-  const journalTemplates = [
-    { value: 'default', label: 'Default' },
-    { value: 'gratitude', label: 'Gratitude' },
-    { value: 'reflection', label: 'Reflection' },
-    { value: 'achievement', label: 'Achievement' },
-    { value: 'custom', label: 'Custom' }
-  ];
+  const journalTemplates = AVAILABLE_TEMPLATES;
   
   // App theme options
   const appThemes = [
@@ -164,6 +160,9 @@ const SettingsScreen = ({ navigation }) => {
   const [quietHoursEnd, setQuietHoursEnd] = useState(new Date().setHours(7, 0, 0, 0));
   const [showQuietHoursStartPicker, setShowQuietHoursStartPicker] = useState(false);
   const [showQuietHoursEndPicker, setShowQuietHoursEndPicker] = useState(false);
+  
+  // Add state for template manager visibility
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
   
   useEffect(() => {
     loadSettings();
@@ -803,6 +802,44 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
   
+  // Add function to handle template selection
+  const handleTemplateSelect = (templateId, templateContent) => {
+    setSelectedJournalTemplate(templateId);
+    setSettingsChanged(true);
+    
+    // Save template selection
+    autoSaveSettings();
+  };
+  
+  // Add function to open template manager
+  const openTemplateManager = () => {
+    setShowTemplateManager(true);
+  };
+  
+  // Modify the Journal Template dropdown option to show a "Manage" button
+  const renderJournalTemplateOption = () => {
+    const selectedTemplate = journalTemplates.find(template => template.value === selectedJournalTemplate);
+    const selectedLabel = selectedTemplate ? selectedTemplate.label : 'Default';
+    
+    return (
+      <TouchableOpacity 
+        style={styles.settingRow}
+        onPress={openTemplateManager}
+      >
+        <View style={styles.settingLabelContainer}>
+          <Text style={[styles.settingLabel, appTheme === 'light' && styles.lightText]}>Journal Template</Text>
+          <Text style={styles.settingDescription}>Choose default template for new journal entries</Text>
+        </View>
+        <View style={styles.settingValueContainer}>
+          <Text style={[styles.settingValue, appTheme === 'light' && styles.lightText]}>
+            {selectedLabel}
+          </Text>
+          <MaterialIcons name="chevron-right" size={22} color="#666666" />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+  
   return (
     <SafeAreaView style={[styles.container, appTheme === 'light' && styles.lightContainer]}>
       <View style={[styles.header, appTheme === 'light' && styles.lightHeader]}>
@@ -952,12 +989,8 @@ const SettingsScreen = ({ navigation }) => {
             'Time to remind you to write in your journal daily'
           )}
           
-          {renderDropdownOption(
-            selectedJournalTemplate,
-            journalTemplates,
-            'Journal Template',
-            'Choose default template for new journal entries'
-          )}
+          {/* Replace standard dropdown with custom journal template option */}
+          {renderJournalTemplateOption()}
         </View>
         
         {/* General Settings */}
@@ -988,13 +1021,6 @@ const SettingsScreen = ({ navigation }) => {
             },
             'Enable Notifications',
             'Allow the app to send notifications and reminders'
-          )}
-          
-          {renderSettingSwitch(
-            syncEnabled,
-            setSyncEnabled,
-            'Data Sync',
-            'Sync your data across devices'
           )}
         </View>
         
@@ -1105,51 +1131,60 @@ const SettingsScreen = ({ navigation }) => {
         </View>
         
         {/* Data Management Section */}
-        <Text style={styles.sectionTitle}>Data Management</Text>
-        
-        {/* Google Drive Backup */}
-        {renderActionButton(
-          () => {
-            // Show the CloudBackupSection as a modal or navigate to a dedicated screen
-            // For now, we'll just toggle the visibility of the CloudBackupSection
-            setShowCloudBackup(!showCloudBackup);
-          },
-          'Google Drive Backup',
-          'cloud',
-          'Backup and sync data with Google Drive'
-        )}
-        
-        {showCloudBackup && (
-          <View style={styles.cloudBackupContainer}>
-            <CloudBackupSection 
-              navigation={navigation}
-              onBackupComplete={handleBackupComplete}
-            />
-          </View>
-        )}
-        
-        {renderActionButton(
-          exportData,
-          'Local Backup',
-          'save-alt',
-          'Backup data to a local file'
-        )}
-        
-        {renderActionButton(
-          importData,
-          'Restore from Local',
-          'restore',
-          'Restore data from a local backup file'
-        )}
-        
-        {/* Clear Data */}
-        {renderActionButton(
-          clearAllData,
-          'Clear All Data',
-          'delete',
-          'Permanently delete all app data',
-          true
-        )}
+        <View style={styles.settingSection}>
+          <Text style={[styles.sectionTitle, appTheme === 'light' && styles.lightSectionTitle]}>Data Management</Text>
+          
+          {renderSettingSwitch(
+            syncEnabled,
+            setSyncEnabled,
+            'Data Sync',
+            'Sync your data across devices'
+          )}
+          
+          {/* Google Drive Backup */}
+          {renderActionButton(
+            () => {
+              // Show the CloudBackupSection as a modal or navigate to a dedicated screen
+              // For now, we'll just toggle the visibility of the CloudBackupSection
+              setShowCloudBackup(!showCloudBackup);
+            },
+            'Google Drive Backup',
+            'cloud',
+            'Backup and sync data with Google Drive'
+          )}
+          
+          {showCloudBackup && (
+            <View style={styles.cloudBackupContainer}>
+              <CloudBackupSection 
+                navigation={navigation}
+                onBackupComplete={handleBackupComplete}
+              />
+            </View>
+          )}
+          
+          {renderActionButton(
+            exportData,
+            'Local Backup',
+            'save-alt',
+            'Backup data to a local file'
+          )}
+          
+          {renderActionButton(
+            importData,
+            'Restore from Local',
+            'restore',
+            'Restore data from a local backup file'
+          )}
+          
+          {/* Clear Data */}
+          {renderActionButton(
+            clearAllData,
+            'Clear All Data',
+            'delete',
+            'Permanently delete all app data',
+            true
+          )}
+        </View>
         
         {/* About Section */}
         <Text style={styles.sectionTitle}>About</Text>
@@ -1200,7 +1235,7 @@ const SettingsScreen = ({ navigation }) => {
                     {item.label}
                   </Text>
                   {currentValue === item.value && (
-                    <MaterialIcons name="check" size={22} color="#007AFF" />
+                    <MaterialIcons name="check" size={22} color="#FFFFFF" />
                   )}
                 </TouchableOpacity>
               )}
@@ -1248,7 +1283,7 @@ const SettingsScreen = ({ navigation }) => {
                   style={[styles.modalButton, styles.confirmButton]}
                   onPress={confirmTimeSelection}
                 >
-                  <Text style={{color: '#333', fontSize: 16, fontWeight: '600'}}>Confirm</Text>
+                  <Text style={styles.confirmButtonText}>Confirm</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1291,7 +1326,7 @@ const SettingsScreen = ({ navigation }) => {
                 style={[styles.modalButton, styles.confirmButton]} 
                 onPress={exportData}
               >
-                <Text style={styles.modalButtonText}>Export</Text>
+                <Text style={styles.confirmButtonText}>Export</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1319,6 +1354,13 @@ const SettingsScreen = ({ navigation }) => {
           onChange={handleQuietHoursEndChange}
         />
       )}
+      
+      {/* Add Template Manager Modal */}
+      <JournalTemplateManager 
+        isVisible={showTemplateManager}
+        onClose={() => setShowTemplateManager(false)}
+        onTemplateSelect={handleTemplateSelect}
+      />
     </SafeAreaView>
   );
 };
@@ -1545,7 +1587,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   confirmButtonText: {
-    color: '#FFFFFF',
+    color: '#000000',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -1555,6 +1597,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#111',
     borderRadius: 10,
     padding: 15,
+  },
+  manageButton: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  manageButtonText: {
+    color: '#000',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

@@ -541,9 +541,15 @@ class NotificationService {
       
       const tasks = JSON.parse(tasksJson);
       
-      // 查找并更新任务
+      // 查找并更新任务，添加完成时间戳
       const updatedTasks = tasks.map(task => 
-        task.id === taskId ? { ...task, completed: true } : task
+        task.id === taskId 
+          ? { 
+              ...task, 
+              completed: true,
+              completedAt: new Date().toISOString() // 添加完成时间戳
+            } 
+          : task
       );
       
       // 保存更新后的任务

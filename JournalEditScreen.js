@@ -14,13 +14,15 @@ import {
   ScrollView,
   Image,
   Linking,
-  Dimensions
+  Dimensions,
+  TouchableWithoutFeedback
 } from 'react-native';
 import { MaterialIcons, Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import Markdown from 'react-native-markdown-display'; // 导入 Markdown 组件
 import useWeather from './utils/useWeather'; // 导入天气Hook
+import { getTemplateContent } from './constants/JournalTemplates'; // 导入模板功能
 
 const JournalEditScreen = ({ navigation, route }) => {
   const { savedJournal, date, viewOnly = false, location: routeLocation, weather: routeWeather, temperature: routeTemperature, mood: routeMood } = route.params;
@@ -33,6 +35,8 @@ const JournalEditScreen = ({ navigation, route }) => {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [loading, setLoading] = useState(true);
   const [locationError, setLocationError] = useState(null);
+  const [showTemplateMenu, setShowTemplateMenu] = useState(false); // 添加模板菜单状态
+  const [currentTemplate, setCurrentTemplate] = useState('default'); // 添加当前使用的模板状态
 
   // 使用自定义Hook获取天气数据，但不自动获取
   const { 
@@ -125,6 +129,36 @@ const JournalEditScreen = ({ navigation, route }) => {
       
       // 否则尝试从 AsyncStorage 加载或获取新数据
       await loadJournalMeta();
+      
+      // 如果是新日记（没有现有内容），检查是否需要应用模板
+      if (!savedJournal || savedJournal.trim() === '') {
+        const settings = await AsyncStorage.getItem('userSettings');
+        if (settings) {
+          const parsedSettings = JSON.parse(settings);
+          if (parsedSettings.selectedJournalTemplate && parsedSettings.selectedJournalTemplate !== 'default') {
+            // 检查是否为已删除的模板
+            if (parsedSettings.selectedJournalTemplate === 'morning') {
+              setCurrentTemplate('default');
+            } else {
+              // 应用选定的模板
+              const templateContent = getTemplateContent(parsedSettings.selectedJournalTemplate);
+              if (templateContent) {
+                setJournalText(templateContent);
+                setCurrentTemplate(parsedSettings.selectedJournalTemplate);
+              }
+            }
+          } else if (parsedSettings.selectedJournalTemplate === 'custom') {
+            // 应用自定义模板
+            const customTemplate = await AsyncStorage.getItem('customJournalTemplate');
+            if (customTemplate) {
+              setJournalText(customTemplate);
+              setCurrentTemplate('custom');
+            }
+          } else {
+            setCurrentTemplate('default');
+          }
+        }
+      }
       
       // 修改：即使有位置或天气数据，也尝试获取最新数据
       // 但不强制刷新，如果缓存有效则使用缓存
@@ -605,6 +639,109 @@ useEffect(() => {
   }
 }, [viewOnly, journalText]);
 
+  // 添加应用模板的函数
+  const applyTemplate = async (templateId) => {
+    if (viewOnly) return; // 在查看模式下不应用模板
+    
+    // 防止应用已删除的模板
+    if (templateId === 'morning') {
+      return;
+    }
+    
+    // 如果当前编辑器有内容，提示确认
+    if (journalText.trim() !== '') {
+      Alert.alert(
+        'Apply Template',
+        'This will replace your current text. Continue?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Apply', 
+            onPress: () => {
+              if (templateId === 'custom') {
+                applyCustomTemplate();
+              } else {
+                const templateContent = getTemplateContent(templateId);
+                if (templateContent) {
+                  setJournalText(templateContent);
+                  setCurrentTemplate(templateId);
+                }
+              }
+              setShowTemplateMenu(false);
+            } 
+          }
+        ]
+      );
+    } else {
+      // 如果没有内容，直接应用
+      if (templateId === 'custom') {
+        applyCustomTemplate();
+      } else {
+        const templateContent = getTemplateContent(templateId);
+        if (templateContent) {
+          setJournalText(templateContent);
+          setCurrentTemplate(templateId);
+        }
+      }
+      setShowTemplateMenu(false);
+    }
+  };
+  
+  // 应用自定义模板的辅助函数
+  const applyCustomTemplate = async () => {
+    try {
+      const customTemplate = await AsyncStorage.getItem('customJournalTemplate');
+      if (customTemplate) {
+        setJournalText(customTemplate);
+        setCurrentTemplate('custom');
+      }
+    } catch (error) {
+      console.error('Error applying custom template:', error);
+    }
+  };
+  
+  // 添加模板菜单渲染函数
+  const renderTemplateMenu = () => {
+    if (!showTemplateMenu) return null;
+    
+    const templates = [
+      { id: 'default', name: 'Default' },
+      { id: 'gratitude', name: 'Gratitude' },
+      { id: 'reflection', name: 'Reflection' },
+      { id: 'achievement', name: 'Achievement' },
+      { id: 'evening', name: 'Evening' },
+      { id: 'detailed', name: 'Detailed' },
+      { id: 'custom', name: 'Custom' }
+    ];
+    
+    return (
+      <TouchableWithoutFeedback onPress={() => setShowTemplateMenu(false)}>
+        <View style={styles.templateOverlay}>
+          <TouchableWithoutFeedback>
+            <View style={styles.templateMenuContainer}>
+              {templates.map(template => (
+                <TouchableOpacity 
+                  key={template.id}
+                  style={styles.templateOption}
+                  onPress={() => applyTemplate(template.id)}
+                >
+                  <View style={styles.templateOptionTextContainer}>
+                    {currentTemplate === template.id && (
+                      <Text style={styles.templateOptionDot}>•</Text>
+                    )}
+                    <Text style={styles.templateOptionText}>
+                      {template.name}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar hidden />
@@ -626,9 +763,17 @@ useEffect(() => {
           {viewOnly ? 'Journal Review' : 'Edit Journal'}
         </Text>
         {!viewOnly && (
-          <TouchableOpacity onPress={saveJournal}>
-            <MaterialIcons name="check" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+          <View style={{flexDirection: 'row'}}>
+            <TouchableOpacity 
+              style={styles.templateButton}
+              onPress={() => setShowTemplateMenu(!showTemplateMenu)}
+            >
+              <Feather name="file-text" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity style={{marginLeft: 16}} onPress={saveJournal}>
+              <MaterialIcons name="check" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         )}
         {viewOnly && (
           <TouchableOpacity onPress={() => {
@@ -640,6 +785,9 @@ useEffect(() => {
           </TouchableOpacity>
         )}
       </View>
+      
+      {/* 模板菜单 */}
+      {renderTemplateMenu()}
       
       {/* 日期和心情显示 - 仅在查看模式显示 */}
       {viewOnly && (
@@ -926,6 +1074,58 @@ const styles = StyleSheet.create({
   refreshButton: {
     marginLeft: 8,
     padding: 3,
+  },
+  templateButton: {
+    padding: 4,
+  },
+  templateMenuContainer: {
+    position: 'absolute',
+    top: 100,
+    right: 20,
+    backgroundColor: '#262626',
+    borderRadius: 8,
+    overflow: 'hidden',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 1000,
+  },
+  templateOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  templateOptionText: {
+    color: '#FFF',
+    fontSize: 16,
+    marginLeft: 15, // 为圆点留出空间
+  },
+  templateOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    zIndex: 999,
+  },
+  templateOptionTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  templateOptionDot: {
+    position: 'absolute',
+    left: 0,
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

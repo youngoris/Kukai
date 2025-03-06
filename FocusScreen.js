@@ -214,11 +214,40 @@ export default function FocusScreen({ navigation }) {
   };
 
   // Handle focus time completion
-  const handleFocusComplete = () => {
+  const handleFocusComplete = async () => {
     setIsActive(false);
     setShowChoice(true);
     setPomodoroCount((prev) => prev + 1);
     Vibration.vibrate(500);
+    
+    // 保存番茄钟数据到AsyncStorage
+    try {
+      // 获取当前日期
+      const today = new Date().toISOString().split('T')[0];
+      
+      // 获取现有番茄钟数据
+      const pomodorosJson = await AsyncStorage.getItem('pomodoros');
+      let pomodoros = [];
+      
+      if (pomodorosJson) {
+        pomodoros = JSON.parse(pomodorosJson);
+      }
+      
+      // 添加新完成的番茄钟记录
+      pomodoros.push({
+        id: Date.now().toString(),
+        date: today,
+        duration: focusDuration,
+        timestamp: new Date().toISOString()
+      });
+      
+      // 保存更新后的番茄钟数据
+      await AsyncStorage.setItem('pomodoros', JSON.stringify(pomodoros));
+      
+      console.log('保存番茄钟记录成功');
+    } catch (error) {
+      console.error('保存番茄钟记录失败:', error);
+    }
   };
 
   // Handle break time completion
