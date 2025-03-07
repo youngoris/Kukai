@@ -12,6 +12,10 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import googleDriveService from '../services/GoogleDriveService';
+import Constants from 'expo-constants';
+
+// 检查是否运行在Expo Go中
+const isExpoGo = Constants.appOwnership === 'expo';
 
 const CloudBackupSection = ({ navigation, onBackupComplete }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -71,20 +75,97 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
 
   // Handle Google authentication
   const handleAuthenticate = async () => {
+    // 检查是否在Expo Go中运行
+    if (isExpoGo) {
+      Alert.alert(
+        '功能限制',
+        'Expo Go对Google认证的支持非常有限，可能会导致应用崩溃。\n\n您有以下选择:',
+        [
+          { 
+            text: '使用本地备份', 
+            onPress: () => {
+              Alert.alert(
+                '使用本地备份',
+                '本地备份功能可以将数据导出到文件，而无需Google账号。在设置菜单中您可以找到"本地备份"功能。',
+                [{ text: '了解了' }]
+              );
+            }
+          },
+          { 
+            text: '使用模拟账号', 
+            onPress: () => {
+              useMockGoogleAccount();
+            }
+          },
+          { text: '取消', style: 'cancel' },
+          { 
+            text: '继续尝试', 
+            style: 'destructive',
+            onPress: () => attemptAuthenticate() 
+          }
+        ]
+      );
+      return;
+    }
+    
+    attemptAuthenticate();
+  };
+  
+  // 使用模拟Google账号（不需要实际认证）
+  const useMockGoogleAccount = () => {
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsAuthenticated(true);
+      setAutoSyncEnabled(false);
+      setSyncFrequency('daily');
+      setLastSyncTime(new Date().toISOString());
+      Alert.alert(
+        '已连接模拟账号',
+        '您现在已连接到模拟Google账号。请注意，这只是为了演示界面，实际数据不会上传到云端。请使用本地备份保存重要数据。',
+        [{ text: '了解了' }]
+      );
+      setIsLoading(false);
+    }, 1500);
+  };
+
+  // 实际的认证尝试
+  const attemptAuthenticate = async () => {
     setIsLoading(true);
     try {
+      console.log('CloudBackupSection: 开始谷歌认证...');
       const success = await googleDriveService.authenticate();
       setIsAuthenticated(success);
       
       if (success) {
+        console.log('CloudBackupSection: 谷歌认证成功');
         loadSyncSettings();
-        Alert.alert('Success', 'Successfully connected to Google Drive');
+        Alert.alert('成功', '已成功连接到Google Drive');
       } else {
-        Alert.alert('Error', 'Failed to connect to Google Drive');
+        console.log('CloudBackupSection: 谷歌认证失败');
+        Alert.alert('错误', '无法连接到Google Drive，请重试');
       }
     } catch (error) {
-      console.error('Authentication error:', error);
-      Alert.alert('Error', 'An error occurred during authentication');
+      console.error('CloudBackupSection: 认证错误:', error);
+      
+      // 显示更具体的错误消息
+      let errorMessage = '认证过程中发生错误';
+      
+      if (error.message.includes('Error DEVELOPER_ERROR')) {
+        errorMessage = '开发者错误: 客户端ID可能无效或配置不正确。请检查应用设置。';
+      } else if (error.message.includes('access_denied')) {
+        errorMessage = '用户拒绝了访问请求';
+      } else if (error.message.includes('network')) {
+        errorMessage = '网络错误: 请检查您的网络连接并重试';
+      } else if (error.message.includes('client_id')) {
+        errorMessage = '客户端ID错误: Google API配置不正确';
+      }
+      
+      // 如果在Expo Go中发生错误，添加更多指导信息
+      if (isExpoGo) {
+        errorMessage += '\n\n在Expo Go中使用Google认证可能不稳定。请考虑创建开发构建版本以获得完整功能。';
+      }
+      
+      Alert.alert('认证错误', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -385,51 +466,49 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.sectionDescription}>
+        备份和恢复你的数据到Google Drive
+      </Text>
+      
+      {!isAuthenticated && (
+        <Text style={styles.noDevAccountNote}>
+          注意: 在Expo Go中此功能可能不稳定。如果没有开发者账号，建议使用本地备份或模拟账号。
+        </Text>
+      )}
+      
       {isLoading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#FFFFFF" />
         </View>
       )}
       
-      {/* Google Drive connection status */}
-      <View style={styles.settingItem}>
-        <View style={styles.settingContent}>
-          <View style={styles.settingLabelContainer}>
-            <MaterialIcons name="cloud" size={22} color="#FFFFFF" style={styles.settingIcon} />
-            <Text style={styles.settingLabel}>Google Drive</Text>
-          </View>
-          <Text style={styles.settingDescription}>
-            {isAuthenticated 
-              ? 'Connected, ready for backup and sync' 
-              : 'Not connected, tap to enable cloud backup'}
-          </Text>
-        </View>
-        
+      {!isAuthenticated ? (
+        // 未认证状态，显示连接Google Drive按钮
         <TouchableOpacity
-          style={[
-            styles.actionButton,
-            isAuthenticated ? styles.disconnectButton : styles.connectButton
-          ]}
-          onPress={isAuthenticated ? handleSignOut : handleAuthenticate}
+          style={styles.connectButton}
+          onPress={handleAuthenticate}
+          disabled={isLoading}
         >
-          <MaterialIcons 
-            name={isAuthenticated ? "link-off" : "link"} 
-            size={14} 
-            color="#FFFFFF" 
-            style={styles.actionButtonIcon} 
-          />
-          <Text style={styles.actionButtonText}>
-            {isAuthenticated ? 'Disconnect' : 'Connect'}
-          </Text>
+          <MaterialIcons name="cloud" size={24} color="#FFFFFF" />
+          <Text style={styles.connectButtonText}>连接Google Drive</Text>
         </TouchableOpacity>
-      </View>
-      
-      {isAuthenticated && (
-        <>
+      ) : (
+        // 已认证状态，显示断开连接按钮
+        <View style={styles.authenticatedContainer}>
+          <View style={styles.statusContainer}>
+            <Text style={styles.statusText}>已连接到Google Drive</Text>
+            <TouchableOpacity
+              style={styles.disconnectButton}
+              onPress={handleSignOut}
+            >
+              <Text style={styles.disconnectButtonText}>断开连接</Text>
+            </TouchableOpacity>
+          </View>
+          
           {/* Last sync time */}
           {lastSyncTime && (
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Last sync:</Text>
+              <Text style={styles.infoLabel}>上次同步时间:</Text>
               <Text style={styles.infoValue}>{formatDate(lastSyncTime)}</Text>
             </View>
           )}
@@ -508,7 +587,7 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
               </View>
             </View>
           )}
-        </>
+        </View>
       )}
       
       {renderBackupListModal()}
@@ -518,7 +597,9 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
+    backgroundColor: '#111',
+    borderRadius: 10,
+    padding: 20,
   },
   sectionTitle: {
     color: '#FFF',
@@ -564,10 +645,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   connectButton: {
-    backgroundColor: '#444',
+    backgroundColor: '#4285F4', // Google蓝色
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 15,
   },
   disconnectButton: {
-    backgroundColor: '#555',
+    backgroundColor: '#444',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 5,
   },
   actionButtonIcon: {
     marginRight: 5,
@@ -716,6 +806,48 @@ const styles = StyleSheet.create({
     color: '#888',
     textAlign: 'center',
     padding: 20,
+  },
+  sectionDescription: {
+    color: '#FFF',
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  connectButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 10,
+  },
+  authenticatedContainer: {
+    backgroundColor: '#222',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 15,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  statusText: {
+    color: '#FFF',
+    fontSize: 16,
+  },
+  disconnectButton: {
+    backgroundColor: '#444',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 5,
+  },
+  disconnectButtonText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+  },
+  noDevAccountNote: {
+    color: '#888',
+    fontSize: 12,
+    marginBottom: 10,
   },
 });
 

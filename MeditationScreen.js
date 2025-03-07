@@ -28,8 +28,37 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Ignore specific warnings
 LogBox.ignoreLogs(['Animated: `useNativeDriver`']);
 
+// Audio configuration - Adjust these values to customize the audio experience
+// CROSSFADE_DURATION: Controls how smooth the transition is between loops (in milliseconds)
+// - Lower values (300-500ms): Quicker transitions but might be noticeable
+// - Medium values (800-1200ms): Good balance between smoothness and responsiveness
+// - Higher values (1500-3000ms): Very smooth transitions but uses more resources
+const AUDIO_CONFIG = {
+  CROSSFADE_DURATION: 2500,  // Milliseconds for crossfade between audio loops
+  DEFAULT_VOLUME: 0.5        // Default background sound volume
+};
+
 const { width } = Dimensions.get('window');
 const TIMER_SIZE = width * 0.8;
+
+// Audio session configuration for seamless playback
+const configureAudioSession = async () => {
+  try {
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: true,
+      // Use numeric constants instead of Audio enum values to avoid compatibility issues
+      // 1 = INTERRUPTION_MODE_IOS_DO_NOT_MIX / INTERRUPTION_MODE_ANDROID_DO_NOT_MIX
+      interruptionModeIOS: 1,
+      interruptionModeAndroid: 1,
+      shouldDuckAndroid: false,
+      playThroughEarpieceAndroid: false
+    });
+    console.log("Audio session configured for optimal meditation experience");
+  } catch (error) {
+    console.error("Failed to configure audio session:", error);
+  }
+};
 
 // Define sound themes
 const soundThemes = [
@@ -71,15 +100,25 @@ const MeditationScreen = ({ navigation }) => {
   
   // References
   const [sound, setSound] = useState();
-  const [backgroundSound, setBackgroundSound] = useState();
   const meditationTimer = useRef(null);
   const countdownTimer = useRef(null);
   const meditationStartTime = useRef(0);
   const animationFrameId = useRef(null);
   
+  // Audio session and seamless looping
+  const audioSessionConfigured = useRef(false);
+  const primarySoundRef = useRef(null);
+  const secondarySoundRef = useRef(null);
+  const crossfadeTimerRef = useRef(null);
+  const audioPositionRef = useRef(0);
+  const audioDurationRef = useRef(0);
+  
   // New state variables
   const [customDuration, setCustomDuration] = useState(10); // Default custom duration
   const [selectedSoundTheme, setSelectedSoundTheme] = useState('silence'); // Default set to silent
+  const [isAudioReleasing, setIsAudioReleasing] = useState(false); // 添加状态标志
+  const audioLoopCountRef = useRef(0);
+  const statusLogTimeRef = useRef(0);
   
   // Load settings from AsyncStorage when screen focuses
   useFocusEffect(
@@ -157,7 +196,72 @@ const MeditationScreen = ({ navigation }) => {
     };
   }, []);
   
-  // Preload sound effects
+  // Initialize audio session when component mounts
+  useEffect(() => {
+    const setupAudioSession = async () => {
+      if (!audioSessionConfigured.current) {
+        await configureAudioSession();
+        audioSessionConfigured.current = true;
+        console.log("Audio session initialized for meditation");
+      }
+    };
+    
+    setupAudioSession();
+    
+    return () => {
+      // Clean up audio resources
+      releaseAllAudioResources();
+    };
+  }, []);
+  
+  // Function to release all audio resources
+  const releaseAllAudioResources = async () => {
+    try {
+      // 如果已经在释放中，避免重复执行
+      if (isAudioReleasing) {
+        console.log("[Audio Debug] Release already in progress, skipping");
+        return;
+      }
+      
+      setIsAudioReleasing(true);
+      console.log("[Audio Debug] Release called from:", new Error().stack.split("\n")[2]);
+      // Clear any pending crossfade timers
+      if (crossfadeTimerRef.current) {
+        clearTimeout(crossfadeTimerRef.current);
+        crossfadeTimerRef.current = null;
+      }
+      
+      // Unload primary sound
+      if (primarySoundRef.current) {
+        await primarySoundRef.current.unloadAsync();
+        primarySoundRef.current = null;
+      }
+      
+      // Unload secondary sound
+      if (secondarySoundRef.current) {
+        await secondarySoundRef.current.unloadAsync();
+        secondarySoundRef.current = null;
+      }
+      
+      // Unload completion sound
+      if (sound) {
+        await sound.unloadAsync();
+        setSound(null);
+      }
+      
+      // Reset any other audio-related state
+      audioPositionRef.current = 0;
+      audioDurationRef.current = 0;
+      
+      console.log("[Audio Cleanup] All audio resources released");
+      setIsAudioReleasing(false);
+    } catch (error) {
+      console.error("Error releasing audio resources:", error);
+      setIsAudioReleasing(false);
+    }
+  };
+  
+  // Load meditation completion sound
   useEffect(() => {
     const loadSound = async () => {
       try {
@@ -180,44 +284,164 @@ const MeditationScreen = ({ navigation }) => {
     };
   }, []);
   
-  // Play background sound when meditation starts
+  // Advanced seamless background sound playback
   useEffect(() => {
-    const playBackgroundSound = async () => {
+    const initializeSeamlessAudio = async () => {
       try {
-        // Unload previous sound if any
-        if (backgroundSound) {
-          await backgroundSound.unloadAsync();
+        // Don't load sounds if silent mode or not meditating
+        if (selectedSoundTheme === 'silence' || !isMeditating) {
+          // Only release resources if we had resources loaded previously
+          if (primarySoundRef.current || secondarySoundRef.current || sound) {
+            await releaseAllAudioResources();
+          }
+          return;
         }
-        
-        // Don't load sound for silence option
-        if (selectedSoundTheme === 'silence' || !isMeditating) return;
         
         // Find the selected sound theme
         const theme = soundThemes.find(theme => theme.id === selectedSoundTheme);
-        if (!theme || !theme.source) return;
+        if (!theme || !theme.source) {
+          console.log(`Error: Sound theme "${selectedSoundTheme}" not found or has no source`);
+          return;
+        }
         
-        // Create and play the sound from local asset
-        const { sound: newSound } = await Audio.Sound.createAsync(
+        console.log(`Loading sound theme: ${theme.label} (${theme.id})`);
+        
+        // Reset loop counter
+        audioLoopCountRef.current = 0;
+        
+        // Load primary sound instance
+        const { sound: primarySound, status: primaryStatus } = await Audio.Sound.createAsync(
           theme.source,
-          { volume: 0.5, isLooping: true }
+          { volume: AUDIO_CONFIG.DEFAULT_VOLUME, progressUpdateIntervalMillis: 100 },
+          onPlaybackStatusUpdate
         );
+        primarySoundRef.current = primarySound;
         
-        setBackgroundSound(newSound);
-        await newSound.playAsync();
+        // Load secondary sound instance (for crossfading)
+        const { sound: secondarySound } = await Audio.Sound.createAsync(
+          theme.source,
+          { volume: 0, progressUpdateIntervalMillis: 100 },
+          // 确保次要音频实例也能接收回调，这样在交换后依然能保持监听
+          onPlaybackStatusUpdate  
+        );
+        secondarySoundRef.current = secondarySound;
+        
+        // 明确设置播放状态回调，确保监听正常工作
+        await primarySound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
+        
+        // Store duration for timing calculations
+        audioDurationRef.current = primaryStatus.durationMillis;
+        
+        // Start playback
+        await primarySound.playAsync();
+        console.log(`Started playing ${theme.label} background sound (${primaryStatus.durationMillis}ms duration)`);
       } catch (error) {
-        console.log('Error playing background sound:', error);
+        console.error('Error initializing seamless audio:', error);
       }
     };
     
-    playBackgroundSound();
+    initializeSeamlessAudio();
     
     return () => {
-      // Clean up background sound when component unmounts
-      if (backgroundSound) {
-        backgroundSound.unloadAsync();
-      }
+      releaseAllAudioResources();
     };
   }, [isMeditating, selectedSoundTheme]);
+  
+  // Monitor playback status and handle seamless looping
+  const onPlaybackStatusUpdate = useCallback(async (status) => {
+    if (!status.isLoaded) {
+      console.log("Audio status: Not loaded");
+      return;
+    }
+    
+    if (!isMeditating) {
+      return;
+    }
+    
+    // 每10秒打印一次播放状态，避免日志过多
+    const currentTime = Date.now();
+    if (statusLogTimeRef.current === 0 || currentTime - statusLogTimeRef.current > 10000) {
+      console.log(`Audio position: ${status.positionMillis}/${audioDurationRef.current}ms, isPlaying: ${status.isPlaying}`);
+      statusLogTimeRef.current = currentTime;
+    }
+    
+    // Track current position for crossfade timing
+    audioPositionRef.current = status.positionMillis;
+    
+    // Handle seamless looping with crossfade
+    if (status.isPlaying && 
+        audioDurationRef.current > 0 && 
+        status.positionMillis > audioDurationRef.current - AUDIO_CONFIG.CROSSFADE_DURATION - 100) {
+      
+      // Start crossfade process if not already in progress
+      if (!crossfadeTimerRef.current && primarySoundRef.current && secondarySoundRef.current) {
+        try {
+          // 增加循环计数
+          audioLoopCountRef.current += 1;
+          console.log(`Starting crossfade for seamless loop #${audioLoopCountRef.current}`);
+          
+          // Prepare secondary sound to start from beginning
+          await secondarySoundRef.current.setPositionAsync(0);
+          await secondarySoundRef.current.setVolumeAsync(0);
+          await secondarySoundRef.current.playAsync();
+          
+          // Smoothly crossfade between the two instances
+          const fadeSteps = 10;
+          const fadeStepDuration = AUDIO_CONFIG.CROSSFADE_DURATION / fadeSteps;
+          
+          for (let i = 1; i <= fadeSteps; i++) {
+            crossfadeTimerRef.current = setTimeout(async () => {
+              // 确保冥想仍在进行，否则不继续交叉淡入淡出
+              if (!isMeditating) {
+                if (crossfadeTimerRef.current) {
+                  clearTimeout(crossfadeTimerRef.current);
+                  crossfadeTimerRef.current = null;
+                }
+                return;
+              }
+              
+              const primaryVolume = AUDIO_CONFIG.DEFAULT_VOLUME * (1 - i/fadeSteps);
+              const secondaryVolume = AUDIO_CONFIG.DEFAULT_VOLUME * (i/fadeSteps);
+              
+              if (primarySoundRef.current && secondarySoundRef.current) {
+                await primarySoundRef.current.setVolumeAsync(primaryVolume);
+                await secondarySoundRef.current.setVolumeAsync(secondaryVolume);
+                
+                // When fully crossfaded, swap the sound instances
+                if (i === fadeSteps) {
+                  const temp = primarySoundRef.current;
+                  primarySoundRef.current = secondarySoundRef.current;
+                  secondarySoundRef.current = temp;
+                  
+                  // 重要修复：确保新的主音频实例继续接收播放状态更新
+                  await primarySoundRef.current.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
+                  
+                  // Stop the previous primary (now secondary) and reset
+                  await secondarySoundRef.current.stopAsync();
+                  await secondarySoundRef.current.setVolumeAsync(0);
+                  
+                  // Reset crossfade timer
+                  crossfadeTimerRef.current = null;
+                  
+                  // 重置状态日志时间，确保下一个周期立即打印状态
+                  statusLogTimeRef.current = 0;
+                  
+                  console.log(`Completed crossfade loop #${audioLoopCountRef.current}, continuing playback`);
+                }
+              }
+            }, i * fadeStepDuration);
+          }
+        } catch (error) {
+          console.error('Error during crossfade:', error);
+          // 发生错误时重置交叉淡入淡出定时器
+          if (crossfadeTimerRef.current) {
+            clearTimeout(crossfadeTimerRef.current);
+            crossfadeTimerRef.current = null;
+          }
+        }
+      }
+    }
+  }, [isMeditating]);
   
   // Breathing animation effect
   useEffect(() => {
@@ -369,18 +593,21 @@ const MeditationScreen = ({ navigation }) => {
     return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
   }, []);
   
-  // End meditation and clean up
+  // End meditation
   const endMeditation = useCallback((callback, resetDuration = true) => {
-    // Stop timers
+    console.log('Ending meditation session');
+    
+    // Stop meditation timer
     if (meditationTimer.current) {
       clearInterval(meditationTimer.current);
       meditationTimer.current = null;
     }
+
+    // Release audio resources
+    releaseAllAudioResources();
     
-    // Stop background sound
-    if (backgroundSound) {
-      backgroundSound.stopAsync();
-    }
+    // Log audio loops for debugging
+    console.log(`Meditation ended after ${audioLoopCountRef.current} audio loops`);
     
     // Reset animation values
     breatheAnim.setValue(1);
@@ -401,7 +628,7 @@ const MeditationScreen = ({ navigation }) => {
     if (typeof callback === 'function') {
       callback();
     }
-  }, [breatheAnim, pulseAnim, backgroundSound]);
+  }, [breatheAnim, pulseAnim, releaseAllAudioResources]);
   
   // Handle meditation complete
   const handleMeditationComplete = useCallback((durationInMinutes) => {
@@ -562,35 +789,36 @@ const MeditationScreen = ({ navigation }) => {
             </View>
           </View>
           
-          {/* Sound Selection */}
-          <View style={styles.soundSection}>
-            <Text style={styles.sectionTitle}>Background Sound</Text>
+          {/* Sound themes */}
+          <View style={styles.settingSection}>
+            <Text style={styles.settingSectionTitle}>Background Sounds</Text>
+            <Text style={styles.settingSectionSubtitle}>Professional seamless looping audio</Text>
             <View style={styles.soundThemeContainer}>
-              {soundThemes.map((theme) => (
-            <TouchableOpacity 
-                  key={theme.id}
+            {soundThemes.map((theme) => (
+              <TouchableOpacity 
+                key={theme.id}
+                style={[
+                  styles.soundThemeButton,
+                  selectedSoundTheme === theme.id && styles.soundThemeButtonSelected
+                ]}
+                onPress={() => setSelectedSoundTheme(theme.id)}
+              >
+                <Ionicons 
+                  name={theme.icon} 
+                  size={24} 
+                  color={selectedSoundTheme === theme.id ? COLORS.background : COLORS.text.secondary} 
+                />
+                <Text 
                   style={[
-                    styles.soundThemeButton,
-                    selectedSoundTheme === theme.id && styles.soundThemeButtonSelected
+                    styles.soundThemeText,
+                    selectedSoundTheme === theme.id && styles.soundThemeTextSelected
                   ]}
-                  onPress={() => setSelectedSoundTheme(theme.id)}
+                  numberOfLines={1}
                 >
-                  <Ionicons 
-                    name={theme.icon} 
-                    size={24} 
-                    color={selectedSoundTheme === theme.id ? COLORS.background : COLORS.text.secondary} 
-                  />
-                  <Text 
-                    style={[
-                      styles.soundThemeText,
-                      selectedSoundTheme === theme.id && styles.soundThemeTextSelected
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {theme.label}
-                  </Text>
-            </TouchableOpacity>
-              ))}
+                  {theme.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
             </View>
           </View>
           
@@ -641,18 +869,28 @@ const MeditationScreen = ({ navigation }) => {
       
       {isMeditating && !isMeditationComplete && (
         <View style={styles.meditationContainer}>
-          <Progress.Circle
-            size={200}
-            thickness={6}
-            color={COLORS.text.primary}
-            unfilledColor="rgba(255, 255, 255, 0.2)"
-            borderWidth={0}
-            progress={progress}
-            formatText={() => formatTime(remainingTime)}
-            showsText={true}
-            textStyle={styles.progressText}
-            style={styles.progressCircle}
-          />
+          {/* Timer circle */}
+          <Animated.View 
+            style={[
+              styles.timerCircle,
+              { 
+                transform: [{ scale: breatheAnim }] 
+              }
+            ]}
+          >
+            <Progress.Circle
+              size={TIMER_SIZE}
+              thickness={6}
+              color={COLORS.text.primary}
+              unfilledColor="rgba(255, 255, 255, 0.2)"
+              borderWidth={0}
+              progress={progress}
+              formatText={() => formatTime(remainingTime)}
+              showsText={true}
+              textStyle={styles.progressText}
+              style={styles.progressCircle}
+            />
+          </Animated.View>
           
           <Text style={styles.durationText}>
             {selectedDuration} minute{selectedDuration !== 1 ? 's' : ''} session
@@ -667,8 +905,8 @@ const MeditationScreen = ({ navigation }) => {
               />
               <Text style={styles.soundIndicatorText}>
                 {soundThemes.find(t => t.id === selectedSoundTheme)?.label || 'Sound'}
-            </Text>
-          </View>
+              </Text>
+            </View>
           )}
           
           <Text style={styles.meditationSubtext}>
@@ -982,6 +1220,24 @@ const styles = StyleSheet.create({
     color: COLORS.text.secondary,
     fontWeight: '600',
     fontSize: FONT_SIZE.m,
+  },
+  settingSection: {
+    width: '100%',
+    marginBottom: SPACING.m,
+  },
+  settingSectionTitle: {
+    color: COLORS.text.secondary,
+    fontSize: FONT_SIZE.l,
+    marginBottom: SPACING.m,
+    fontWeight: '400',
+  },
+  settingSectionSubtitle: {
+    color: COLORS.text.tertiary,
+    fontSize: FONT_SIZE.m,
+    marginBottom: SPACING.m,
+  },
+  timerCircle: {
+    marginBottom: SPACING.xl,
   },
 });
 

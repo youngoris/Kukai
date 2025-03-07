@@ -15,10 +15,11 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
-import { AntDesign, MaterialIcons, Ionicons, Feather } from '@expo/vector-icons';
+import { AntDesign, MaterialIcons, Ionicons, Feather, Octicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import FrogIcon from './assets/frog.svg';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import CustomDateTimePicker from './components/CustomDateTimePicker';
 
 const PRIORITY_COLORS = {
   high: '#666666', // Dark gray
@@ -783,7 +784,7 @@ const SummaryScreen = ({ navigation }) => {
                       
                       {showTimePicker && (
                         <View style={[styles.timePickerContainer, { marginBottom: 20 }]}>
-                          <DateTimePicker
+                          <CustomDateTimePicker
                             value={taskTime}
                             mode="time"
                             is24Hour={true}

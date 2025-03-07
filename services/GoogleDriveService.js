@@ -3,18 +3,36 @@ import * as FileSystem from 'expo-file-system';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import * as Crypto from 'expo-crypto';
+import { GOOGLE_EXPO_CLIENT_ID, GOOGLE_IOS_CLIENT_ID, GOOGLE_ANDROID_CLIENT_ID, GOOGLE_WEB_CLIENT_ID } from '@env';
+import { Platform } from 'react-native';
+import * as Application from 'expo-application';
+import Constants from 'expo-constants';
 // import { zip, unzip } from 'react-native-zip-archive';
 
 // Ensure WebBrowser can complete the authentication session
 WebBrowser.maybeCompleteAuthSession();
 
+// Check if running in Expo Go
+const isExpoGo = Constants.appOwnership === 'expo';
+
+// 在Expo Go环境中使用简化的认证流程
+const useSimplifiedAuth = isExpoGo;
+
+// Print environment variables, for debugging
+console.log('GoogleDriveService - Environment variable check:');
+console.log('GOOGLE_EXPO_CLIENT_ID:', GOOGLE_EXPO_CLIENT_ID ? 'Set' : 'Not set');
+console.log('GOOGLE_IOS_CLIENT_ID:', GOOGLE_IOS_CLIENT_ID ? 'Set' : 'Not set');
+console.log('GOOGLE_ANDROID_CLIENT_ID:', GOOGLE_ANDROID_CLIENT_ID ? 'Set' : 'Not set');
+console.log('GOOGLE_WEB_CLIENT_ID:', GOOGLE_WEB_CLIENT_ID ? 'Set' : 'Not set');
+console.log('Running in Expo Go:', isExpoGo ? 'Yes' : 'No');
+
 // Google API Configuration
 const GOOGLE_API_CONFIG = {
-  // Replace with actual client IDs
-  expoClientId: 'YOUR_EXPO_CLIENT_ID',
-  iosClientId: 'YOUR_IOS_CLIENT_ID',
-  androidClientId: 'YOUR_ANDROID_CLIENT_ID',
-  webClientId: 'YOUR_WEB_CLIENT_ID',
+  // Use environment variables for client IDs
+  expoClientId: GOOGLE_EXPO_CLIENT_ID,
+  iosClientId: GOOGLE_IOS_CLIENT_ID,
+  androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+  webClientId: GOOGLE_WEB_CLIENT_ID,
   scopes: [
     'https://www.googleapis.com/auth/drive.file',
     'https://www.googleapis.com/auth/drive.appdata'
@@ -42,17 +60,25 @@ class GoogleDriveService {
   // Initialize service
   async initialize() {
     try {
+      console.log('GoogleDriveService.initialize: Starting initialization');
+      
       // Try to load authentication state from storage
       await this.loadAuthState();
+      console.log('GoogleDriveService.initialize: Authentication state loaded', 
+        this.accessToken ? 'Access token exists' : 'No access token',
+        this.refreshToken ? 'Refresh token exists' : 'No refresh token');
       
       // If token is expired, try to refresh it
       if (this.accessToken && this.isTokenExpired()) {
+        console.log('GoogleDriveService.initialize: Access token expired, attempting refresh');
         await this.refreshAccessToken();
       }
       
-      return !!this.accessToken;
+      const isAuthenticated = !!this.accessToken;
+      console.log('GoogleDriveService.initialize: Completed initialization, authentication status:', isAuthenticated);
+      return isAuthenticated;
     } catch (error) {
-      console.error('Failed to initialize Google Drive service:', error);
+      console.error('GoogleDriveService.initialize: Failed to initialize Google Drive service:', error);
       return false;
     }
   }
@@ -99,49 +125,174 @@ class GoogleDriveService {
   // Perform Google authentication
   async authenticate() {
     try {
-      // Generate random state to prevent CSRF attacks
-      const state = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        Math.random().toString()
-      );
-
-      // Create authentication request
-      const authRequest = new AuthSession.AuthRequest({
-        clientId: GOOGLE_API_CONFIG.webClientId,
-        scopes: GOOGLE_API_CONFIG.scopes,
-        redirectUri: AuthSession.makeRedirectUri({ useProxy: true }),
-        state
-      });
-
-      // Start authentication flow
-      const result = await authRequest.promptAsync({
-        authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
-        tokenUrl: 'https://oauth2.googleapis.com/token',
-        returnUrl: AuthSession.makeRedirectUri({ useProxy: true })
-      });
-
-      if (result.type === 'success') {
-        // Set authentication information
-        this.accessToken = result.params.access_token;
-        this.refreshToken = result.params.refresh_token;
-        
-        // Calculate expiration time (usually 1 hour)
-        const expiresIn = result.params.expires_in ? parseInt(result.params.expires_in) : 3600;
-        this.expiresAt = Date.now() + expiresIn * 1000;
-        
-        // Save authentication state
-        await this.saveAuthState();
-        
-        // Ensure backup folder exists
-        await this.ensureBackupFolderExists();
-        
-        return true;
+      console.log('GoogleDriveService.authenticate: 开始认证流程');
+      
+      // 验证环境变量是否设置
+      if (!GOOGLE_API_CONFIG.webClientId) {
+        console.error('GoogleDriveService.authenticate: 缺少必需的clientId');
+        throw new Error('缺少Google API客户端ID');
       }
       
-      return false;
+      // 针对Expo Go的超简化方案
+      if (isExpoGo) {
+        console.log('GoogleDriveService.authenticate: 在Expo Go中运行，使用更简单的方法');
+        try {
+          // 使用基本WebBrowser打开授权页面
+          const clientId = GOOGLE_API_CONFIG.webClientId;
+          const redirectUri = encodeURIComponent('https://auth.expo.io/@anonymous/kukai');
+          const scope = encodeURIComponent(GOOGLE_API_CONFIG.scopes.join(' '));
+          
+          const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+                          `client_id=${clientId}` +
+                          `&redirect_uri=${redirectUri}` +
+                          `&response_type=token` +
+                          `&scope=${scope}`;
+          
+          console.log('使用简化Auth URL:', authUrl.substring(0, 100) + '...');
+          
+          // 使用WebBrowser打开OAuth页面
+          const result = await WebBrowser.openAuthSessionAsync(
+            authUrl,
+            'com.andre.kukai://'
+          );
+          
+          console.log('WebBrowser结果:', result.type);
+          
+          if (result.type === 'success') {
+            const { url } = result;
+            console.log('重定向URL:', url.substring(0, 50) + '...');
+            
+            // 从URL中解析访问令牌
+            const accessToken = url.match(/access_token=([^&]*)/)?.[1];
+            if (accessToken) {
+              this.accessToken = accessToken;
+              this.expiresAt = Date.now() + 3600 * 1000; // 假设1小时过期
+              
+              await this.saveAuthState();
+              return true;
+            }
+          }
+          
+          return false;
+        } catch (expoError) {
+          console.error('GoogleDriveService.authenticate (Expo Go): 简化认证失败:', expoError);
+          
+          // 如果简化方法失败，尝试标准方法
+          try {
+            console.log('尝试备选认证方法...');
+            
+            // 这里采用原来的isExpoGo部分的代码...
+            const clientId = GOOGLE_API_CONFIG.expoClientId || GOOGLE_API_CONFIG.webClientId;
+            
+            const state = await Crypto.digestStringAsync(
+              Crypto.CryptoDigestAlgorithm.SHA256,
+              Math.random().toString()
+            );
+            
+            const redirectUri = AuthSession.makeRedirectUri({ 
+              useProxy: true
+            });
+            console.log('重定向URI:', redirectUri);
+            
+            const authRequest = new AuthSession.AuthRequest({
+              clientId: clientId,
+              scopes: GOOGLE_API_CONFIG.scopes,
+              redirectUri: redirectUri,
+              state
+            });
+            
+            // 使用较低超时时间
+            const result = await Promise.race([
+              authRequest.promptAsync({
+                authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+                tokenUrl: 'https://oauth2.googleapis.com/token',
+                returnUrl: redirectUri
+              }),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('认证超时')), 30000)
+              )
+            ]);
+            
+            if (result.type === 'success') {
+              this.accessToken = result.params.access_token;
+              this.refreshToken = result.params.refresh_token;
+              
+              const expiresIn = result.params.expires_in ? parseInt(result.params.expires_in) : 3600;
+              this.expiresAt = Date.now() + expiresIn * 1000;
+              
+              await this.saveAuthState();
+              return true;
+            }
+            
+            return false;
+          } catch (backupError) {
+            console.error('备选认证方法也失败:', backupError);
+            throw new Error('在Expo Go中无法完成认证，请尝试使用本地备份功能');
+          }
+        }
+      } else {
+        // 保持原有的标准流程代码不变...
+        // Generate random state to prevent CSRF attacks
+        const state = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          Math.random().toString()
+        );
+        
+        console.log('GoogleDriveService.authenticate: 创建认证请求');
+        console.log('使用的客户端ID:', GOOGLE_API_CONFIG.webClientId.substring(0, 10) + '...');
+        
+        // Create authentication request
+        const redirectUri = AuthSession.makeRedirectUri({ useProxy: true });
+        console.log('重定向URI:', redirectUri);
+        
+        const authRequest = new AuthSession.AuthRequest({
+          clientId: GOOGLE_API_CONFIG.webClientId,
+          scopes: GOOGLE_API_CONFIG.scopes,
+          redirectUri: redirectUri,
+          state
+        });
+        
+        console.log('GoogleDriveService.authenticate: 开始认证流程');
+        // Start authentication flow
+        const result = await authRequest.promptAsync({
+          authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+          tokenUrl: 'https://oauth2.googleapis.com/token',
+          returnUrl: redirectUri
+        });
+        
+        console.log('GoogleDriveService.authenticate: 认证结果类型:', result.type);
+        
+        if (result.type === 'success') {
+          console.log('GoogleDriveService.authenticate: 认证成功');
+          
+          // Set authentication information
+          this.accessToken = result.params.access_token;
+          this.refreshToken = result.params.refresh_token;
+          
+          // Calculate expiration time (usually 1 hour)
+          const expiresIn = result.params.expires_in ? parseInt(result.params.expires_in) : 3600;
+          this.expiresAt = Date.now() + expiresIn * 1000;
+          
+          console.log('GoogleDriveService.authenticate: 保存认证状态');
+          // Save authentication state
+          await this.saveAuthState();
+          
+          console.log('GoogleDriveService.authenticate: 确保备份文件夹存在');
+          // Ensure backup folder exists
+          await this.ensureBackupFolderExists();
+          
+          return true;
+        } else if (result.type === 'error') {
+          console.error('GoogleDriveService.authenticate: 认证错误:', result.error);
+        } else if (result.type === 'dismiss') {
+          console.log('GoogleDriveService.authenticate: 用户取消了认证');
+        }
+        
+        return false;
+      }
     } catch (error) {
-      console.error('Authentication failed:', error);
-      return false;
+      console.error('GoogleDriveService.authenticate: 认证失败:', error);
+      throw error; // 重新抛出以便调用者可以显示适当的错误消息
     }
   }
 

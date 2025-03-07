@@ -21,7 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons, Ionicons, AntDesign, Feather } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import FrogIcon from './assets/frog.svg';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import CustomDateTimePicker from './components/CustomDateTimePicker';
 import notificationService from './services/NotificationService';
 
 const TaskScreen = ({ navigation }) => {
@@ -716,7 +716,7 @@ const TaskScreen = ({ navigation }) => {
                         
                         {showTimePicker && (
                           <View style={styles.timePickerContainer}>
-                            <DateTimePicker
+                            <CustomDateTimePicker
                               value={taskTime}
                               mode="time"
                               is24Hour={true}
@@ -816,7 +816,7 @@ const TaskScreen = ({ navigation }) => {
                         
                         {showTimePicker && (
                           <View style={styles.timePickerContainer}>
-                            <DateTimePicker
+                            <CustomDateTimePicker
                               value={taskTime}
                               mode="time"
                               is24Hour={true}

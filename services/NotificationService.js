@@ -167,16 +167,16 @@ class NotificationService {
       return null;
     }
     
-    // 验证任务是否有任务时间
+    // Verify task has a task time
     if (!task.taskTime) {
       console.log(`Task ${task.id} does not have a task time, skipping notification`);
       return null;
     }
     
     try {
-      // 获取当前时间并添加1分钟的缓冲，确保通知不会立即触发
+      // Get current time and add 1 minute buffer to ensure notifications don't trigger immediately
       const now = new Date();
-      const bufferMs = 60 * 1000; // 1分钟的缓冲
+      const bufferMs = 60 * 1000; // 1 minute buffer
       const nowPlusBuffer = new Date(now.getTime() + bufferMs);
       
       console.log(`Current time: ${now.toISOString()}`);
@@ -185,13 +185,13 @@ class NotificationService {
       const taskTime = new Date(task.taskTime);
       console.log(`Task time: ${taskTime.toISOString()}`);
       
-      // 验证任务时间有效性
+      // Validate task time
       if (isNaN(taskTime.getTime())) {
         console.error('Invalid task time:', task.taskTime);
         return null;
       }
       
-      // 如果任务时间已经过去，不创建任何通知
+      // If task time is in the past, don't create notifications
       if (taskTime <= now) {
         console.log(`Task ${task.id} time already passed (${taskTime.toLocaleString()}), no notifications will be created`);
         return null;
@@ -199,7 +199,7 @@ class NotificationService {
       
       let notificationIds = [];
       
-      // 只有当任务明确设置了提前提醒时，才创建提醒通知
+      // Only create reminder notification if the task explicitly has a reminder set
       if (task.hasReminder === true && task.reminderTime) {
         console.log(`Task ${task.id} has reminder set to ${task.reminderTime} minutes before task time`);
         
@@ -208,7 +208,7 @@ class NotificationService {
         
         console.log(`Calculated reminder time: ${reminderTime.toISOString()}`);
         
-        // 只有当提醒时间比当前时间+缓冲更晚，才创建提醒通知
+        // Only create reminder notification if the reminder time is later than current time + buffer
         if (reminderTime > nowPlusBuffer) {
           const sound = this.getNotificationSound();
           const minutesTillReminder = Math.round((reminderTime - now) / (60 * 1000));
@@ -217,7 +217,7 @@ class NotificationService {
           console.log(`Scheduling reminder notification, will trigger in ${minutesTillReminder} minutes (${secondsTillReminder} seconds)`);
           
           try {
-            // 使用TIME_INTERVAL类型触发器代替date类型
+            // Use TIME_INTERVAL trigger type instead of date type
             console.log(`Using TIME_INTERVAL trigger type with ${secondsTillReminder} seconds delay`);
             
             const reminderNotificationId = await Notifications.scheduleNotificationAsync({
@@ -241,7 +241,7 @@ class NotificationService {
               },
             });
             
-            // 验证通知是否成功计划
+            // Verify notification is successfully scheduled
             const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
             const foundNotification = scheduledNotifications.find(n => n.identifier === reminderNotificationId);
             
@@ -251,7 +251,7 @@ class NotificationService {
               console.log('Warning: Reminder notification was scheduled but not found in scheduled notifications list');
             }
             
-            // 保存提醒通知ID与任务ID的映射
+            // Save reminder notification ID to task ID mapping
             await this.saveNotificationMapping(`${task.id}_reminder`, reminderNotificationId);
             notificationIds.push(reminderNotificationId);
             console.log(`Task reminder notification scheduled for ${reminderTime.toLocaleString()}, ID:`, reminderNotificationId);
@@ -265,7 +265,7 @@ class NotificationService {
         console.log(`Task ${task.id} does not have reminder enabled, skipping advance reminder notification`);
       }
       
-      // 只有当任务时间比当前时间+缓冲更晚，才创建任务时间通知
+      // Only create task time notification if the task time is later than current time + buffer
       if (taskTime > nowPlusBuffer) {
         const sound = this.getNotificationSound();
         const minutesTillTask = Math.round((taskTime - now) / (60 * 1000));
@@ -274,7 +274,7 @@ class NotificationService {
         console.log(`Scheduling task time notification, will trigger in ${minutesTillTask} minutes (${secondsTillTask} seconds)`);
         
         try {
-          // 使用TIME_INTERVAL类型触发器代替date类型
+          // Use TIME_INTERVAL trigger type instead of date type
           console.log(`Using TIME_INTERVAL trigger type with ${secondsTillTask} seconds delay`);
           
           const taskNotificationId = await Notifications.scheduleNotificationAsync({
@@ -298,7 +298,7 @@ class NotificationService {
             },
           });
           
-          // 验证通知是否成功计划
+          // Verify notification is successfully scheduled
           const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
           const foundNotification = scheduledNotifications.find(n => n.identifier === taskNotificationId);
           
@@ -308,7 +308,7 @@ class NotificationService {
             console.log('Warning: Notification was scheduled but not found in scheduled notifications list');
           }
           
-          // 保存任务时间通知ID与任务ID的映射
+          // Save task time notification ID to task ID mapping
           await this.saveNotificationMapping(`${task.id}_time`, taskNotificationId);
           notificationIds.push(taskNotificationId);
           console.log(`Task time notification scheduled for ${taskTime.toLocaleString()}, ID:`, taskNotificationId);
@@ -329,7 +329,7 @@ class NotificationService {
   // Cancel task notification
   async cancelTaskNotification(taskId) {
     try {
-      // 取消提醒通知
+      // Cancel reminder notification
       const reminderNotificationId = await this.getNotificationIdForTask(`${taskId}_reminder`);
       if (reminderNotificationId) {
         await Notifications.cancelScheduledNotificationAsync(reminderNotificationId);
@@ -337,7 +337,7 @@ class NotificationService {
         console.log(`Cancelled reminder notification for task ${taskId}`);
       }
       
-      // 取消任务时间通知
+      // Cancel task time notification
       const taskNotificationId = await this.getNotificationIdForTask(`${taskId}_time`);
       if (taskNotificationId) {
         await Notifications.cancelScheduledNotificationAsync(taskNotificationId);
@@ -345,7 +345,7 @@ class NotificationService {
         console.log(`Cancelled time notification for task ${taskId}`);
       }
       
-      // 兼容旧版单一通知ID的情况
+      // Compatible with old single notification ID case
       const legacyNotificationId = await this.getNotificationIdForTask(taskId);
       if (legacyNotificationId) {
         await Notifications.cancelScheduledNotificationAsync(legacyNotificationId);
@@ -385,7 +385,7 @@ class NotificationService {
       // Get notification sound
       const sound = this.getNotificationSound();
       
-      // 使用每日重复通知，而不是单次通知
+      // Use daily repeat notification instead of single notification
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Journal Reminder',
@@ -439,7 +439,7 @@ class NotificationService {
       // Get notification sound
       const sound = this.getNotificationSound();
       
-      // 使用每日重复通知，而不是单次通知
+      // Use daily repeat notification instead of single notification
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Meditation Reminder',
@@ -528,7 +528,7 @@ class NotificationService {
         this.config = { ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) };
       }
       
-      // 确保通知不会立即触发
+      // Ensure notifications don't trigger immediately
       await this.configureNotifications();
       
       // Set notification response handler
@@ -543,10 +543,10 @@ class NotificationService {
     }
   }
   
-  // 配置通知系统，避免立即触发
+  // Configure notification system to avoid immediate trigger
   async configureNotifications() {
     try {
-      // 设置通知处理程序
+      // Set notification handler
       Notifications.setNotificationHandler({
         handleNotification: async () => ({
           shouldShowAlert: true,
@@ -555,7 +555,7 @@ class NotificationService {
         }),
       });
       
-      // 取消所有可能的立即通知
+      // Cancel all possible immediate notifications
       await Notifications.cancelAllScheduledNotificationsAsync();
       
       console.log('Notification system configured');
@@ -666,7 +666,7 @@ class NotificationService {
       // Calculate new reminder time (15 minutes later)
       const snoozeMinutes = 15;
       const now = new Date();
-      // 增加 30 秒的缓冲，确保通知不会立即触发
+      // Add 30 seconds buffer to ensure notifications don't trigger immediately
       const bufferSeconds = 30;
       const newNotificationTime = new Date(now.getTime() + (snoozeMinutes * 60 * 1000) + (bufferSeconds * 1000));
       const totalSeconds = snoozeMinutes * 60 + bufferSeconds;
@@ -675,7 +675,7 @@ class NotificationService {
       console.log(`Task snooze - New notification time: ${newNotificationTime.toISOString()}`);
       console.log(`Task snooze - Total seconds delay: ${totalSeconds}`);
       
-      // 使用TIME_INTERVAL类型触发器代替date类型
+      // Use TIME_INTERVAL trigger type instead of date type
       console.log(`Using TIME_INTERVAL trigger type with ${totalSeconds} seconds delay`);
       
       // Create new notification
@@ -701,7 +701,7 @@ class NotificationService {
         },
       });
       
-      // 验证通知是否成功计划
+      // Verify notification is successfully scheduled
       const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
       const foundNotification = scheduledNotifications.find(n => n.identifier === notificationId);
       
@@ -722,7 +722,7 @@ class NotificationService {
     }
   }
   
-  // 创建通知通道
+  // Create notification channel
   async createNotificationChannels() {
     try {
       await Notifications.setNotificationChannelAsync('task-notifications', {

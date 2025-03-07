@@ -35,6 +35,12 @@
     },
     "plugins": [
       "expo-asset"
-    ]
+    ],
+    "scheme": "kukai",
+    "extra": {
+      "eas": {
+        "projectId": "fc032ba7-99e6-4ba8-a1ac-94d54f358eec"
+      }
+    }
   }
 }

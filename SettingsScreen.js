@@ -14,12 +14,12 @@ import {
   Share,
   FlatList
 } from 'react-native';
-import { MaterialIcons, Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons, Feather, MaterialCommunityIcons, AntDesign } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import CustomDateTimePicker from './components/CustomDateTimePicker';
 import CloudBackupSection from './components/CloudBackupSection';
 import JournalTemplateManager from './components/JournalTemplateManager';
 import notificationService from './services/NotificationService';
@@ -1140,14 +1140,14 @@ const SettingsScreen = ({ navigation }) => {
             exportData,
             'Local Backup',
             'save-alt',
-            'Backup data to a local file'
+            '备份数据到本地文件 (推荐无Apple开发者账号用户使用)'
           )}
           
           {renderActionButton(
             importData,
             'Restore from Local',
             'restore',
-            'Restore data from a local backup file'
+            '从本地备份文件恢复数据'
           )}
           
           {/* Clear Data */}
@@ -1236,7 +1236,7 @@ const SettingsScreen = ({ navigation }) => {
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Select Reminder Time</Text>
               <View style={styles.timePickerContainer}>
-                <DateTimePicker
+                <CustomDateTimePicker
                   value={tempSelectedTime || (currentTimePickerMode === 'journalReminder' ? journalReminderTime : meditationReminderTime)}
                   mode="time"
                   display="spinner"
@@ -1309,7 +1309,7 @@ const SettingsScreen = ({ navigation }) => {
       
       {/* 静音时段开始时间选择器 */}
       {showQuietHoursStartPicker && (
-        <DateTimePicker
+        <CustomDateTimePicker
           value={new Date(quietHoursStart)}
           mode="time"
           is24Hour={true}
@@ -1320,7 +1320,7 @@ const SettingsScreen = ({ navigation }) => {
       
       {/* 静音时段结束时间选择器 */}
       {showQuietHoursEndPicker && (
-        <DateTimePicker
+        <CustomDateTimePicker
           value={new Date(quietHoursEnd)}
           mode="time"
           is24Hour={true}

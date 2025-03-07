@@ -14,7 +14,7 @@ import SummaryScreen from './SummaryScreen';
 import JournalScreen from './JournalScreen';
 import SettingsScreen from './SettingsScreen';
 import { useFonts, Roboto_300Light, Roboto_400Regular, Roboto_500Medium, Roboto_700Bold } from '@expo-google-fonts/roboto';
-import AppLoading from 'expo-app-loading';
+import * as SplashScreen from 'expo-splash-screen';
 import { useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -24,6 +24,11 @@ import googleDriveService from './services/GoogleDriveService';
 import notificationService from './services/NotificationService';
 import { WEATHER_API, CACHE, ERROR_TYPES, STORAGE_KEYS } from './constants/Config';
 import useWeather from './utils/useWeather'; // Import weather Hook
+
+// Prevent splash screen from auto-hiding
+SplashScreen.preventAutoHideAsync().catch(() => {
+  /* Ignore errors */
+});
 
 const { width, height } = Dimensions.get('window');
 const Stack = createStackNavigator();
@@ -485,15 +490,32 @@ export default function App() {
     Roboto_700Bold
   });
   
+  // Hide splash screen when fonts are loaded
+  useEffect(() => {
+    const hideSplash = async () => {
+      if (fontsLoaded) {
+        await SplashScreen.hideAsync();
+      }
+    };
+    
+    hideSplash();
+  }, [fontsLoaded]);
+  
   // Initialize Google Drive service
   useEffect(() => {
     const initializeGoogleDrive = async () => {
       try {
-        console.log('Initializing Google Drive service...');
+        console.log("Initializing Google Drive service...");
+        
+        // Print environment variables for debugging
+        console.log('GOOGLE_EXPO_CLIENT_ID:', process.env.GOOGLE_EXPO_CLIENT_ID ? 'Set' : 'Not set');
+        console.log('GOOGLE_IOS_CLIENT_ID:', process.env.GOOGLE_IOS_CLIENT_ID ? 'Set' : 'Not set');
+        console.log('GOOGLE_ANDROID_CLIENT_ID:', process.env.GOOGLE_ANDROID_CLIENT_ID ? 'Set' : 'Not set');
+        console.log('GOOGLE_WEB_CLIENT_ID:', process.env.GOOGLE_WEB_CLIENT_ID ? 'Set' : 'Not set');
+        
         const initialized = await googleDriveService.initialize();
         console.log('Google Drive service initialized:', initialized);
         
-        // If initialized, check if auto sync is needed
         if (initialized) {
           const syncPerformed = await googleDriveService.checkAndPerformAutoSync();
           console.log('Auto sync check performed:', syncPerformed);
@@ -531,11 +553,6 @@ export default function App() {
       notificationService.setNavigationRef(navigationRef.current);
     }
   }, [navigationRef.current]);
-
-  // Wait for fonts to load
-  if (!fontsLoaded) {
-    return <AppLoading />;
-  }
 
   return (
     <>
