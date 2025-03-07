@@ -1566,11 +1566,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   cloudBackupContainer: {
-    marginTop: 10,
+    // marginTop: 3,
     marginBottom: 10,
     backgroundColor: '#111',
     borderRadius: 10,
-    padding: 15,
+    paddingHorizontal: 5,
+    paddingTop: 10,
   },
   manageButton: {
     backgroundColor: "#FFFFFF",
