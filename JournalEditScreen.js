@@ -139,7 +139,7 @@ const JournalEditScreen = ({ navigation, route }) => {
             // Check if it's a deleted template
             if (parsedSettings.selectedJournalTemplate === 'morning') {
               setCurrentTemplate('default');
-            } else {
+      } else {
               // Apply selected template
               const templateContent = getTemplateContent(parsedSettings.selectedJournalTemplate);
               if (templateContent) {
@@ -771,8 +771,8 @@ useEffect(() => {
               <Feather name="file-text" size={22} color="#FFFFFF" />
             </TouchableOpacity>
             <TouchableOpacity style={{marginLeft: 16}} onPress={saveJournal}>
-              <MaterialIcons name="check" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
+            <MaterialIcons name="check" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
           </View>
         )}
         {viewOnly && (

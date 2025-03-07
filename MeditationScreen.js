@@ -57,6 +57,7 @@ const MeditationScreen = ({ navigation }) => {
   const [countdown, setCountdown] = useState(5);
   const [isCountingDown, setIsCountingDown] = useState(false);
   const [isMeditating, setIsMeditating] = useState(false);
+  const [isMeditationComplete, setIsMeditationComplete] = useState(false);
   const [remainingTime, setRemainingTime] = useState(0);
   const [totalTime, setTotalTime] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -369,7 +370,7 @@ const MeditationScreen = ({ navigation }) => {
   }, []);
   
   // End meditation and clean up
-  const endMeditation = useCallback((callback) => {
+  const endMeditation = useCallback((callback, resetDuration = true) => {
     // Stop timers
     if (meditationTimer.current) {
       clearInterval(meditationTimer.current);
@@ -387,9 +388,14 @@ const MeditationScreen = ({ navigation }) => {
     
     // Reset state
     setIsMeditating(false);
-    setSelectedDuration(null);
-    setProgress(0);
-    setRemainingTime(0);
+    
+    // Only reset these if not showing completion screen
+    if (resetDuration) {
+      setIsMeditationComplete(false);
+      setSelectedDuration(null);
+      setProgress(0);
+      setRemainingTime(0);
+    }
     
     // Execute callback if provided
     if (typeof callback === 'function') {
@@ -404,16 +410,15 @@ const MeditationScreen = ({ navigation }) => {
     // Save meditation session data
     saveMeditationSession(durationInMinutes);
     
+    // Stop meditation timers and background sounds, but keep duration for the completion screen
+    endMeditation(null, false);
+    
     // Play completion sound
     playCompletionSound();
     
-    // Show completion message
-    Alert.alert(
-      "Meditation Complete",
-      "You've completed " + durationInMinutes + " minutes of meditation",
-      [{ text: "Continue", onPress: () => navigation.navigate('Task') }]
-    );
-  }, [navigation]);
+    // Set meditation complete state instead of showing alert
+    setIsMeditationComplete(true);
+  }, [endMeditation, saveMeditationSession, playCompletionSound]);
   
   // Save meditation session to storage
   const saveMeditationSession = useCallback(async (durationInMinutes) => {
@@ -486,10 +491,14 @@ const MeditationScreen = ({ navigation }) => {
           }
         ]
       );
+    } else if (isMeditationComplete) {
+      setIsMeditationComplete(false);
+      setSelectedDuration(null);
+      navigation.navigate('Home');
     } else {
       navigation.navigate('Home');
     }
-  }, [isMeditating, isCountingDown, navigation, endMeditation]);
+  }, [isMeditating, isCountingDown, isMeditationComplete, navigation, endMeditation]);
   
   return (
     <SafeAreaView style={styles.container}>
@@ -602,7 +611,35 @@ const MeditationScreen = ({ navigation }) => {
         </View>
       )}
       
-      {isMeditating && (
+      {isMeditationComplete && (
+        <View style={styles.completionContainer}>
+          <Ionicons name="checkmark-circle" size={80} color={COLORS.text.primary} />
+          <Text style={styles.completionTitle}>Meditation Complete</Text>
+          <Text style={styles.completionText}>
+            You've completed {selectedDuration} minute{selectedDuration !== 1 ? 's' : ''} of meditation
+          </Text>
+          
+          <TouchableOpacity 
+            style={styles.continueButton}
+            onPress={() => navigation.navigate('Task')}
+          >
+            <Text style={styles.continueButtonText}>Continue to Tasks</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.homeButton}
+            onPress={() => {
+              setIsMeditationComplete(false);
+              setSelectedDuration(null);
+              navigation.navigate('Home');
+            }}
+          >
+            <Text style={styles.homeButtonText}>Back to Home</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
+      {isMeditating && !isMeditationComplete && (
         <View style={styles.meditationContainer}>
           <Progress.Circle
             size={200}
@@ -896,6 +933,53 @@ const styles = StyleSheet.create({
   },
   startButtonText: {
     color: COLORS.background,
+    fontWeight: '600',
+    fontSize: FONT_SIZE.m,
+  },
+  completionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.l,
+  },
+  completionTitle: {
+    color: COLORS.text.primary,
+    fontSize: FONT_SIZE.xl,
+    fontWeight: 'bold',
+    marginBottom: SPACING.m,
+  },
+  completionText: {
+    color: COLORS.text.secondary,
+    fontSize: FONT_SIZE.m,
+    marginBottom: SPACING.l,
+  },
+  continueButton: {
+    backgroundColor: COLORS.text.primary,
+    paddingVertical: SPACING.m,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: LAYOUT.borderRadius.m,
+    marginTop: SPACING.m,
+    width: '100%',
+    alignItems: 'center',
+  },
+  continueButtonText: {
+    color: COLORS.background,
+    fontWeight: '600',
+    fontSize: FONT_SIZE.m,
+  },
+  homeButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: SPACING.m,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: LAYOUT.borderRadius.m,
+    marginTop: SPACING.s,
+    width: '100%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.text.secondary,
+  },
+  homeButtonText: {
+    color: COLORS.text.secondary,
     fontWeight: '600',
     fontSize: FONT_SIZE.m,
   },
