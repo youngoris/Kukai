@@ -627,12 +627,12 @@ const SettingsScreen = ({ navigation }) => {
     
     return (
       <TouchableOpacity 
-        style={styles.settingRow}
+        style={[styles.settingRow, appTheme === 'light' && styles.lightSettingRow]}
         onPress={() => openOptionModal(options, value, getSetter(), label)}
       >
         <View style={styles.settingLabelContainer}>
           <Text style={[styles.settingLabel, appTheme === 'light' && styles.lightText]}>{label}</Text>
-          {description && <Text style={styles.settingDescription}>{description}</Text>}
+          {description && <Text style={[styles.settingDescription, appTheme === 'light' && styles.lightSettingDescription]}>{description}</Text>}
         </View>
         <View style={styles.settingValueContainer}>
           <Text style={[styles.settingValue, appTheme === 'light' && styles.lightText]}>
@@ -651,15 +651,15 @@ const SettingsScreen = ({ navigation }) => {
     };
     
     return (
-      <View style={styles.settingRow}>
+      <View style={[styles.settingRow, appTheme === 'light' && styles.lightSettingRow]}>
         <View style={styles.settingLabelContainer}>
           <Text style={[styles.settingLabel, appTheme === 'light' && styles.lightText]}>{label}</Text>
-          {description && <Text style={styles.settingDescription}>{description}</Text>}
+          {description && <Text style={[styles.settingDescription, appTheme === 'light' && styles.lightSettingDescription]}>{description}</Text>}
         </View>
         <Switch
-          trackColor={{ false: "#222222", true: "#777777" }}
+          trackColor={{ false: appTheme === 'light' ? "#DDDDDD" : "#222222", true: "#777777" }}
           thumbColor={value ? "#FFFFFF" : "#888888"}
-          ios_backgroundColor="#222222"
+          ios_backgroundColor={appTheme === 'light' ? "#DDDDDD" : "#222222"}
           onValueChange={toggleSwitch}
           value={value}
         />
@@ -668,10 +668,10 @@ const SettingsScreen = ({ navigation }) => {
   };
   
   const renderTimeSetting = (value, onPress, label, description = null) => (
-    <TouchableOpacity style={styles.settingRow} onPress={onPress}>
+    <TouchableOpacity style={[styles.settingRow, appTheme === 'light' && styles.lightSettingRow]} onPress={onPress}>
       <View style={styles.settingLabelContainer}>
         <Text style={[styles.settingLabel, appTheme === 'light' && styles.lightText]}>{label}</Text>
-        {description && <Text style={styles.settingDescription}>{description}</Text>}
+        {description && <Text style={[styles.settingDescription, appTheme === 'light' && styles.lightSettingDescription]}>{description}</Text>}
       </View>
       <View style={styles.timeContainer}>
         <Text style={[styles.timeText, appTheme === 'light' && styles.lightText]}>
@@ -683,7 +683,11 @@ const SettingsScreen = ({ navigation }) => {
   
   const renderActionButton = (onPress, label, icon, description = null, destructive = false) => (
     <TouchableOpacity 
-      style={[styles.actionButton, destructive && styles.dangerButton]} 
+      style={[
+        styles.actionButton, 
+        appTheme === 'light' && styles.lightActionButton,
+        destructive && (appTheme === 'light' ? styles.lightDangerButton : styles.dangerButton)
+      ]} 
       onPress={onPress}
     >
       <View style={styles.actionButtonContent}>
@@ -691,11 +695,11 @@ const SettingsScreen = ({ navigation }) => {
           <Text style={[
             styles.actionButtonLabel, 
             appTheme === 'light' && styles.lightText,
-            destructive && styles.dangerButtonText
+            destructive && (appTheme === 'light' ? styles.lightDangerButtonText : styles.dangerButtonText)
           ]}>
             {label}
           </Text>
-          {description && <Text style={styles.actionButtonDescription}>{description}</Text>}
+          {description && <Text style={[styles.actionButtonDescription, appTheme === 'light' && styles.lightSettingDescription]}>{description}</Text>}
         </View>
       </View>
     </TouchableOpacity>
@@ -854,12 +858,12 @@ const SettingsScreen = ({ navigation }) => {
     
     return (
       <TouchableOpacity 
-        style={styles.settingRow}
+        style={[styles.settingRow, appTheme === 'light' && styles.lightSettingRow]}
         onPress={openTemplateManager}
       >
         <View style={styles.settingLabelContainer}>
           <Text style={[styles.settingLabel, appTheme === 'light' && styles.lightText]}>Journal Template</Text>
-          <Text style={styles.settingDescription}>Choose default template for new journal entries</Text>
+          <Text style={[styles.settingDescription, appTheme === 'light' && styles.lightSettingDescription]}>Choose default template for new journal entries</Text>
         </View>
         <View style={styles.settingValueContainer}>
           <Text style={[styles.settingValue, appTheme === 'light' && styles.lightText]}>
@@ -1055,37 +1059,21 @@ const SettingsScreen = ({ navigation }) => {
         </View>
         
         {/* Notification Settings Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>NOTIFICATION SETTINGS</Text>
-          
-          {renderSettingSwitch(
-            notificationsEnabled,
-            (value) => {
-              setNotificationsEnabled(value);
-              autoSaveSettings();
-            },
-            'Enable Notifications',
-            'Allow the app to send notification reminders'
-          )}
+        <View style={styles.settingSection}>
+          <Text style={[styles.sectionTitle, appTheme === 'light' && styles.lightSectionTitle]}>NOTIFICATION SETTINGS</Text>
           
           {notificationsEnabled && (
             <>
               {renderSettingSwitch(
                 taskNotifications,
-                (value) => {
-                  setTaskNotifications(value);
-                  autoSaveSettings();
-                },
+                setTaskNotifications,
                 'Task Reminders',
                 'Remind you before tasks start'
               )}
               
               {renderSettingSwitch(
                 focusNotifications,
-                (value) => {
-                  setFocusNotifications(value);
-                  autoSaveSettings();
-                },
+                setFocusNotifications,
                 'Focus Mode Notifications',
                 'Notify you when focus sessions end'
               )}
@@ -1104,12 +1092,9 @@ const SettingsScreen = ({ navigation }) => {
               
               {renderSettingSwitch(
                 quietHoursEnabled,
-                (value) => {
-                  setQuietHoursEnabled(value);
-                  autoSaveSettings();
-                },
+                setQuietHoursEnabled,
                 'Quiet Hours',
-                'Disable notification sounds during specific hours'
+                'Disable notifications during specific hours'
               )}
               
               {quietHoursEnabled && (
@@ -1157,10 +1142,11 @@ const SettingsScreen = ({ navigation }) => {
           )}
           
           {showCloudBackup && (
-            <View style={styles.cloudBackupContainer}>
+            <View style={[styles.cloudBackupContainer, appTheme === 'light' && styles.lightCloudBackupContainer]}>
               <CloudBackupSection 
                 navigation={navigation}
                 onBackupComplete={handleBackupComplete}
+                theme={appTheme}
               />
             </View>
           )}
@@ -1190,19 +1176,21 @@ const SettingsScreen = ({ navigation }) => {
         </View>
         
         {/* About Section */}
-        <Text style={styles.sectionTitle}>ABOUT</Text>
-        
-        {renderActionButton(
-          showAboutInfo,
-          'Version Info',
-          'info'
-        )}
-        
-        {renderActionButton(
-          sendFeedback,
-          'Send Feedback',
-          'feedback'
-        )}
+        <View style={styles.settingSection}>
+          <Text style={[styles.sectionTitle, appTheme === 'light' && styles.lightSectionTitle]}>ABOUT</Text>
+          
+          {renderActionButton(
+            showAboutInfo,
+            'Version Info',
+            'info'
+          )}
+          
+          {renderActionButton(
+            sendFeedback,
+            'Send Feedback',
+            'feedback'
+          )}
+        </View>
       </ScrollView>
       
       {/* Options Modal */}
@@ -1212,42 +1200,46 @@ const SettingsScreen = ({ navigation }) => {
         animationType="fade"
         onRequestClose={() => setOptionModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{currentModalTitle}</Text>
-            <FlatList
-              data={currentOptions}
-              keyExtractor={(item) => item.value.toString()}
-              renderItem={({ item }) => (
+        <View style={[styles.modalOverlay, appTheme === 'light' && styles.lightModalOverlay]}>
+          <View style={[styles.modalContent, appTheme === 'light' && styles.lightModalContent]}>
+            <Text style={[styles.modalTitle, appTheme === 'light' && styles.lightModalTitle]}>{currentModalTitle}</Text>
+            <ScrollView style={{ maxHeight: 300 }}>
+              {currentOptions.map((option) => (
                 <TouchableOpacity
+                  key={option.value}
                   style={[
                     styles.modalOption,
-                    currentValue === item.value && styles.modalOptionSelected
+                    appTheme === 'light' && styles.lightModalOption,
+                    currentValue === option.value && styles.modalOptionSelected,
+                    currentValue === option.value && appTheme === 'light' && styles.lightModalOptionSelected
                   ]}
                   onPress={() => {
-                    if (typeof currentSetter === 'function') {
-                      currentSetter(item.value);
-                      setOptionModalVisible(false);
+                    if (currentSetter) {
+                      currentSetter(option.value);
+                      setSettingsChanged(true);
                     }
+                    setOptionModalVisible(false);
                   }}
                 >
                   <Text style={[
                     styles.modalOptionText,
-                    currentValue === item.value && styles.modalOptionTextSelected
+                    appTheme === 'light' && styles.lightModalOptionText,
+                    currentValue === option.value && styles.modalOptionTextSelected,
+                    currentValue === option.value && appTheme === 'light' && styles.lightModalOptionTextSelected
                   ]}>
-                    {item.label}
+                    {option.label}
                   </Text>
-                  {currentValue === item.value && (
-                    <MaterialIcons name="check" size={22} color="#FFFFFF" />
+                  {currentValue === option.value && (
+                    <MaterialIcons name="check" size={24} color={appTheme === 'light' ? "#000" : "#FFF"} />
                   )}
                 </TouchableOpacity>
-              )}
-            />
+              ))}
+            </ScrollView>
             <TouchableOpacity
-              style={styles.modalCancelButton}
+              style={[styles.modalButton, styles.cancelButton, appTheme === 'light' && styles.lightCancelButton]}
               onPress={() => setOptionModalVisible(false)}
             >
-              <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              <Text style={[styles.modalButtonText, appTheme === 'light' && styles.lightModalButtonText]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1261,32 +1253,32 @@ const SettingsScreen = ({ navigation }) => {
           animationType="fade"
           onRequestClose={cancelTimeSelection}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Select Reminder Time</Text>
-              <View style={styles.timePickerContainer}>
+          <View style={[styles.modalOverlay, appTheme === 'light' && styles.lightModalOverlay]}>
+            <View style={[styles.modalContent, appTheme === 'light' && styles.lightModalContent]}>
+              <Text style={[styles.modalTitle, appTheme === 'light' && styles.lightModalTitle]}>Select Reminder Time</Text>
+              <View style={[styles.timePickerContainer, appTheme === 'light' && styles.lightTimePickerContainer]}>
                 <CustomDateTimePicker
                   value={tempSelectedTime || (currentTimePickerMode === 'journalReminder' ? journalReminderTime : meditationReminderTime)}
                   mode="time"
                   display="spinner"
                   onChange={handleTimeChange}
                   style={styles.timePicker}
-                  textColor="#FFFFFF"
-                  themeVariant="dark"
+                  textColor={appTheme === 'light' ? "#000000" : "#FFFFFF"}
+                  themeVariant={appTheme === 'light' ? "light" : "dark"}
                 />
               </View>
               <View style={styles.modalButtons}>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]}
+                  style={[styles.modalButton, styles.cancelButton, appTheme === 'light' && styles.lightCancelButton]}
                   onPress={cancelTimeSelection}
                 >
-                  <Text style={styles.modalButtonText}>Cancel</Text>
+                  <Text style={[styles.modalButtonText, appTheme === 'light' && styles.lightModalButtonText]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.confirmButton]}
+                  style={[styles.modalButton, styles.confirmButton, appTheme === 'light' && styles.lightConfirmButton]}
                   onPress={confirmTimeSelection}
                 >
-                  <Text style={styles.confirmButtonText}>Confirm</Text>
+                  <Text style={[styles.confirmButtonText, appTheme === 'light' && styles.lightConfirmButtonText]}>Confirm</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1301,35 +1293,35 @@ const SettingsScreen = ({ navigation }) => {
         animationType="slide"
         onRequestClose={() => setExportModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Export Data</Text>
-            <Text style={styles.modalDescription}>
+        <View style={[styles.modalOverlay, appTheme === 'light' && styles.lightModalOverlay]}>
+          <View style={[styles.modalContent, appTheme === 'light' && styles.lightModalContent]}>
+            <Text style={[styles.modalTitle, appTheme === 'light' && styles.lightModalTitle]}>Export Data</Text>
+            <Text style={[styles.modalDescription, appTheme === 'light' && styles.lightModalDescription]}>
               Optional: Add a password to protect your data.
             </Text>
             <TextInput
-              style={styles.passwordInput}
+              style={[styles.passwordInput, appTheme === 'light' && styles.lightPasswordInput]}
               placeholder="Password (optional)"
-              placeholderTextColor="#999"
+              placeholderTextColor={appTheme === 'light' ? "#777" : "#999"}
               secureTextEntry={true}
               value={exportPassword}
               onChangeText={setExportPassword}
             />
             <View style={styles.modalButtons}>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]} 
+                style={[styles.modalButton, styles.cancelButton, appTheme === 'light' && styles.lightCancelButton]} 
                 onPress={() => {
                   setExportModalVisible(false);
                   setExportPassword('');
                 }}
               >
-                <Text style={styles.modalButtonText}>Cancel</Text>
+                <Text style={[styles.modalButtonText, appTheme === 'light' && styles.lightModalButtonText]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.confirmButton]} 
+                style={[styles.modalButton, styles.confirmButton, appTheme === 'light' && styles.lightConfirmButton]} 
                 onPress={exportData}
               >
-                <Text style={styles.confirmButtonText}>Export</Text>
+                <Text style={[styles.confirmButtonText, appTheme === 'light' && styles.lightConfirmButtonText]}>Export</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1433,6 +1425,9 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 10,
   },
+  lightSettingRow: {
+    backgroundColor: '#DDDDDD',
+  },
   settingLabelContainer: {
     flex: 1,
   },
@@ -1444,6 +1439,9 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 12,
     marginTop: 4,
+  },
+  lightSettingDescription: {
+    color: '#333',
   },
   settingValueContainer: {
     flexDirection: 'row',
@@ -1475,6 +1473,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  lightActionButton: {
+    backgroundColor: '#DDDDDD',
+  },
   actionButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1494,14 +1495,23 @@ const styles = StyleSheet.create({
   dangerButton: {
     backgroundColor: '#1a0000',
   },
+  lightDangerButton: {
+    backgroundColor: '#F55',
+  },
   dangerButtonText: {
     color: '#F55',
+  },
+  lightDangerButtonText: {
+    color: '#000',
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  lightModalOverlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
     width: '80%',
@@ -1510,6 +1520,9 @@ const styles = StyleSheet.create({
     padding: 20,
     maxHeight: '70%',
   },
+  lightModalContent: {
+    backgroundColor: '#f5f5f5',
+  },
   modalTitle: {
     color: '#FFF',
     fontSize: 18,
@@ -1517,11 +1530,17 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     textAlign: 'center',
   },
+  lightModalTitle: {
+    color: '#000',
+  },
   modalDescription: {
     color: '#CCC',
     fontSize: 14,
     marginBottom: 15,
     textAlign: 'center',
+  },
+  lightModalDescription: {
+    color: '#333',
   },
   modalOption: {
     flexDirection: 'row',
@@ -1532,15 +1551,28 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#333',
   },
+  lightModalOption: {
+    borderBottomColor: '#ddd',
+  },
   modalOptionSelected: {
     backgroundColor: '#333',
+  },
+  lightModalOptionSelected: {
+    backgroundColor: '#ddd',
   },
   modalOptionText: {
     color: '#CCC',
     fontSize: 16,
   },
+  lightModalOptionText: {
+    color: '#333',
+  },
   modalOptionTextSelected: {
     color: '#FFF',
+    fontWeight: 'bold',
+  },
+  lightModalOptionTextSelected: {
+    color: '#000',
     fontWeight: 'bold',
   },
   passwordInput: {
@@ -1549,6 +1581,10 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     marginBottom: 20,
+  },
+  lightPasswordInput: {
+    backgroundColor: '#ddd',
+    color: '#000',
   },
   modalButtons: {
     flexDirection: 'row',
@@ -1565,16 +1601,25 @@ const styles = StyleSheet.create({
   cancelButton: {
     backgroundColor: '#444',
   },
+  lightCancelButton: {
+    backgroundColor: '#ccc',
+  },
   confirmButton: {
     backgroundColor: '#FFFFFF',
     flex: 1,
     marginLeft: 10,
     borderRadius: 8,
   },
+  lightConfirmButton: {
+    backgroundColor: '#333',
+  },
   modalButtonText: {
     color: '#FFF',
     fontSize: 16,
     fontWeight: '500',
+  },
+  lightModalButtonText: {
+    color: '#000',
   },
   timePickerContainer: {
     alignItems: 'center',
@@ -1585,6 +1630,9 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     overflow: 'hidden',
   },
+  lightTimePickerContainer: {
+    backgroundColor: '#ddd',
+  },
   timePicker: {
     height: 200,
     width: '100%',
@@ -1594,13 +1642,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  lightConfirmButtonText: {
+    color: '#fff',
+  },
   cloudBackupContainer: {
-    // marginTop: 3,
     marginBottom: 10,
     backgroundColor: '#111',
     borderRadius: 10,
     paddingHorizontal: 5,
     paddingTop: 10,
+  },
+  lightCloudBackupContainer: {
+    backgroundColor: '#ddd',
   },
   manageButton: {
     backgroundColor: "#FFFFFF",
@@ -1608,10 +1661,16 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
   },
+  lightManageButton: {
+    backgroundColor: "#333",
+  },
   manageButtonText: {
     color: '#000',
     fontSize: 14,
     fontWeight: '500',
+  },
+  lightManageButtonText: {
+    color: '#fff',
   },
 });
 
