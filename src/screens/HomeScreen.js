@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { MaterialIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import useWeather from "../utils/useWeather";
+import { navigateWithDirection } from "../navigation/AppNavigator";
 
 // Quote database
 const quotes = {
@@ -202,22 +203,22 @@ const HomeScreen = ({ navigation }) => {
     // Navigate to corresponding page
     switch (taskName) {
       case "meditation":
-        navigation.navigate("Meditation");
+        navigateWithDirection(navigation, "Meditation");
         break;
       case "task":
-        navigation.navigate("Task");
+        navigateWithDirection(navigation, "Task");
         break;
       case "focus":
-        navigation.navigate("Focus");
+        navigateWithDirection(navigation, "Focus");
         break;
       case "summary":
-        navigation.navigate("Summary");
+        navigateWithDirection(navigation, "Summary");
         break;
       case "journal":
-        navigation.navigate("Journal");
+        navigateWithDirection(navigation, "Journal");
         break;
       case "settings":
-        navigation.navigate("Settings");
+        navigateWithDirection(navigation, "Settings");
         break;
       default:
         console.log(`Accessing ${taskName} function`);

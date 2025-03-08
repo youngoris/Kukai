@@ -19,25 +19,75 @@ const AppNavigator = () => {
   return (
     <Stack.Navigator
       initialRouteName="Home"
-      screenOptions={({ route, navigation }) => ({
-        headerShown: false,
-        contentStyle: { backgroundColor: "#000" },
-        animation: "slide_from_right",
-        gestureEnabled: route.name !== "Home" && route.name !== "Settings",
-        // Native stack uses different animation configuration
-        // No need for gestureDirection and gestureResponseDistance in native stack
-      })}
+      screenOptions={({ route, navigation }) => {
+        // Get the route params
+        const params = route.params || {};
+        // Check if we're navigating with a specific direction
+        const fromBack = params.fromBack === true;
+        
+        return {
+          headerShown: false,
+          contentStyle: { backgroundColor: "#000" },
+          // Use different animation based on the fromBack parameter
+          animation: fromBack ? "slide_from_left" : "slide_from_right",
+          gestureEnabled: route.name !== "Home" && route.name !== "Settings",
+          // This helps with the animation when replacing screens
+          animationTypeForReplace: "push",
+        };
+      }}
     >
-      <Stack.Screen name="Home" component={HomeScreen} />
-      <Stack.Screen name="Meditation" component={MeditationScreen} />
-      <Stack.Screen name="Task" component={TaskScreen} />
-      <Stack.Screen name="Focus" component={FocusScreen} />
-      <Stack.Screen name="Summary" component={SummaryScreen} />
-      <Stack.Screen name="Journal" component={JournalScreen} />
-      <Stack.Screen name="JournalEdit" component={JournalEditScreen} />
-      <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen 
+        name="Home" 
+        component={HomeScreen} 
+        options={{
+          // Home screen always slides from left when returning to it
+          animation: "slide_from_left"
+        }}
+      />
+      <Stack.Screen 
+        name="Meditation" 
+        component={MeditationScreen} 
+      />
+      <Stack.Screen 
+        name="Task" 
+        component={TaskScreen} 
+      />
+      <Stack.Screen 
+        name="Focus" 
+        component={FocusScreen} 
+      />
+      <Stack.Screen 
+        name="Summary" 
+        component={SummaryScreen} 
+      />
+      <Stack.Screen 
+        name="Journal" 
+        component={JournalScreen} 
+      />
+      <Stack.Screen 
+        name="JournalEdit" 
+        component={JournalEditScreen} 
+      />
+      <Stack.Screen 
+        name="Settings" 
+        component={SettingsScreen} 
+      />
     </Stack.Navigator>
   );
+};
+
+// Custom navigation function to handle direction
+export const navigateWithDirection = (navigation, routeName, params = {}, fromBack = false) => {
+  // If fromBack is true, it will simulate a back navigation animation
+  navigation.navigate({
+    name: routeName,
+    params: { ...params, fromBack },
+  });
+};
+
+// Helper function to go back to Home with correct animation
+export const goBackToHome = (navigation, params = {}) => {
+  navigateWithDirection(navigation, "Home", params, true);
 };
 
 export default AppNavigator;

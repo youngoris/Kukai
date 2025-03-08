@@ -27,6 +27,7 @@ import {
   SHADOWS,
 } from "../constants/DesignSystem";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { goBackToHome } from "../navigation/AppNavigator";
 
 // Ignore specific warnings
 LogBox.ignoreLogs(["Animated: `useNativeDriver`"]);
@@ -213,23 +214,20 @@ const MeditationScreen = ({ navigation }) => {
     useCallback(() => {
       const onBackPress = () => {
         if (isMeditating) {
-          // Show confirmation dialog when trying to exit during meditation
           Alert.alert(
             "End Meditation",
-            "Are you sure you want to end your current meditation session?",
+            "Are you sure you want to end your meditation session?",
             [
-              { text: "Continue", style: "cancel" },
+              { text: "Cancel", style: "cancel" },
               {
-                text: "End Session",
-                onPress: () => endMeditation(() => navigation.navigate("Home")),
+                text: "End",
+                onPress: () => endMeditation(() => goBackToHome(navigation)),
                 style: "destructive",
               },
-            ],
+            ]
           );
           return true;
         }
-
-        // Allow normal back navigation if not meditating
         return false;
       };
 
@@ -802,8 +800,10 @@ const MeditationScreen = ({ navigation }) => {
       }
 
       // Execute callback if provided
-      if (typeof callback === "function") {
+      if (callback) {
         callback();
+      } else {
+        goBackToHome(navigation);
       }
     },
     [breatheAnim, pulseAnim, releaseAllAudioResources],
@@ -841,7 +841,7 @@ const MeditationScreen = ({ navigation }) => {
             text: "End Session",
             onPress: () => {
               endMeditation();
-              navigation.navigate("Home");
+              goBackToHome(navigation);
             },
             style: "destructive",
           },
@@ -850,9 +850,9 @@ const MeditationScreen = ({ navigation }) => {
     } else if (isMeditationComplete) {
       setIsMeditationComplete(false);
       setSelectedDuration(null);
-      navigation.navigate("Home");
+      goBackToHome(navigation);
     } else {
-      navigation.navigate("Home");
+      goBackToHome(navigation);
     }
   }, [
     isMeditating,
@@ -869,7 +869,7 @@ const MeditationScreen = ({ navigation }) => {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.navigate("Home")}
+            onPress={() => goBackToHome(navigation)}
           >
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
@@ -890,7 +890,7 @@ const MeditationScreen = ({ navigation }) => {
           <View style={{marginTop: 40}}>
             <TouchableOpacity
               style={styles.webActionButton}
-              onPress={() => navigation.navigate("Home")}
+              onPress={() => goBackToHome(navigation)}
             >
               <Text style={styles.webActionButtonText}>Return to Home</Text>
             </TouchableOpacity>
@@ -904,7 +904,7 @@ const MeditationScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       {!isMeditating && !isCountingDown && (
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.navigate("Home")}>
+          <TouchableOpacity onPress={() => goBackToHome(navigation)}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerText}>MEDITATION</Text>
@@ -1049,7 +1049,7 @@ const MeditationScreen = ({ navigation }) => {
             onPress={() => {
               setIsMeditationComplete(false);
               setSelectedDuration(null);
-              navigation.navigate("Home");
+              goBackToHome(navigation);
             }}
           >
             <Text style={styles.homeButtonText}>Back to Home</Text>
@@ -1119,7 +1119,7 @@ const MeditationScreen = ({ navigation }) => {
                   {
                     text: "End Session",
                     onPress: () =>
-                      endMeditation(() => navigation.navigate("Home")),
+                      endMeditation(() => goBackToHome(navigation)),
                     style: "destructive",
                   },
                 ],
