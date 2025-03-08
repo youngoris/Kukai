@@ -50,7 +50,6 @@ const SummaryScreen = ({ navigation }) => {
     return defaultTime;
   });
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [appTheme, setAppTheme] = useState('dark');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -58,9 +57,6 @@ const SummaryScreen = ({ navigation }) => {
   const inputRef = useRef(null);
   const scrollViewRef = useRef(null);
   const addTaskContainerRef = useRef(null);
-
-  // 检查是否为浅色主题
-  const isLightTheme = appTheme === 'light';
 
   useEffect(() => {
     StatusBar.setHidden(true);
@@ -70,9 +66,8 @@ const SummaryScreen = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
-    // 检查是否需要每日重置
+    // Check if daily reset is needed
     checkDailyReset();
-    
     loadData();
 
     Animated.parallel([
@@ -89,13 +84,12 @@ const SummaryScreen = ({ navigation }) => {
     ]).start();
   }, []);
 
-  // 添加键盘事件监听
+  // Add keyboard event listeners
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
       (event) => {
-        setKeyboardVisible(true);
-        // 获取键盘高度
+        // Get keyboard height
         const keyboardHeight = event.endCoordinates.height;
         scrollToInput(keyboardHeight);
       }
@@ -103,8 +97,7 @@ const SummaryScreen = ({ navigation }) => {
     const keyboardDidHideListener = Keyboard.addListener(
       'keyboardDidHide',
       () => {
-        setKeyboardVisible(false);
-        // 键盘隐藏时，可以选择滚动到特定位置或不做处理
+        // When keyboard hides, can choose to scroll to a specific position or do nothing
       }
     );
 
@@ -114,29 +107,24 @@ const SummaryScreen = ({ navigation }) => {
     };
   }, []);
 
-  // 检查是否需要每日重置
   const checkDailyReset = async () => {
     try {
-      // 获取当前日期
+      // Check if daily reset is needed
+      
+      // Get current date
       const today = new Date().toISOString().split('T')[0];
       
-      // 获取上次记录的日期
-      const lastRecordedDate = await AsyncStorage.getItem('lastRecordedDate');
+      // Get last recorded date
+      const lastDateJson = await AsyncStorage.getItem('lastDate');
       
-      // 如果日期不同或没有记录过日期，执行每日重置
-      if (!lastRecordedDate || lastRecordedDate !== today) {
-        console.log('Performing daily reset...');
+      // If date is different or no date has been recorded, perform daily reset
+      if (!lastDateJson || JSON.parse(lastDateJson) !== today) {
+        await resetDailyPomodoroCount(lastDateJson ? JSON.parse(lastDateJson) : null);
         
-        // 更新最后记录日期为今天
-        await AsyncStorage.setItem('lastRecordedDate', today);
+        // Update last recorded date to today
+        await AsyncStorage.setItem('lastDate', JSON.stringify(today));
         
-        // 重置番茄钟计数（保存历史记录，但重置当日计数）
-        await resetDailyPomodoroCount(lastRecordedDate);
-        
-        // 可以在这里添加其他每日重置逻辑
-        // 例如：将昨天未完成的任务标记为过期，或者转移到今天的任务中
-        
-        // 自动将昨天"明日计划"中的任务转移到今天的任务列表中
+        // Auto transfer tomorrow's tasks to today's tasks if enabled
         await autoTransferTomorrowTasks();
       }
     } catch (error) {
@@ -144,78 +132,89 @@ const SummaryScreen = ({ navigation }) => {
     }
   };
 
-  // 重置每日番茄钟计数
+  // Reset daily pomodoro count but keep history
   const resetDailyPomodoroCount = async (lastDate) => {
     try {
-      // 读取旧的番茄钟记录
+      // Reset daily pomodoro count but keep history
       const pomodorosJson = await AsyncStorage.getItem('pomodoros');
-      let pomodoros = [];
-      
       if (pomodorosJson) {
-        pomodoros = JSON.parse(pomodorosJson);
+        const pomodoros = JSON.parse(pomodorosJson);
+        // Keep the history but reset today's count
+        setPomodoroCount(0);
       }
-      
-      // 如果是新的一天，保存旧的记录并清空计数器
-      // 注意：这里只是重置计数器，保留历史记录
-      await AsyncStorage.setItem('pomodoros', JSON.stringify(pomodoros));
-      
-      // Reset today's pomodoro count (UI reset only, doesn't affect historical data)
-      setPomodoroCount(0);
     } catch (error) {
       console.error('Error resetting pomodoro count:', error);
     }
   };
 
-  // 自动将昨天"明日计划"中的任务转移到今天的任务列表中
+  // If auto transfer is enabled, move tomorrow's tasks to today's tasks
   const autoTransferTomorrowTasks = async () => {
     try {
-      const tomorrowTasksJson = await AsyncStorage.getItem('tomorrowTasks');
-      if (tomorrowTasksJson && JSON.parse(tomorrowTasksJson).length > 0) {
-        const tomorrowTasks = JSON.parse(tomorrowTasksJson);
-        
-        // 获取现有任务
+      // Get user settings to check if auto transfer is enabled
+      const userSettingsJson = await AsyncStorage.getItem('userSettings');
+      let autoTransfer = false;
+      
+      if (userSettingsJson) {
+        const userSettings = JSON.parse(userSettingsJson);
+        autoTransfer = userSettings.autoTransferTasks || false;
+      }
+      
+      // If auto transfer is enabled, move tomorrow's tasks to today's tasks
+      if (autoTransfer) {
+        const tomorrowTasksJson = await AsyncStorage.getItem('tomorrowTasks');
         const tasksJson = await AsyncStorage.getItem('tasks');
-        let existingTasks = tasksJson ? JSON.parse(tasksJson) : [];
         
-        // 将明日任务添加到任务列表中
-        const formattedTasks = tomorrowTasks.map((task) => ({
-          ...task,
-          priority: 'medium',
-        }));
-        
-        const updatedTasks = [...existingTasks, ...formattedTasks];
-        await AsyncStorage.setItem('tasks', JSON.stringify(updatedTasks));
-        
-        // 清空明日任务列表
-        await AsyncStorage.setItem('tomorrowTasks', JSON.stringify([]));
-        
-        console.log('Automatically transferred tasks from tomorrow\'s plan to today\'s task list');
+        if (tomorrowTasksJson) {
+          const tomorrowTasks = JSON.parse(tomorrowTasksJson);
+          
+          if (tomorrowTasks.length > 0) {
+            let allTasks = [];
+            
+            if (tasksJson) {
+              allTasks = JSON.parse(tasksJson);
+            }
+            
+            // Add tomorrow's tasks to the task list
+            const updatedTasks = [...allTasks, ...tomorrowTasks.map(task => ({
+              ...task,
+              completed: false,
+              completedAt: null,
+              createdAt: new Date().toISOString()
+            }))];
+            
+            // Save updated tasks
+            await AsyncStorage.setItem('tasks', JSON.stringify(updatedTasks));
+            
+            // Clear tomorrow's tasks
+            await AsyncStorage.setItem('tomorrowTasks', JSON.stringify([]));
+            setTomorrowTasks([]);
+          }
+        }
       }
     } catch (error) {
-      console.error('Error automatically transferring tomorrow\'s tasks:', error);
+      console.error('Error auto-transferring tasks:', error);
     }
   };
 
   const loadData = async () => {
     try {
-      // Get today's date string (format: YYYY-MM-DD)
       const today = new Date().toISOString().split('T')[0];
       
-      // 加载任务数据
+      // Load task data
       const tasksJson = await AsyncStorage.getItem('tasks');
       let allTasks = [];
       
-      // 处理任务数据
+      // Process task data
       if (tasksJson) {
         allTasks = JSON.parse(tasksJson);
-        // Filter tasks completed today and pending tasks
+        // Filter completed and pending tasks for today
         const todayTasks = allTasks.filter((task) => {
-          // If task has completion time, check if it was completed today
+          // If task has a completion time, check if it's today's task
           if (task.completedAt) {
             const completedDate = new Date(task.completedAt).toISOString().split('T')[0];
             return completedDate === today;
           }
-          // For incomplete tasks, display all by default
+          // For pending tasks, default to showing all pending tasks
           return !task.completed;
         });
         
@@ -225,11 +224,11 @@ const SummaryScreen = ({ navigation }) => {
         setCompletedTasks(completed);
         setPendingTasks(pending);
         
-        // Calculate today's task completion rate (considering only today's tasks)
+        // Calculate today's task completion rate (only consider today's tasks)
         const rate = todayTasks.length > 0 ? (completed.length / todayTasks.length) * 100 : 0;
         setCompletionRate(Math.round(rate));
       } else {
-        // If no task data exists, initialize with empty arrays
+        // If no task data, initialize as empty array
         setCompletedTasks([]);
         setPendingTasks([]);
         setCompletionRate(0);
@@ -237,7 +236,7 @@ const SummaryScreen = ({ navigation }) => {
         await AsyncStorage.setItem('tasks', JSON.stringify([]));
       }
 
-      // Load meditation data (only today's meditation time)
+      // Load meditation data (only load today's meditation time)
       const meditationSessionsJson = await AsyncStorage.getItem('meditationSessions');
       let todayMeditationMinutes = 0;
       if (meditationSessionsJson) {
@@ -252,7 +251,7 @@ const SummaryScreen = ({ navigation }) => {
       }
       setTotalMeditationMinutes(todayMeditationMinutes);
 
-      // Load focus time data (only today's focus time)
+      // Load focus time data (only load today's focus time)
       const focusSessionsJson = await AsyncStorage.getItem('focusSessions');
       if (focusSessionsJson) {
         const focusSessions = JSON.parse(focusSessionsJson);
@@ -268,7 +267,7 @@ const SummaryScreen = ({ navigation }) => {
         setTotalFocusMinutes(0);
       }
 
-      // Load pomodoro count (only today's pomodoros)
+      // Load pomodoro count (only load today's pomodoro count)
       const pomodorosJson = await AsyncStorage.getItem('pomodoros');
       if (pomodorosJson) {
         const pomodoros = JSON.parse(pomodorosJson);
@@ -287,13 +286,13 @@ const SummaryScreen = ({ navigation }) => {
       if (tomorrowTasksJson) {
         setTomorrowTasks(JSON.parse(tomorrowTasksJson));
       } else {
-        // If no tomorrow's tasks data, initialize as empty array
+        // If no tomorrow task data, initialize as empty array
         setTomorrowTasks([]);
         await AsyncStorage.setItem('tomorrowTasks', JSON.stringify([]));
       }
     } catch (error) {
       console.error('Error loading data:', error);
-      // 显示友好的错误消息并提供重试选项
+      // Show friendly error message and provide retry option
       Alert.alert(
         'Data Loading Error',
         'Unable to load summary data.',
@@ -314,12 +313,12 @@ const SummaryScreen = ({ navigation }) => {
   const addTomorrowTask = async () => {
     if (newTomorrowTask.trim() === '') return;
     try {
-      // 如果显示了时间选择器，确保时间标签被激活
+      // If time picker is displayed, ensure time tag is activated
       if (showTimePicker) {
         setIsTimeTagged(true);
       }
       
-      // 如果设置了提醒但没有设置时间，提示用户
+      // If reminder is set but time is not set, prompt user
       if (hasReminder && !isTimeTagged && !showTimePicker) {
         Alert.alert(
           "Reminder Setup",
@@ -387,7 +386,7 @@ const SummaryScreen = ({ navigation }) => {
       const formattedTasks = tomorrowTasks.map((task) => ({
         ...task,
         priority: 'medium',
-        // 保留原有的标签信息，不覆盖
+        // Keep original tag information, do not overwrite
       }));
       const updatedTasks = [...existingTasks, ...formattedTasks];
       await AsyncStorage.setItem('tasks', JSON.stringify(updatedTasks));
@@ -402,7 +401,7 @@ const SummaryScreen = ({ navigation }) => {
     }
   };
 
-  // 处理时间变更
+  // Handle time change
   const onTimeChange = (event, selectedTime) => {
     if (Platform.OS === 'android') {
       setShowTimePicker(false);
@@ -414,7 +413,7 @@ const SummaryScreen = ({ navigation }) => {
     }
   };
 
-  // 处理时间标签点击
+  // Handle time tag press
   const handleTimeTagPress = () => {
     // Update time to current hour and 30 minutes
     const currentTime = new Date();
@@ -422,31 +421,31 @@ const SummaryScreen = ({ navigation }) => {
     setTaskTime(currentTime);
     
     if (showTimePicker) {
-      // 如果时间选择器已经显示，点击后关闭选择器并取消标签
+      // If time picker is already displayed, click to close picker and remove tag
       setShowTimePicker(false);
       setIsTimeTagged(false);
-      // 同时关闭提醒功能
+      // Also close reminder functionality
       setHasReminder(false);
       setShowReminderOptions(false);
     } else if (isTimeTagged) {
-      // 如果已经有时间标签但选择器未显示，点击后取消标签
+      // If there's already a time tag but picker is not displayed, click to remove tag
       setIsTimeTagged(false);
       setShowTimePicker(false);
-      // 同时关闭提醒功能
+      // Also close reminder functionality
       setHasReminder(false);
       setShowReminderOptions(false);
     } else {
-      // 如果没有时间标签，点击后显示选择器并激活标签
+      // If there's no time tag, click to display picker and activate tag
       setShowTimePicker(true);
       setIsTimeTagged(true);
-      // 滚动到可见区域
+      // Scroll to visible area
       setTimeout(() => scrollToInput(), 100);
     }
   };
 
-  // 处理提醒标签点击
+  // Handle reminder tag press
   const handleReminderPress = () => {
-    // 如果没有设置时间，先提示设置时间
+    // If time is not set, first prompt to set time
     if (!isTimeTagged && !showTimePicker) {
       Alert.alert(
         "Reminder Setup",
@@ -460,33 +459,33 @@ const SummaryScreen = ({ navigation }) => {
     }
     
     if (showReminderOptions) {
-      // 如果选项已显示，则隐藏选项（但不更改提醒状态）
+      // If options are displayed, hide options (but do not change reminder status)
       setShowReminderOptions(false);
     } else if (hasReminder) {
-      // 如果已有提醒，则取消提醒
+      // If reminder is already set, cancel reminder
       setHasReminder(false);
       setShowReminderOptions(false);
     } else {
-      // 如果没有提醒，则显示选项并激活提醒状态
+      // If there's no reminder, display options and activate reminder status
       setShowReminderOptions(true);
-      // 设置默认提醒时间并激活
+      // Set default reminder time and activate
       setReminderTime(15);
       setHasReminder(true);
-      // 显示提醒选项时关闭时间选择器，避免界面过于拥挤
+      // Close time picker when reminder options are displayed to avoid interface crowding
       setShowTimePicker(false);
-      // 滚动到可见区域
+      // Scroll to visible area
       setTimeout(() => scrollToInput(), 100);
     }
   };
 
-  // 选择提醒时间
+  // Select reminder time
   const selectReminderTime = (minutes) => {
     setReminderTime(minutes);
     setHasReminder(true);
     setShowReminderOptions(false);
   };
 
-  // 渲染标签按钮
+  // Render tag buttons
   const renderTagButtons = () => (
     <View style={styles.tagButtonsContainer}>
       <TouchableOpacity
@@ -561,12 +560,12 @@ const SummaryScreen = ({ navigation }) => {
     </View>
   );
 
-  // 添加自动滚动到输入区域的函数
+  // Add automatic scroll to input area function
   const scrollToInput = (keyboardHeight = 300) => {
-    // 给键盘弹出时间，再滚动
+    // Give keyboard pop time, then scroll
     setTimeout(() => {
       if (scrollViewRef.current && addTaskContainerRef.current) {
-        // 测量添加任务容器在滚动视图中的位置
+        // Measure added task container in scroll view
         addTaskContainerRef.current.measureLayout(
           scrollViewRef.current,
           (x, y, width, height) => {
@@ -590,78 +589,75 @@ const SummaryScreen = ({ navigation }) => {
     }, 300);
   };
 
-  // Load user settings
-  useEffect(() => {
-    const loadUserSettings = async () => {
-      try {
-        const settingsData = await AsyncStorage.getItem('userSettings');
-        if (settingsData) {
-          const parsedSettings = JSON.parse(settingsData);
-          if (parsedSettings.appTheme) {
-            setAppTheme(parsedSettings.appTheme);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading user settings:', error);
-      }
-    };
-    
-    loadUserSettings();
-  }, []);
-
   return (
-    <SafeAreaView style={[styles.container, isLightTheme && styles.lightContainer]}>
-      <StatusBar barStyle={isLightTheme ? "dark-content" : "light-content"} />
-      <View style={[styles.header, isLightTheme && styles.lightHeader]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <MaterialIcons name="arrow-back" size={24} color={isLightTheme ? "#000000" : "#FFFFFF"} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, isLightTheme && styles.lightHeaderTitle]}>SUMMARY</Text>
-        <View style={styles.headerRight} />
-      </View>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+    >
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => navigation.navigate('Home')}
+          >
+            <Text style={styles.headerButtonText}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>SUMMARY</Text>
+          <View style={styles.headerButton} />
+        </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollViewContent}
-        ref={scrollViewRef}
-      >
-        <View style={styles.content}>
-          {/* Stats Card */}
+        <Animated.ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          style={[
+            { 
+              opacity: fadeAnim, 
+              transform: [{ translateY: slideAnim }] 
+            }
+          ]}
+          keyboardDismissMode="interactive"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.headerContainer}>
+            <Text style={styles.headerSubtitle}>Today</Text>
+            <Text style={styles.dateText}>{new Date().toLocaleDateString()}</Text>
+          </View>
+          
+          {/* Daily Statistics */}
           <View style={styles.statsContainer}>
-            <View style={[styles.statsCard, isLightTheme && styles.lightStatsCard]}>
+            <View style={styles.statsCard}>
               <View style={styles.statItem}>
-                <Text style={[styles.statTitle, isLightTheme && styles.lightStatTitle]}>Completion Rate</Text>
+                <Text style={styles.statTitle}>Completion Rate</Text>
                 <View style={styles.progressContainer}>
                   <View style={[styles.progressBar, { width: `${completionRate}%` }]} />
-                  <Text style={[styles.progressText, isLightTheme && styles.lightProgressText]}>{completionRate}%</Text>
+                  <Text style={styles.progressText}>{completionRate}%</Text>
                 </View>
               </View>
               
-              <View style={[styles.statDivider, isLightTheme && styles.lightStatDivider]} />
+              <View style={styles.statDivider} />
               
-              {/* 使用水平布局容器 */}
+              {/* Use horizontal layout container */}
               <View style={styles.statRowContainer}>
-                {/* 冥想时间 */}
+                {/* Meditation Time */}
                 <View style={styles.statItemHalf}>
-                  <Text style={[styles.statTitle, isLightTheme && styles.lightStatTitle]}>Meditation</Text>
+                  <Text style={styles.statTitle}>Meditation</Text>
                   <View style={styles.focusTimeContainer}>
-                    <MaterialIcons name="self-improvement" size={22} color={isLightTheme ? "#333333" : "#CCCCCC"} />
-                    <Text style={[styles.focusTimeText, isLightTheme && styles.lightFocusTimeText]}>{totalMeditationMinutes} min</Text>
+                    <MaterialIcons name="self-improvement" size={22} color="#CCCCCC" />
+                    <Text style={styles.focusTimeText}>{totalMeditationMinutes} min</Text>
                   </View>
                 </View>
                 
-                {/* 垂直分隔线 */}
-                <View style={[styles.verticalDivider, isLightTheme && styles.lightVerticalDivider]} />
+                {/* Vertical divider */}
+                <View style={styles.verticalDivider} />
                 
-                {/* 番茄钟会话 */}
+                {/* Pomodoro Sessions */}
                 <View style={styles.statItemHalf}>
-                  <Text style={[styles.statTitle, isLightTheme && styles.lightStatTitle]}>Pomodoros</Text>
+                  <Text style={styles.statTitle}>Pomodoros</Text>
                   <View style={styles.focusTimeContainer}>
-                    <MaterialIcons name="timer" size={22} color={isLightTheme ? "#333333" : "#CCCCCC"} />
-                    <Text style={[styles.focusTimeText, isLightTheme && styles.lightFocusTimeText]}>{pomodoroCount} sessions</Text>
+                    <MaterialIcons name="timer" size={22} color="#CCCCCC" />
+                    <Text style={styles.focusTimeText}>{pomodoroCount} sessions</Text>
                   </View>
                 </View>
               </View>
@@ -670,42 +666,42 @@ const SummaryScreen = ({ navigation }) => {
 
           {/* Completed Tasks */}
           <View style={styles.sectionContainer}>
-            <Text style={[styles.sectionTitle, isLightTheme && styles.lightSectionTitle]}>Completed Tasks</Text>
+            <Text style={styles.sectionTitle}>Completed Tasks</Text>
             {completedTasks.length > 0 ? (
               <FlatList
                 data={completedTasks}
                 renderItem={({ item }) => (
-                  <View style={[styles.taskItem, isLightTheme && styles.lightTaskItem]}>
+                  <View style={styles.taskItem}>
                     <View
                       style={[styles.taskPriorityIndicator, { backgroundColor: PRIORITY_COLORS[item.priority] }]}
                     />
                     <View style={styles.taskContent}>
-                      <Text style={[styles.taskText, isLightTheme && styles.lightTaskText]}>{item.text}</Text>
+                      <Text style={styles.taskText}>{item.text}</Text>
                     </View>
-                    <MaterialIcons name="check-circle" size={20} color={isLightTheme ? "#333333" : "#CCCCCC"} />
+                    <MaterialIcons name="check-circle" size={20} color="#CCCCCC" />
                   </View>
                 )}
                 keyExtractor={(item) => item.id}
                 scrollEnabled={false}
               />
             ) : (
-              <Text style={[styles.emptyText, isLightTheme && styles.lightEmptyText]}>No tasks completed today</Text>
+              <Text style={styles.emptyText}>No tasks completed today</Text>
             )}
           </View>
 
           {/* Pending Tasks */}
           <View style={styles.sectionContainer}>
-            <Text style={[styles.sectionTitle, isLightTheme && styles.lightSectionTitle]}>Pending Tasks</Text>
+            <Text style={styles.sectionTitle}>Pending Tasks</Text>
             {pendingTasks.length > 0 ? (
               <FlatList
                 data={pendingTasks}
                 renderItem={({ item }) => (
-                  <View style={[styles.taskItem, isLightTheme && styles.lightTaskItem]}>
+                  <View style={styles.taskItem}>
                     <View
                       style={[styles.taskPriorityIndicator, { backgroundColor: PRIORITY_COLORS[item.priority] }]}
                     />
                     <View style={styles.taskContent}>
-                      <Text style={[styles.taskText, isLightTheme && styles.lightTaskText]}>{item.text}</Text>
+                      <Text style={styles.taskText}>{item.text}</Text>
                     </View>
                   </View>
                 )}
@@ -713,22 +709,26 @@ const SummaryScreen = ({ navigation }) => {
                 scrollEnabled={false}
               />
             ) : (
-              <Text style={[styles.emptyText, isLightTheme && styles.lightEmptyText]}>All tasks completed!</Text>
+              <Text style={styles.emptyText}>All tasks completed!</Text>
             )}
           </View>
 
           {/* Tomorrow's Plan */}
           <View style={styles.sectionContainer}>
-            <Text style={[styles.sectionTitle, isLightTheme && styles.lightSectionTitle]}>Tomorrow's Plan</Text>
+            <Text style={styles.sectionTitle}>Tomorrow's Plan</Text>
             {!isAddingTask ? (
               <TouchableOpacity
-                style={[styles.addTaskButton, isLightTheme && styles.lightAddTaskButton]}
+                style={styles.addTaskButton}
                 onPress={() => {
                   setIsAddingTask(true);
+                  setTimeout(() => {
+                    inputRef.current?.focus();
+                    scrollToInput();
+                  }, 100);
                 }}
               >
-                <AntDesign name="plus" size={20} color={isLightTheme ? "#333333" : "#FFFFFF"} />
-                <Text style={[styles.addTaskText, isLightTheme && styles.lightAddTaskText]}>Add task for tomorrow</Text>
+                <AntDesign name="plus" size={20} color="#CCCCCC" />
+                <Text style={styles.addTaskText}>Add Tomorrow Task</Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.addTaskWrapperContainer}>
@@ -832,7 +832,7 @@ const SummaryScreen = ({ navigation }) => {
               </View>
             )}
             
-            {/* 明日任务列表 */}
+            {/* Tomorrow task list */}
             {tomorrowTasks.length > 0 ? (
               <>
                 <FlatList
@@ -892,9 +892,9 @@ const SummaryScreen = ({ navigation }) => {
               <Text style={styles.emptyText}>No tasks for tomorrow</Text>
             )}
           </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+        </Animated.ScrollView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -903,153 +903,127 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  lightContainer: {
-    backgroundColor: '#f5f5f5',
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 15,
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
+    paddingVertical: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#222',
   },
-  lightHeader: {
-    borderBottomColor: '#e0e0e0',
+  headerButton: {
+    width: 24,
   },
-  backButton: {
-    position: 'absolute',
-    left: 20,
+  headerButtonText: {
+    color: '#FFFFFF',
+    fontSize: 26,
+    fontWeight: 'bold',
   },
   headerTitle: {
-    fontSize: 20,
+    color: '#FFFFFF',
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
     textAlign: 'center',
   },
-  lightHeaderTitle: {
-    color: '#333',
+  scrollContent: {
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 50,
+  },
+  headerContainer: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
+  },
+  headerSubtitle: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 8,
+    letterSpacing: 2,
+    textAlign: 'center',
+  },
+  dateText: {
+    color: '#aaa',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  statsContainer: {
+    marginBottom: 20,
   },
   statsCard: {
     backgroundColor: '#111',
-    borderRadius: 10,
-    margin: 15,
-    padding: 15,
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  lightStatsCard: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   statItem: {
-    marginBottom: 15,
+    marginBottom: 20,
   },
   statTitle: {
-    fontSize: 16,
     color: '#aaa',
+    fontSize: 16,
     marginBottom: 10,
   },
-  lightStatTitle: {
-    color: '#666',
-  },
   progressContainer: {
-    height: 20,
+    height: 24,
     backgroundColor: '#222',
-    borderRadius: 10,
+    borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 15,
-  },
-  lightProgressContainer: {
-    backgroundColor: '#e0e0e0',
+    position: 'relative',
   },
   progressBar: {
-    height: '100%',
-    backgroundColor: '#4CAF50',
+    height: 24,
+    backgroundColor: '#CCCCCC', // Monochrome light gray
+    borderRadius: 12,
   },
   progressText: {
     position: 'absolute',
     right: 10,
-    top: 0,
+    top: 2,
     color: '#fff',
     fontSize: 14,
-    lineHeight: 20,
-  },
-  lightProgressText: {
-    color: '#333',
+    fontWeight: '600',
   },
   statDivider: {
-    width: 1,
-    height: '100%',
+    height: 1,
     backgroundColor: '#333',
-  },
-  lightStatDivider: {
-    backgroundColor: '#e0e0e0',
-  },
-  statRowContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statItemHalf: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  verticalDivider: {
-    width: 1,
-    backgroundColor: '#333',
-    marginHorizontal: 15,
-  },
-  lightVerticalDivider: {
-    backgroundColor: '#e0e0e0',
+    marginVertical: 20,
   },
   focusTimeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 5,
   },
   focusTimeText: {
-    fontSize: 24,
-    fontWeight: 'bold',
     color: '#fff',
-    textAlign: 'center',
-  },
-  lightFocusTimeText: {
-    color: '#333',
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 10,
   },
   sectionContainer: {
-    marginTop: 20,
-    paddingHorizontal: 15,
+    marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
     color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
     marginBottom: 15,
-  },
-  lightSectionTitle: {
-    color: '#333',
+    marginTop: 20,
+    letterSpacing: 1,
   },
   taskItem: {
+    flexDirection: 'row',
     backgroundColor: '#111',
     borderRadius: 8,
-    padding: 15,
-    marginBottom: 10,
-    flexDirection: 'row',
+    padding: 20,
+    marginBottom: 15,
     alignItems: 'center',
-  },
-  lightTaskItem: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   taskPriorityIndicator: {
     width: 4,
@@ -1061,46 +1035,62 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   taskText: {
-    flex: 1,
-    fontSize: 16,
     color: '#fff',
+    fontSize: 16,
   },
-  lightTaskText: {
-    color: '#333',
+  taskTagsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  taskTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#333333',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    marginRight: 6,
+    marginBottom: 4,
+  },
+  frogTag: {
+    backgroundColor: '#2E8B57', // Green background for frog tag
+  },
+  importantTag: {
+    backgroundColor: '#3D2645', // Purple background for important tag
+  },
+  urgentTag: {
+    backgroundColor: '#832232', // Red background for urgent tag
+  },
+  taskTagText: {
+    color: '#fff',
+    fontSize: 12,
+    marginLeft: 4,
   },
   emptyText: {
-    fontSize: 16,
-    color: '#777',
+    color: '#666666',
+    fontSize: 14,
     textAlign: 'center',
-    marginVertical: 20,
     fontStyle: 'italic',
-  },
-  lightEmptyText: {
-    color: '#999',
-  },
-  addTaskButton: {
-    backgroundColor: '#333',
-    borderRadius: 8,
-    padding: 15,
-    alignItems: 'center',
     marginTop: 10,
   },
-  lightAddTaskButton: {
-    backgroundColor: '#e0e0e0',
+  addTaskButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#111',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 20,
   },
   addTaskText: {
+    color: '#CCCCCC',
     fontSize: 16,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  lightAddTaskText: {
-    color: '#333',
+    marginLeft: 8,
   },
   addTaskContainer: {
     backgroundColor: '#111',
     borderRadius: 8,
     padding: 15,
-    marginBottom: 10,
+    marginBottom: 20,
   },
   taskInput: {
     color: '#fff',
@@ -1169,22 +1159,37 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 6,
   },
-  tagButtonsContainer: {
+  statRowContainer: {
     flexDirection: 'row',
-    marginTop: 15,
     justifyContent: 'space-between',
   },
-  tagButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  statItemHalf: {
+    flex: 1,
+    paddingHorizontal: 10,
+  },
+  verticalDivider: {
+    width: 1,
     backgroundColor: '#333',
+    alignSelf: 'stretch',
+  },
+  tagButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+  },
+  tagButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 5,
+    backgroundColor: '#000000',
+    borderWidth: 1,
+    borderColor: '#666666',
+    marginRight: 10,
   },
   tagButtonActive: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
   },
   frogButtonActive: {
     backgroundColor: '#FFFFFF',
@@ -1216,10 +1221,10 @@ const styles = StyleSheet.create({
     height: Platform.OS === 'ios' ? 140 : 120,
   },
   timeTag: {
-    backgroundColor: '#555555', // 时间标签的灰色背景
+    backgroundColor: '#555555', // Time tag gray background
   },
   reminderTag: {
-    backgroundColor: '#9C27B0', // 紫色背景
+    backgroundColor: '#9C27B0', // Purple background
   },
   reminderOptionsContainer: {
     marginTop: 15,

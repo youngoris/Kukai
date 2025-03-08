@@ -221,7 +221,7 @@ export default function FocusScreen({ navigation }) {
     setPomodoroCount((prev) => prev + 1);
     Vibration.vibrate(500);
     
-    // 保存番茄钟数据到AsyncStorage
+    // Save pomodoro data to AsyncStorage
     try {
       // 获取当前日期
       const today = new Date().toISOString().split('T')[0];
@@ -234,7 +234,7 @@ export default function FocusScreen({ navigation }) {
         pomodoros = JSON.parse(pomodorosJson);
       }
       
-      // 添加新完成的番茄钟记录
+      // Add newly completed pomodoro record
       pomodoros.push({
         id: Date.now().toString(),
         date: today,
@@ -242,7 +242,7 @@ export default function FocusScreen({ navigation }) {
         timestamp: new Date().toISOString()
       });
       
-      // 保存更新后的番茄钟数据
+      // Save updated pomodoro data
       await AsyncStorage.setItem('pomodoros', JSON.stringify(pomodoros));
       
       console.log('保存番茄钟记录成功');
