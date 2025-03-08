@@ -736,44 +736,73 @@ const SettingsScreen = ({ navigation }) => {
   };
   
   const clearAllData = async () => {
-    try {
-      // Get all keys
-      const allKeys = await AsyncStorage.getAllKeys();
-      
-      // Filter out keys that shouldn't be deleted
-      const keysToRemove = allKeys.filter(key => 
-        !key.startsWith('expo.') && 
-        !key.startsWith('google_drive_')
-      );
-      
-      // Remove all data
-      await AsyncStorage.multiRemove(keysToRemove);
-      
-      // Reset state
-      setSettings({
-        darkMode: true,
-        notifications: true,
-        journalReminder: true,
-        journalReminderTime: new Date(),
-        focusDuration: 25,
-        breakDuration: 5,
-        longBreakDuration: 15,
-        longBreakInterval: 4,
-        autoStartBreaks: false,
-        autoStartPomodoros: false,
-        soundEnabled: true,
-        vibrationEnabled: true,
-        meditationDuration: 10,
-        meditationSound: 'silence',
-        meditationEndSound: 'bell',
-        meditationBackgroundColor: '#1E1E1E',
-      });
-      
-      Alert.alert('Data Cleared', 'All data has been deleted.');
-    } catch (error) {
-      console.error('Error clearing data:', error);
-      Alert.alert('Error', 'An error occurred while clearing data.');
-    }
+    // Show confirmation dialog before clearing data
+    Alert.alert(
+      'Clear All Data',
+      'This will permanently delete all your data including tasks, journals, and settings. This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Clear All Data',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Get all keys
+              const allKeys = await AsyncStorage.getAllKeys();
+              
+              // Filter out keys that shouldn't be deleted
+              const keysToRemove = allKeys.filter(key => 
+                !key.startsWith('expo.') && 
+                !key.startsWith('google_drive_')
+              );
+              
+              // Remove all data
+              await AsyncStorage.multiRemove(keysToRemove);
+              
+              // Reset state to defaults
+              setDarkMode(true);
+              setNotificationsEnabled(true);
+              setJournalReminder(false);
+              setJournalReminderTime(new Date(new Date().setHours(21, 0, 0, 0)));
+              setFocusDuration(25);
+              setBreakDuration(5);
+              setLongBreakDuration(15);
+              setLongBreakInterval(4);
+              setAutoStartNextFocus(false);
+              setMeditationDuration(10);
+              setSelectedSoundTheme('rain');
+              setAppTheme('dark');
+              setFontSizeScale('medium');
+              setIncludeWeather(true);
+              setIncludeLocation(true);
+              setMarkdownSupport(true);
+              setSelectedJournalTemplate('default');
+              setMeditationReminder(false);
+              setMeditationReminderTime(new Date(new Date().setHours(8, 30, 0, 0)));
+              setFocusNotifications(true);
+              setDifferentWeekendSettings(false);
+              setSyncEnabled(false);
+              
+              // Reset notification settings
+              setTaskNotifications(true);
+              setNotificationSound('default');
+              setQuietHoursEnabled(false);
+              setQuietHoursStart(new Date().setHours(22, 0, 0, 0));
+              setQuietHoursEnd(new Date().setHours(7, 0, 0, 0));
+              
+              Alert.alert('Data Cleared', 'All app data has been deleted.');
+            } catch (error) {
+              console.error('Error clearing data:', error);
+              Alert.alert('Error', 'An error occurred while clearing data.');
+            }
+          }
+        }
+      ],
+      { cancelable: true }
+    );
   };
 
   const showAboutInfo = () => {

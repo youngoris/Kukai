@@ -9,6 +9,7 @@ import {
   AppState,
   Modal,
   Pressable,
+  Platform,
 } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Progress from 'react-native-progress';
@@ -488,6 +489,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF', 
     fontSize: 60, 
     fontWeight: '200',
+    fontFamily: Platform.OS === 'ios' 
+      ? 'Courier New' // iOS上更美观的等宽字体
+      : 'monospace',
   },
   timerButton: { backgroundColor: '#FFFFFF', padding: 20, borderRadius: 40 },
   timerButtonText: { color: '#000000', fontSize: 20, fontWeight: 'bold' },

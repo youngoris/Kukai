@@ -62,14 +62,14 @@ const configureAudioSession = async () => {
 
 // Define sound themes
 const soundThemes = [
-  { id: 'silence', label: 'Silence', icon: 'volume-mute', source: null },
-  { id: 'whitenoise', label: 'Bright', icon: 'sunny', source: require('../assets/whitenoise.m4a') },
-  { id: 'brownnoise', label: 'Dark', icon: 'moon', source: require('../assets/brownnoise.m4a') },
-  { id: 'rain', label: 'Rain', icon: 'rainy', source: require('../assets/rain.m4a') },
-  { id: 'forest', label: 'Forest', icon: 'leaf', source: require('../assets/forest.m4a') },
-  { id: 'ocean', label: 'Ocean', icon: 'water', source: require('../assets/ocean.m4a') },
-  { id: 'fire', label: 'Fire', icon: 'flame', source: require('../assets/fire.m4a') },
-  { id: 'plane', label: 'Plane', icon: 'airplane', source: require('../assets/plane.m4a') }
+  { id: 'silence', label: 'Silence', icon: 'volume-off', source: null },
+  { id: 'whitenoise', label: 'Bright', icon: 'sunny', source: require('../../assets/whitenoise.m4a') },
+  { id: 'brownnoise', label: 'Dark', icon: 'moon', source: require('../../assets/brownnoise.m4a') },
+  { id: 'rain', label: 'Rain', icon: 'rainy', source: require('../../assets/rain.m4a') },
+  { id: 'forest', label: 'Forest', icon: 'leaf', source: require('../../assets/forest.m4a') },
+  { id: 'ocean', label: 'Ocean', icon: 'water', source: require('../../assets/ocean.m4a') },
+  { id: 'fire', label: 'Fire', icon: 'flame', source: require('../../assets/fire.m4a') },
+  { id: 'plane', label: 'Plane', icon: 'airplane', source: require('../../assets/plane.m4a') }
 ];
 
 // Define quick duration options
@@ -1037,6 +1037,9 @@ const styles = StyleSheet.create({
     color: COLORS.text.primary,
     fontSize: 80,
     fontWeight: '200',
+    fontFamily: Platform.OS === 'ios' 
+      ? 'Courier New' // iOS上更美观的等宽字体
+      : 'monospace',
   },
   countdownSubtext: {
     color: COLORS.text.secondary,
@@ -1056,6 +1059,9 @@ const styles = StyleSheet.create({
     color: COLORS.text.primary,
     fontSize: 36,
     fontWeight: '200',
+    fontFamily: Platform.OS === 'ios' 
+      ? 'Courier New' // iOS上更美观的等宽字体
+      : 'monospace',
   },
   durationText: {
     color: COLORS.text.secondary,

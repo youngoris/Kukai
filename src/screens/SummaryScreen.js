@@ -18,7 +18,7 @@ import {
 import { AntDesign, MaterialIcons, Ionicons, Feather, Octicons } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import FrogIcon from '../assets/frog.svg';
+import FrogIcon from '../../assets/frog.svg';
 import CustomDateTimePicker from '../components/CustomDateTimePicker';
 
 const PRIORITY_COLORS = {
