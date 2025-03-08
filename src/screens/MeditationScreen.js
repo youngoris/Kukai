@@ -31,6 +31,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // Ignore specific warnings
 LogBox.ignoreLogs(["Animated: `useNativeDriver`"]);
 
+// Check if running on web platform
+const isWeb = Platform.OS === 'web';
+
 // Audio configuration - Adjust these values to customize the audio experience
 // CROSSFADE_DURATION: Controls how smooth the transition is between loops (in milliseconds)
 // - Lower values (300-500ms): Quicker transitions but might be noticeable
@@ -46,6 +49,12 @@ const TIMER_SIZE = width * 0.8;
 
 // Audio session configuration for seamless playback
 const configureAudioSession = async () => {
+  // Skip audio configuration on web platform
+  if (isWeb) {
+    console.log("Audio session configuration skipped on web platform");
+    return;
+  }
+  
   try {
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
@@ -261,13 +270,19 @@ const MeditationScreen = ({ navigation }) => {
 
   // Function to release all audio resources
   const releaseAllAudioResources = async () => {
+    // Skip on web platform
+    if (isWeb) {
+      console.log("Audio resources release skipped on web platform");
+      return;
+    }
+    
     try {
       // If already releasing, avoid duplicate execution
       if (isAudioReleasing) {
         console.log("[Audio Debug] Release already in progress, skipping");
         return;
       }
-
+      
       setIsAudioReleasing(true);
       console.log(
         "[Audio Debug] Release called from:",
@@ -313,6 +328,12 @@ const MeditationScreen = ({ navigation }) => {
   useEffect(() => {
     const loadSound = async () => {
       try {
+        // Skip loading sound on web platform to prevent errors
+        if (isWeb) {
+          console.log("Sound loading skipped on web platform");
+          return;
+        }
+        
         const { sound } = await Audio.Sound.createAsync(
           {
             uri: "https://assets.mixkit.co/active_storage/sfx/2867/2867-preview.mp3",
@@ -338,6 +359,12 @@ const MeditationScreen = ({ navigation }) => {
   useEffect(() => {
     const initializeSeamlessAudio = async () => {
       try {
+        // Skip audio initialization on web platform
+        if (isWeb) {
+          console.log("Seamless audio initialization skipped on web platform");
+          return;
+        }
+        
         // Don't load sounds if silent mode or not meditating
         if (selectedSoundTheme === "silence" || !isMeditating) {
           // Only release resources if we had resources loaded previously
@@ -678,6 +705,68 @@ const MeditationScreen = ({ navigation }) => {
     return `${mins < 10 ? "0" : ""}${mins}:${secs < 10 ? "0" : ""}${secs}`;
   }, []);
 
+  // Play completion sound
+  const playCompletionSound = useCallback(async () => {
+    try {
+      // Skip on web platform
+      if (isWeb) {
+        console.log("Completion sound playback skipped on web platform");
+        return;
+      }
+      
+      if (sound) {
+        await sound.replayAsync();
+      }
+    } catch (error) {
+      console.log("Error playing sound:", error);
+    }
+  }, [sound, isWeb]);
+
+  // Save meditation session to storage
+  const saveMeditationSession = useCallback(
+    async (durationInMinutes) => {
+      try {
+        // Skip saving on web platform
+        if (isWeb) {
+          console.log("Saving meditation session skipped on web platform");
+          return;
+        }
+        
+        // Get current date in YYYY-MM-DD format
+        const today = new Date().toISOString().split("T")[0];
+
+        // Create new session object
+        const newSession = {
+          date: today,
+          duration: durationInMinutes,
+          soundTheme: selectedSoundTheme,
+          timestamp: new Date().toISOString(),
+        };
+
+        // Get existing sessions or initialize empty array
+        const sessionsJson = await AsyncStorage.getItem("meditation_sessions");
+        let sessions = [];
+        if (sessionsJson) {
+          sessions = JSON.parse(sessionsJson);
+        }
+
+        // Add new session
+        sessions.push(newSession);
+
+        // Save updated sessions
+        await AsyncStorage.setItem(
+          "meditation_sessions",
+          JSON.stringify(sessions),
+        );
+
+        console.log("Meditation session saved successfully");
+      } catch (error) {
+        console.error("Error saving meditation session:", error);
+      }
+    },
+    [selectedSoundTheme, isWeb],
+  );
+
   // End meditation
   const endMeditation = useCallback(
     (callback, resetDuration = true) => {
@@ -740,68 +829,6 @@ const MeditationScreen = ({ navigation }) => {
     [endMeditation, saveMeditationSession, playCompletionSound],
   );
 
-  // Save meditation session to storage
-  const saveMeditationSession = useCallback(
-    async (durationInMinutes) => {
-      try {
-        // Get current date in YYYY-MM-DD format
-        const today = new Date().toISOString().split("T")[0];
-
-        // Create new session object
-        const newSession = {
-          date: today,
-          duration: durationInMinutes,
-          soundTheme: selectedSoundTheme,
-          timestamp: new Date().toISOString(),
-        };
-
-        // Load existing meditation sessions
-        let sessions = [];
-        const savedSessions = await AsyncStorage.getItem("meditationSessions");
-        if (savedSessions) {
-          sessions = JSON.parse(savedSessions);
-        }
-
-        // Add new session and save back to storage
-        sessions.push(newSession);
-        await AsyncStorage.setItem(
-          "meditationSessions",
-          JSON.stringify(sessions),
-        );
-
-        // Also update completed tasks for today
-        const completedTasksKey = `completed_${today}`;
-        let completedTasks = { meditation: true };
-
-        const savedTasks = await AsyncStorage.getItem(completedTasksKey);
-        if (savedTasks) {
-          completedTasks = { ...JSON.parse(savedTasks), meditation: true };
-        }
-
-        await AsyncStorage.setItem(
-          completedTasksKey,
-          JSON.stringify(completedTasks),
-        );
-
-        console.log("Meditation session saved successfully");
-      } catch (error) {
-        console.log("Error saving meditation session:", error);
-      }
-    },
-    [selectedSoundTheme],
-  );
-
-  // Play completion sound
-  const playCompletionSound = useCallback(async () => {
-    try {
-      if (sound) {
-        await sound.replayAsync();
-      }
-    } catch (error) {
-      console.log("Error playing sound:", error);
-    }
-  }, [sound]);
-
   // Navigation handler - with confirmation if needed
   const goBack = useCallback(() => {
     if (isMeditating || isCountingDown) {
@@ -834,6 +861,44 @@ const MeditationScreen = ({ navigation }) => {
     navigation,
     endMeditation,
   ]);
+
+  // Render Web compatibility message if on web platform
+  if (isWeb) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.navigate("Home")}
+          >
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>MEDITATION</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        
+        <View style={[styles.contentContainer, {justifyContent: 'center', alignItems: 'center'}]}>
+          <MaterialIcons name="web" size={64} color={COLORS.PRIMARY} />
+          <Text style={[styles.title, {marginTop: 20}]}>
+            Web Platform Notice
+          </Text>
+          <Text style={[styles.subtitle, {textAlign: 'center', marginHorizontal: 40, marginTop: 10}]}>
+            The meditation experience is optimized for mobile devices.
+            For the best experience, please use the Kukai app on iOS or Android.
+          </Text>
+          
+          <View style={{marginTop: 40}}>
+            <TouchableOpacity
+              style={styles.webActionButton}
+              onPress={() => navigation.navigate("Home")}
+            >
+              <Text style={styles.webActionButtonText}>Return to Home</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -1374,6 +1439,31 @@ const styles = StyleSheet.create({
   },
   timerCircle: {
     marginBottom: SPACING.xl,
+  },
+  contentContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  title: {
+    color: COLORS.text.primary,
+    fontSize: FONT_SIZE.xl,
+    fontWeight: "bold",
+  },
+  subtitle: {
+    color: COLORS.text.secondary,
+    fontSize: FONT_SIZE.m,
+  },
+  webActionButton: {
+    backgroundColor: COLORS.text.primary,
+    paddingVertical: SPACING.m,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: LAYOUT.borderRadius.m,
+  },
+  webActionButtonText: {
+    color: COLORS.background,
+    fontWeight: "600",
+    fontSize: FONT_SIZE.m,
   },
 });
 

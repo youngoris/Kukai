@@ -36,6 +36,7 @@ const SummaryScreen = ({ navigation }) => {
   const [completedTasks, setCompletedTasks] = useState([]);
   const [pendingTasks, setPendingTasks] = useState([]);
   const [completionRate, setCompletionRate] = useState(0);
+  const [totalFocusMinutes, setTotalFocusMinutes] = useState(0);
   const [totalMeditationMinutes, setTotalMeditationMinutes] = useState(0);
   const [newTomorrowTask, setNewTomorrowTask] = useState("");
   const [tomorrowTasks, setTomorrowTasks] = useState([]);

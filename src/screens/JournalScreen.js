@@ -22,6 +22,7 @@ const JournalScreen = ({ navigation }) => {
   const [streak, setStreak] = useState(0);
   const [savedJournal, setSavedJournal] = useState("");
   const [savedJournalMeta, setSavedJournalMeta] = useState(null);
+  const [savedToday, setSavedToday] = useState(false);
   const [allJournals, setAllJournals] = useState([]);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;

@@ -2,6 +2,9 @@ import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
+// Add isWeb check
+const isWeb = Platform.OS === 'web';
+
 // Configure notification handler
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -122,39 +125,48 @@ class NotificationService {
 
   // Request notification permissions
   async requestPermissions() {
-    const { status: existingStatus } =
-      await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-
-    // If no permission, request permission
-    if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+    if (isWeb) {
+      console.log("Notification permissions skipped on web platform");
+      return true;
     }
-
-    // On iOS, additional notification permission is needed
-    if (Platform.OS === "ios") {
-      await Notifications.setNotificationCategoryAsync("default", [
-        {
-          identifier: "complete",
-          buttonTitle: "Complete",
-          options: {
-            isDestructive: false,
-            isAuthenticationRequired: false,
+    
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      
+      // If no permission, request permission
+      if (existingStatus !== "granted") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      
+      // On iOS, additional notification permission is needed
+      if (Platform.OS === "ios") {
+        await Notifications.setNotificationCategoryAsync("default", [
+          {
+            identifier: "complete",
+            buttonTitle: "Complete",
+            options: {
+              isDestructive: false,
+              isAuthenticationRequired: false,
+            },
           },
-        },
-        {
-          identifier: "snooze",
-          buttonTitle: "Snooze",
-          options: {
-            isDestructive: false,
-            isAuthenticationRequired: false,
+          {
+            identifier: "snooze",
+            buttonTitle: "Snooze",
+            options: {
+              isDestructive: false,
+              isAuthenticationRequired: false,
+            },
           },
-        },
-      ]);
+        ]);
+      }
+      
+      return finalStatus === "granted";
+    } catch (error) {
+      console.error('Error requesting notification permissions:', error);
+      return false;
     }
-
-    return finalStatus === "granted";
   }
 
   // Check notification permissions
@@ -636,6 +648,12 @@ class NotificationService {
 
   // Initialize notification system
   async initialize() {
+    // Skip on web platform
+    if (isWeb) {
+      console.log("Notification system initialization skipped on web platform");
+      return true;
+    }
+    
     // Load configuration
     try {
       const savedConfig = await AsyncStorage.getItem("notificationConfig");
@@ -661,6 +679,12 @@ class NotificationService {
 
   // Configure notification system to avoid immediate trigger
   async configureNotifications() {
+    // Skip on web platform
+    if (isWeb) {
+      console.log("Notification configuration skipped on web platform");
+      return;
+    }
+    
     try {
       // Set notification handler
       Notifications.setNotificationHandler({
