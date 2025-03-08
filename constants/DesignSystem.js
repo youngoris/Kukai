@@ -2,7 +2,7 @@ import { Dimensions } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
-// 间距常量
+// Spacing constants
 export const SPACING = {
   xs: 4,
   s: 8,
@@ -12,7 +12,7 @@ export const SPACING = {
   xxl: 48
 };
 
-// 字体大小常量
+// Font size constants
 export const FONT_SIZE = {
   xs: 12,
   s: 14,
@@ -23,7 +23,7 @@ export const FONT_SIZE = {
   xxxl: 40
 };
 
-// 字体样式常量
+// Font family constants
 export const FONT_FAMILY = {
   light: 'Roboto_300Light',
   regular: 'Roboto_400Regular',
@@ -31,7 +31,7 @@ export const FONT_FAMILY = {
   bold: 'Roboto_700Bold'
 };
 
-// 颜色常量
+// Color constants
 export const COLORS = {
   background: '#000',
   card: '#111',
@@ -46,7 +46,7 @@ export const COLORS = {
   warning: '#feca57'
 };
 
-// 布局常量
+// Layout constants
 export const LAYOUT = {
   screenWidth: width,
   screenHeight: height,
@@ -59,7 +59,7 @@ export const LAYOUT = {
   }
 };
 
-// 阴影常量
+// Shadow constants
 export const SHADOWS = {
   small: {
     shadowColor: '#000',
@@ -77,7 +77,7 @@ export const SHADOWS = {
   }
 };
 
-// 动画持续时间
+// Animation duration
 export const ANIMATION = {
   duration: {
     fast: 300,
@@ -85,6 +85,6 @@ export const ANIMATION = {
     slow: 800
   },
   easing: {
-    // 可以添加不同的缓动函数
+    // Can add different easing functions
   }
 }; 

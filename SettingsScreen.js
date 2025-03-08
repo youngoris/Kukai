@@ -47,7 +47,7 @@ const SettingsScreen = ({ navigation }) => {
   const [journalReminderTime, setJournalReminderTime] = useState(new Date(new Date().setHours(21, 0, 0, 0)));
   const [selectedJournalTemplate, setSelectedJournalTemplate] = useState('default');
   
-  // 冥想设置
+  // Meditation Settings
   const [meditationReminder, setMeditationReminder] = useState(false);
   const [meditationReminderTime, setMeditationReminderTime] = useState(new Date(new Date().setHours(8, 30, 0, 0)));
   
@@ -60,8 +60,8 @@ const SettingsScreen = ({ navigation }) => {
   
   // UI States
   const [isTimePickerVisible, setTimePickerVisible] = useState(false);
-  const [currentTimePickerMode, setCurrentTimePickerMode] = useState('journalReminder'); // 'journalReminder' 或 'meditationReminder'
-  const [tempSelectedTime, setTempSelectedTime] = useState(null); // 临时存储用户选择的时间
+  const [currentTimePickerMode, setCurrentTimePickerMode] = useState('journalReminder'); // 'journalReminder' or 'meditationReminder'
+  const [tempSelectedTime, setTempSelectedTime] = useState(null); // Temporary storage for user selected time
   const [isExportModalVisible, setExportModalVisible] = useState(false);
   const [exportPassword, setExportPassword] = useState('');
   
@@ -72,10 +72,10 @@ const SettingsScreen = ({ navigation }) => {
   const [currentSetter, setCurrentSetter] = useState(null);
   const [currentModalTitle, setCurrentModalTitle] = useState('');
   
-  // 添加一个状态来跟踪设置是否已更改
+  // Add a state to track if settings have changed
   const [settingsChanged, setSettingsChanged] = useState(false);
   
-  // 添加一个防抖定时器引用
+  // Add a debounce timer reference
   const saveTimeoutRef = useRef(null);
   
   // Sound theme options
@@ -227,7 +227,7 @@ const SettingsScreen = ({ navigation }) => {
         journalReminderTime: journalReminderTime.toISOString(),
         selectedJournalTemplate,
         
-        // 冥想提醒设置
+        // Meditation reminder settings
         meditationReminder,
         meditationReminderTime: meditationReminderTime.toISOString(),
         
@@ -238,7 +238,7 @@ const SettingsScreen = ({ navigation }) => {
         notificationsEnabled,
         syncEnabled,
         
-        // 加载通知设置
+        // Notification settings
         taskNotifications,
         notificationSound,
         quietHoursEnabled,
@@ -249,21 +249,21 @@ const SettingsScreen = ({ navigation }) => {
       console.log('Auto-saving settings:', settings);
       await AsyncStorage.setItem('userSettings', JSON.stringify(settings));
       
-      // 设置日志提醒通知（如果启用）
+      // Set journal reminder notification if enabled
       if (journalReminder && notificationsEnabled) {
         await scheduleJournalReminder();
       } else {
         await notificationService.scheduleJournalReminder(0, 0, false);
       }
       
-      // 设置冥想提醒通知（如果启用）
+      // Set meditation reminder notification (if enabled)
       if (meditationReminder && notificationsEnabled) {
         await scheduleMeditationReminder();
       } else {
         await notificationService.scheduleMeditationReminder(0, 0, false);
       }
       
-      // 保存通知设置
+      // Save notification settings
       await AsyncStorage.setItem('taskNotifications', JSON.stringify(taskNotifications));
       await AsyncStorage.setItem('notificationSound', notificationSound);
       await AsyncStorage.setItem('quietHoursEnabled', JSON.stringify(quietHoursEnabled));
@@ -441,11 +441,11 @@ const SettingsScreen = ({ navigation }) => {
       
       // 延迟显示保存成功的提示，避免与可能的通知冲突
       setTimeout(() => {
-        Alert.alert('设置已保存', '您的偏好设置已更新。');
+        Alert.alert('Settings Saved', 'Your preferences have been updated.');
       }, 1000);
     } catch (error) {
       console.error('Error saving settings:', error);
-      Alert.alert('错误', '无法保存设置。请重试。');
+      Alert.alert('Error', 'Unable to save settings. Please try again.');
     }
   };
   
@@ -563,21 +563,21 @@ const SettingsScreen = ({ navigation }) => {
   
   // Function to open dropdown modal
   const openOptionModal = (options, currentVal, setterFunction, title) => {
-    // 确保options是一个数组
+    // Ensure options is an array
     if (!Array.isArray(options) || options.length === 0) {
       console.error('Error: options must be a non-empty array', options);
       Alert.alert('Error', 'An error occurred. Please try again later.');
       return;
     }
     
-    // 确保setterFunction是一个函数
+    // Ensure setterFunction is a function
     if (typeof setterFunction !== 'function') {
       console.error('Error: setterFunction is not a function', setterFunction);
       Alert.alert('Error', 'An error occurred. Please try again later.');
       return;
     }
     
-    // 确保title是一个字符串
+    // Ensure title is a string
     const modalTitle = typeof title === 'string' ? title : 'Select an option';
     
     setCurrentOptions(options);
@@ -618,7 +618,7 @@ const SettingsScreen = ({ navigation }) => {
           return setNotificationSound;
         default:
           console.warn(`No setter found for label: ${label}`);
-          // 返回一个空函数而不是null，避免类型错误
+          // Return an empty function instead of null to avoid type errors
           return (val) => {
             console.warn(`Attempted to set value for unknown setting: ${label}`, val);
           };
@@ -647,7 +647,7 @@ const SettingsScreen = ({ navigation }) => {
   const renderSettingSwitch = (value, setter, label, description = null) => {
     const toggleSwitch = () => {
       setter(!value);
-      setSettingsChanged(true); // 标记设置已更改
+      setSettingsChanged(true); // Mark settings as changed
     };
     
     return (
@@ -850,7 +850,7 @@ const SettingsScreen = ({ navigation }) => {
         >
           <MaterialIcons name="arrow-back" size={24} color={appTheme === 'light' ? "#000000" : "#FFFFFF"} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, appTheme === 'light' && styles.lightText]}>Settings</Text>
+        <Text style={[styles.headerTitle, appTheme === 'light' && styles.lightText]}>SETTINGS</Text>
         <View style={styles.headerRight} />
       </View>
       
@@ -860,7 +860,7 @@ const SettingsScreen = ({ navigation }) => {
       >
         {/* Meditation Settings */}
         <View style={styles.settingSection}>
-          <Text style={[styles.sectionTitle, appTheme === 'light' && styles.lightSectionTitle]}>Meditation Settings</Text>
+          <Text style={[styles.sectionTitle, appTheme === 'light' && styles.lightSectionTitle]}>MEDITATION SETTINGS</Text>
           
           {renderDropdownOption(
             meditationDuration, 
@@ -896,7 +896,7 @@ const SettingsScreen = ({ navigation }) => {
         
         {/* Focus Settings */}
         <View style={styles.settingSection}>
-          <Text style={[styles.sectionTitle, appTheme === 'light' && styles.lightSectionTitle]}>Focus Settings</Text>
+          <Text style={[styles.sectionTitle, appTheme === 'light' && styles.lightSectionTitle]}>FOCUS SETTINGS</Text>
           
           {renderDropdownOption(
             focusDuration,
@@ -950,7 +950,7 @@ const SettingsScreen = ({ navigation }) => {
         
         {/* Journal Settings */}
         <View style={styles.settingSection}>
-          <Text style={[styles.sectionTitle, appTheme === 'light' && styles.lightSectionTitle]}>Journal Settings</Text>
+          <Text style={[styles.sectionTitle, appTheme === 'light' && styles.lightSectionTitle]}>JOURNAL SETTINGS</Text>
           
           {renderSettingSwitch(
             includeWeather,
@@ -996,7 +996,7 @@ const SettingsScreen = ({ navigation }) => {
         
         {/* General Settings */}
         <View style={styles.settingSection}>
-          <Text style={[styles.sectionTitle, appTheme === 'light' && styles.lightSectionTitle]}>General Settings</Text>
+          <Text style={[styles.sectionTitle, appTheme === 'light' && styles.lightSectionTitle]}>GENERAL SETTINGS</Text>
           
           {renderDropdownOption(
             appTheme,
@@ -1025,9 +1025,9 @@ const SettingsScreen = ({ navigation }) => {
           )}
         </View>
         
-        {/* 通知设置部分 */}
+        {/* Notification Settings Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notification Settings</Text>
+          <Text style={styles.sectionTitle}>NOTIFICATION SETTINGS</Text>
           
           {renderSettingSwitch(
             notificationsEnabled,
@@ -1106,7 +1106,7 @@ const SettingsScreen = ({ navigation }) => {
         
         {/* Data Management Section */}
         <View style={styles.settingSection}>
-          <Text style={[styles.sectionTitle, appTheme === 'light' && styles.lightSectionTitle]}>Data Management</Text>
+          <Text style={[styles.sectionTitle, appTheme === 'light' && styles.lightSectionTitle]}>DATA MANAGEMENT</Text>
           
           {renderSettingSwitch(
             syncEnabled,
@@ -1140,14 +1140,14 @@ const SettingsScreen = ({ navigation }) => {
             exportData,
             'Local Backup',
             'save-alt',
-            '备份数据到本地文件 (推荐无Apple开发者账号用户使用)'
+            'Backup data to local file (Recommended for users without an Apple developer account)'
           )}
           
           {renderActionButton(
             importData,
             'Restore from Local',
             'restore',
-            '从本地备份文件恢复数据'
+            'Restore data from local backup file'
           )}
           
           {/* Clear Data */}
@@ -1161,7 +1161,7 @@ const SettingsScreen = ({ navigation }) => {
         </View>
         
         {/* About Section */}
-        <Text style={styles.sectionTitle}>About</Text>
+        <Text style={styles.sectionTitle}>ABOUT</Text>
         
         {renderActionButton(
           showAboutInfo,

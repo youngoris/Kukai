@@ -30,7 +30,7 @@ class NotificationService {
     };
     this.responseListener = null;
     
-    // 创建通知通道（Android需要）
+    // Create notification channels (required for Android)
     if (Platform.OS === 'android') {
       this.createNotificationChannels();
     }

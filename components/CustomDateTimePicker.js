@@ -3,9 +3,9 @@ import { View, Platform, Button, Modal, TouchableOpacity, Text, StyleSheet } fro
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 /**
- * 平台兼容的日期时间选择器组件
- * 在iOS上直接使用原生DateTimePicker
- * 在Android上使用Modal包装的选择器，避免TurboModule问题
+ * Platform-compatible date time picker component
+ * On iOS, it directly uses the native DateTimePicker
+ * On Android, it uses a Modal-wrapped picker to avoid TurboModule issues
  */
 const CustomDateTimePicker = ({ 
   value, 
@@ -16,18 +16,17 @@ const CustomDateTimePicker = ({
   maximumDate,
   ...props 
 }) => {
-  // 确保value是一个有效的Date对象
+  // Ensure value is a valid Date object
   const ensureDate = (dateValue) => {
     if (!dateValue) return new Date();
     if (dateValue instanceof Date) return dateValue;
-    // 如果是字符串或数字，尝试转换为Date
     return new Date(dateValue);
   };
 
   const [isPickerVisible, setPickerVisible] = useState(false);
   const [tempDate, setTempDate] = useState(ensureDate(value));
   
-  // iOS直接使用原生DateTimePicker
+  // iOS directly uses native DateTimePicker
   if (Platform.OS === 'ios') {
     return (
       <DateTimePicker
@@ -42,12 +41,11 @@ const CustomDateTimePicker = ({
     );
   }
 
-  // Android使用Modal包装的选择器
+  // Android uses Modal-wrapped picker
   const handleAndroidChange = (event, selectedDate) => {
     setPickerVisible(false);
     if (selectedDate) {
       setTempDate(selectedDate);
-      // 使用相同的事件格式调用原始onChange
       onChange(event, selectedDate);
     }
   };
@@ -56,11 +54,11 @@ const CustomDateTimePicker = ({
     setPickerVisible(true);
   };
 
-  // Android的按钮格式化日期显示
+  // Format date display for Android button
   const formatDate = (date) => {
     if (!date) return '';
     
-    // 确保date是Date对象
+    // Ensure date is a Date object
     const safeDate = ensureDate(date);
     
     if (mode === 'date') {

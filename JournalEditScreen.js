@@ -135,11 +135,17 @@ const JournalEditScreen = ({ navigation, route }) => {
         const settings = await AsyncStorage.getItem('userSettings');
         if (settings) {
           const parsedSettings = JSON.parse(settings);
+          
+          // Always load default template content first
+          const defaultTemplateContent = getTemplateContent('default');
+          setJournalText(defaultTemplateContent);
+          
+          // Then check if we need to apply a different template
           if (parsedSettings.selectedJournalTemplate && parsedSettings.selectedJournalTemplate !== 'default') {
             // Check if it's a deleted template
             if (parsedSettings.selectedJournalTemplate === 'morning') {
               setCurrentTemplate('default');
-      } else {
+            } else {
               // Apply selected template
               const templateContent = getTemplateContent(parsedSettings.selectedJournalTemplate);
               if (templateContent) {
@@ -157,6 +163,11 @@ const JournalEditScreen = ({ navigation, route }) => {
           } else {
             setCurrentTemplate('default');
           }
+        } else {
+          // If no settings found, still apply default template
+          const defaultTemplateContent = getTemplateContent('default');
+          setJournalText(defaultTemplateContent);
+          setCurrentTemplate('default');
         }
       }
       

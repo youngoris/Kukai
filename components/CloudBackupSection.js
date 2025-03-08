@@ -14,7 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import googleDriveService from '../services/GoogleDriveService';
 import Constants from 'expo-constants';
 
-// 检查是否运行在Expo Go中
+// Check if running in Expo Go
 const isExpoGo = Constants.appOwnership === 'expo';
 
 const CloudBackupSection = ({ navigation, onBackupComplete }) => {
@@ -75,31 +75,31 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
 
   // Handle Google authentication
   const handleAuthenticate = async () => {
-    // 检查是否在Expo Go中运行
+    // Check if running in Expo Go
     if (isExpoGo) {
       Alert.alert(
-        '功能限制',
-        'Expo Go对Google认证的支持非常有限，可能会导致应用崩溃。\n\n您有以下选择:',
+        'Feature Limitation',
+        'Expo Go has very limited support for Google authentication and may cause the app to crash.\n\nYou have the following options:',
         [
           { 
-            text: '使用本地备份', 
+            text: 'Use Local Backup', 
             onPress: () => {
               Alert.alert(
-                '使用本地备份',
-                '本地备份功能可以将数据导出到文件，而无需Google账号。在设置菜单中您可以找到"本地备份"功能。',
-                [{ text: '了解了' }]
+                'Use Local Backup',
+                'The local backup feature allows you to export data to a file without needing a Google account. You can find the "Local Backup" feature in the settings menu.',
+                [{ text: 'Got it' }]
               );
             }
           },
           { 
-            text: '使用模拟账号', 
+            text: 'Use Mock Account', 
             onPress: () => {
               useMockGoogleAccount();
             }
           },
-          { text: '取消', style: 'cancel' },
+          { text: 'Cancel', style: 'cancel' },
           { 
-            text: '继续尝试', 
+            text: 'Try Anyway', 
             style: 'destructive',
             onPress: () => attemptAuthenticate() 
           }
@@ -120,9 +120,9 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
       setSyncFrequency('daily');
       setLastSyncTime(new Date().toISOString());
       Alert.alert(
-        '已连接模拟账号',
-        '您现在已连接到模拟Google账号。请注意，这只是为了演示界面，实际数据不会上传到云端。请使用本地备份保存重要数据。',
-        [{ text: '了解了' }]
+        'Connected to Mock Account',
+        'You are now connected to a mock Google account. Please note that this is only for interface demonstration, and actual data will not be uploaded to the cloud. Please use local backup to save important data.',
+        [{ text: 'Got it' }]
       );
       setIsLoading(false);
     }, 1500);
@@ -132,40 +132,40 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
   const attemptAuthenticate = async () => {
     setIsLoading(true);
     try {
-      console.log('CloudBackupSection: 开始谷歌认证...');
+      console.log('CloudBackupSection: Starting Google authentication...');
       const success = await googleDriveService.authenticate();
       setIsAuthenticated(success);
       
       if (success) {
-        console.log('CloudBackupSection: 谷歌认证成功');
+        console.log('CloudBackupSection: Google authentication successful');
         loadSyncSettings();
-        Alert.alert('成功', '已成功连接到Google Drive');
+        Alert.alert('Success', 'Successfully connected to Google Drive');
       } else {
-        console.log('CloudBackupSection: 谷歌认证失败');
-        Alert.alert('错误', '无法连接到Google Drive，请重试');
+        console.log('CloudBackupSection: Google authentication failed');
+        Alert.alert('Error', 'Unable to connect to Google Drive, please try again');
       }
     } catch (error) {
-      console.error('CloudBackupSection: 认证错误:', error);
+      console.error('CloudBackupSection: Authentication error:', error);
       
-      // 显示更具体的错误消息
-      let errorMessage = '认证过程中发生错误';
+      // Display more specific error message
+      let errorMessage = 'An error occurred during authentication';
       
       if (error.message.includes('Error DEVELOPER_ERROR')) {
-        errorMessage = '开发者错误: 客户端ID可能无效或配置不正确。请检查应用设置。';
+        errorMessage = 'Developer Error: Client ID may be invalid or incorrectly configured. Please check app settings.';
       } else if (error.message.includes('access_denied')) {
-        errorMessage = '用户拒绝了访问请求';
+        errorMessage = 'User denied the access request';
       } else if (error.message.includes('network')) {
-        errorMessage = '网络错误: 请检查您的网络连接并重试';
+        errorMessage = 'Network Error: Please check your network connection and try again';
       } else if (error.message.includes('client_id')) {
-        errorMessage = '客户端ID错误: Google API配置不正确';
+        errorMessage = 'Client ID Error: Google API configuration is incorrect';
       }
       
-      // 如果在Expo Go中发生错误，添加更多指导信息
+      // If an error occurs in Expo Go, add more guidance
       if (isExpoGo) {
-        errorMessage += '\n\n在Expo Go中使用Google认证可能不稳定。请考虑创建开发构建版本以获得完整功能。';
+        errorMessage += '\n\nUsing Google authentication in Expo Go may be unstable. Consider creating a development build version for full functionality.';
       }
       
-      Alert.alert('认证错误', errorMessage);
+      Alert.alert('Authentication Error', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -467,12 +467,12 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
   return (
     <View style={styles.container}>
       <Text style={styles.sectionDescription}>
-        备份和恢复你的数据到Google Drive
+        Backup and restore data to Google Drive
       </Text>
       
       {!isAuthenticated && (
         <Text style={styles.noDevAccountNote}>
-          注意: 在Expo Go中此功能可能不稳定。如果没有开发者账号，建议使用本地备份或模拟账号。
+          Note: This feature may be unstable in Expo Go. If you don't have a developer account, it's recommended to use local backup or a mock account.
         </Text>
       )}
       
@@ -483,32 +483,32 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
       )}
       
       {!isAuthenticated ? (
-        // 未认证状态，显示连接Google Drive按钮
+        // Unauthenticated state, show Connect to Google Drive button
         <TouchableOpacity
           style={styles.connectButton}
           onPress={handleAuthenticate}
           disabled={isLoading}
         >
           <MaterialIcons name="cloud" size={24} color="#FFFFFF" />
-          <Text style={styles.connectButtonText}>连接Google Drive</Text>
+          <Text style={styles.connectButtonText}>Connect to Google Drive</Text>
         </TouchableOpacity>
       ) : (
-        // 已认证状态，显示断开连接按钮
+        // Authenticated state, show disconnect button
         <View style={styles.authenticatedContainer}>
           <View style={styles.statusContainer}>
-            <Text style={styles.statusText}>已连接到Google Drive</Text>
+            <Text style={styles.statusText}>Connected to Google Drive</Text>
             <TouchableOpacity
               style={styles.disconnectButton}
               onPress={handleSignOut}
             >
-              <Text style={styles.disconnectButtonText}>断开连接</Text>
+              <Text style={styles.disconnectButtonText}>Disconnect</Text>
             </TouchableOpacity>
           </View>
           
           {/* Last sync time */}
           {lastSyncTime && (
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>上次同步时间:</Text>
+              <Text style={styles.infoLabel}>Last sync time:</Text>
               <Text style={styles.infoValue}>{formatDate(lastSyncTime)}</Text>
             </View>
           )}
@@ -645,7 +645,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   connectButton: {
-    backgroundColor: '#4285F4', // Google蓝色
+    backgroundColor: '#4285F4', // Google blue
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',

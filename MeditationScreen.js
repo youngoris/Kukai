@@ -116,7 +116,7 @@ const MeditationScreen = ({ navigation }) => {
   // New state variables
   const [customDuration, setCustomDuration] = useState(10); // Default custom duration
   const [selectedSoundTheme, setSelectedSoundTheme] = useState('silence'); // Default set to silent
-  const [isAudioReleasing, setIsAudioReleasing] = useState(false); // 添加状态标志
+  const [isAudioReleasing, setIsAudioReleasing] = useState(false); // Add state flag
   const audioLoopCountRef = useRef(0);
   const statusLogTimeRef = useRef(0);
   
@@ -358,7 +358,7 @@ const MeditationScreen = ({ navigation }) => {
       return;
     }
     
-    // 每10秒打印一次播放状态，避免日志过多
+    // Print playback status every 10 seconds to avoid excessive logging
     const currentTime = Date.now();
     if (statusLogTimeRef.current === 0 || currentTime - statusLogTimeRef.current > 10000) {
       console.log(`Audio position: ${status.positionMillis}/${audioDurationRef.current}ms, isPlaying: ${status.isPlaying}`);

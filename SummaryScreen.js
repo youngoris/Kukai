@@ -46,7 +46,7 @@ const SummaryScreen = ({ navigation }) => {
   const [showReminderOptions, setShowReminderOptions] = useState(false);
   const [taskTime, setTaskTime] = useState(() => {
     const defaultTime = new Date();
-    defaultTime.setMinutes(30, 0, 0); // 设置默认分钟为30分
+    defaultTime.setMinutes(30, 0, 0); // Set default minutes to 30
     return defaultTime;
   });
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -121,7 +121,7 @@ const SummaryScreen = ({ navigation }) => {
       
       // 如果日期不同或没有记录过日期，执行每日重置
       if (!lastRecordedDate || lastRecordedDate !== today) {
-        console.log('执行每日重置...');
+        console.log('Performing daily reset...');
         
         // 更新最后记录日期为今天
         await AsyncStorage.setItem('lastRecordedDate', today);
@@ -136,7 +136,7 @@ const SummaryScreen = ({ navigation }) => {
         await autoTransferTomorrowTasks();
       }
     } catch (error) {
-      console.error('检查每日重置时出错:', error);
+      console.error('Error checking daily reset:', error);
     }
   };
 
@@ -155,10 +155,10 @@ const SummaryScreen = ({ navigation }) => {
       // 注意：这里只是重置计数器，保留历史记录
       await AsyncStorage.setItem('pomodoros', JSON.stringify(pomodoros));
       
-      // 重置当日番茄钟计数（这里只是UI上的重置，不影响历史数据）
+      // Reset today's pomodoro count (UI reset only, doesn't affect historical data)
       setPomodoroCount(0);
     } catch (error) {
-      console.error('重置番茄钟计数时出错:', error);
+      console.error('Error resetting pomodoro count:', error);
     }
   };
 
@@ -185,16 +185,16 @@ const SummaryScreen = ({ navigation }) => {
         // 清空明日任务列表
         await AsyncStorage.setItem('tomorrowTasks', JSON.stringify([]));
         
-        console.log('已自动将明日计划中的任务转移到今天的任务列表');
+        console.log('Automatically transferred tasks from tomorrow\'s plan to today\'s task list');
       }
     } catch (error) {
-      console.error('自动转移明日任务时出错:', error);
+      console.error('Error automatically transferring tomorrow\'s tasks:', error);
     }
   };
 
   const loadData = async () => {
     try {
-      // 获取今天的日期字符串（格式：YYYY-MM-DD）
+      // Get today's date string (format: YYYY-MM-DD)
       const today = new Date().toISOString().split('T')[0];
       
       // 加载任务数据
@@ -334,11 +334,11 @@ const SummaryScreen = ({ navigation }) => {
         isFrog: isFrogTask,
         isImportant: isImportant,
         isUrgent: isUrgent,
-        isTimeTagged: isTimeTagged || showTimePicker, // 如果时间选择器显示，则认为已标记时间
+        isTimeTagged: isTimeTagged || showTimePicker, // If time picker is displayed, consider time as tagged
         taskTime: (isTimeTagged || showTimePicker) ? taskTime.toISOString() : null,
         hasReminder: hasReminder,
-        reminderTime: reminderTime, // 提前通知时间（分钟）
-        notifyAtDeadline: true, // 在截止时间到达时通知
+        reminderTime: reminderTime, // Advance notification time (minutes)
+        notifyAtDeadline: true, // Notify at deadline
       };
       const updatedTasks = [...tomorrowTasks, newTask];
       setTomorrowTasks(updatedTasks);
@@ -412,7 +412,7 @@ const SummaryScreen = ({ navigation }) => {
 
   // 处理时间标签点击
   const handleTimeTagPress = () => {
-    // 更新时间为当前小时和30分钟
+    // Update time to current hour and 30 minutes
     const currentTime = new Date();
     currentTime.setMinutes(30, 0, 0);
     setTaskTime(currentTime);
@@ -566,21 +566,21 @@ const SummaryScreen = ({ navigation }) => {
         addTaskContainerRef.current.measureLayout(
           scrollViewRef.current,
           (x, y, width, height) => {
-            // 计算适当的滚动位置，确保元素与键盘顶部保持10px的距离
-            const scrollPosition = y - 10; // 保持10px的距离
+            // Calculate appropriate scroll position, ensuring the element maintains a 10px distance from the keyboard top
+            const scrollPosition = y - 10; // Maintain 10px distance
             scrollViewRef.current.scrollTo({
               y: scrollPosition,
               animated: true
             });
           },
           (error) => {
-            console.error('测量布局时出错:', error);
-            // 如果测量失败，回退到默认的scrollToEnd方法
-            scrollViewRef.current.scrollToEnd({ animated: true });
+            console.error('Error measuring layout:', error);
+            // If reference is unavailable, fall back to the default scrollToEnd method
+            scrollViewRef.current?.scrollToEnd({ animated: true });
           }
         );
       } else {
-        // 如果引用不可用，回退到默认的scrollToEnd方法
+        // If reference is unavailable, fall back to the default scrollToEnd method
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }
     }, 300);
@@ -1050,13 +1050,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   frogTag: {
-    backgroundColor: '#2E8B57', // 青蛙标签的绿色背景
+    backgroundColor: '#2E8B57', // Green background for frog tag
   },
   importantTag: {
-    backgroundColor: '#3D2645', // 重要标签的紫色背景
+    backgroundColor: '#3D2645', // Purple background for important tag
   },
   urgentTag: {
-    backgroundColor: '#832232', // 紧急标签的红色背景
+    backgroundColor: '#832232', // Red background for urgent tag
   },
   taskTagText: {
     color: '#fff',
@@ -1115,7 +1115,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#333',
   },
   saveButton: {
-    backgroundColor: '#FFFFFF', // 改为白色
+    backgroundColor: '#FFFFFF', // Changed to white
   },
   inputButtonText: {
     color: '#fff',
@@ -1145,7 +1145,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 6,
-    backgroundColor: '#FFFFFF', // 改为白色
+    backgroundColor: '#FFFFFF', // Changed to white
     marginTop: 10,
     marginBottom: 20,
     justifyContent: 'center',
@@ -1211,7 +1211,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#222',
     borderRadius: 8,
     overflow: 'hidden',
-    marginBottom: 20, // 增加底部边距，使按钮与边框距离更大
+    marginBottom: 20, // Increase bottom margin to create more space between buttons and border
   },
   timePicker: {
     width: Platform.OS === 'ios' ? '100%' : 150,
@@ -1228,7 +1228,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#222',
     borderRadius: 8,
     padding: 10,
-    marginBottom: 20, // 增加底部边距，使按钮与边框距离更大
+    marginBottom: 20, // Increase bottom margin to create more space between buttons and border
   },
   reminderOptionsTitle: {
     color: '#FFFFFF',
@@ -1249,14 +1249,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   reminderButtonActive: {
-    backgroundColor: '#FFFFFF', // 改为白色背景
+    backgroundColor: '#FFFFFF', // Changed to white background
   },
   reminderButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
   },
   reminderButtonTextActive: {
-    color: '#000000', // 激活状态的文字为黑色
+    color: '#000000', // Text is black when active
   },
 });
 
