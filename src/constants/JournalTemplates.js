@@ -118,19 +118,19 @@ export const DETAILED_TEMPLATE = `# Daily Journal
 // Get template content by template ID
 export const getTemplateContent = (templateId) => {
   switch (templateId) {
-    case 'default':
+    case "default":
       return DEFAULT_TEMPLATE;
-    case 'gratitude':
+    case "gratitude":
       return GRATITUDE_TEMPLATE;
-    case 'reflection':
+    case "reflection":
       return REFLECTION_TEMPLATE;
-    case 'achievement':
+    case "achievement":
       return ACHIEVEMENT_TEMPLATE;
-    case 'morning':
+    case "morning":
       return MORNING_TEMPLATE;
-    case 'evening':
+    case "evening":
       return EVENING_TEMPLATE;
-    case 'detailed':
+    case "detailed":
       return DETAILED_TEMPLATE;
     default:
       return DEFAULT_TEMPLATE;
@@ -139,11 +139,11 @@ export const getTemplateContent = (templateId) => {
 
 // All available templates for selection
 export const AVAILABLE_TEMPLATES = [
-  { value: 'default', label: 'Default' },
-  { value: 'gratitude', label: 'Gratitude' },
-  { value: 'reflection', label: 'Reflection' },
-  { value: 'achievement', label: 'Achievement' }, 
-  { value: 'evening', label: 'Evening' },
-  { value: 'detailed', label: 'Detailed' },
-  { value: 'custom', label: 'Custom' }
-]; 
+  { value: "default", label: "Default" },
+  { value: "gratitude", label: "Gratitude" },
+  { value: "reflection", label: "Reflection" },
+  { value: "achievement", label: "Achievement" },
+  { value: "evening", label: "Evening" },
+  { value: "detailed", label: "Detailed" },
+  { value: "custom", label: "Custom" },
+];

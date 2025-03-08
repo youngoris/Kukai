@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -16,19 +16,18 @@ import {
   Alert,
   KeyboardAvoidingView,
   ScrollView,
-} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MaterialIcons, Ionicons, AntDesign, Feather } from '@expo/vector-icons';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import FrogIcon from '../../assets/frog.svg';
-import CustomDateTimePicker from '../components/CustomDateTimePicker';
-import notificationService from '../services/NotificationService';
+} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
+import FrogIcon from "../../assets/frog.svg";
+import CustomDateTimePicker from "../components/CustomDateTimePicker";
+import notificationService from "../services/NotificationService";
 
 const TaskScreen = ({ navigation }) => {
   const [tasks, setTasks] = useState([]);
-  const [newTaskText, setNewTaskText] = useState('');
+  const [newTaskText, setNewTaskText] = useState("");
   const [editingTask, setEditingTask] = useState(null);
-  const [editText, setEditText] = useState('');
+  const [editText, setEditText] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [isFrogTask, setIsFrogTask] = useState(false); // Mark as "frog" status
@@ -44,8 +43,7 @@ const TaskScreen = ({ navigation }) => {
     return defaultTime;
   }); // Task time
   const [showTimePicker, setShowTimePicker] = useState(false); // Whether to show time picker
-  const [timeLabel, setTimeLabel] = useState('');
-  
+
   const inputRef = useRef(null);
   const editInputRef = useRef(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -63,7 +61,7 @@ const TaskScreen = ({ navigation }) => {
   // Load tasks and fade-in animation
   useEffect(() => {
     loadTasks();
-    
+
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 500,
@@ -74,13 +72,13 @@ const TaskScreen = ({ navigation }) => {
   // Load tasks from storage
   const loadTasks = async () => {
     try {
-      const savedTasks = await AsyncStorage.getItem('tasks');
+      const savedTasks = await AsyncStorage.getItem("tasks");
       if (savedTasks) {
         const parsedTasks = JSON.parse(savedTasks);
         setTasks(sortTasksByPriority(parsedTasks));
       }
     } catch (error) {
-      console.error('Error loading tasks:', error);
+      console.error("Error loading tasks:", error);
     }
   };
 
@@ -91,20 +89,20 @@ const TaskScreen = ({ navigation }) => {
       if (a.completed !== b.completed) {
         return a.completed - b.completed;
       }
-      
+
       // Then, sort by tag priority
       // Frog tag has the highest priority
       if (a.isFrog && !b.isFrog) return -1;
       if (!a.isFrog && b.isFrog) return 1;
-      
+
       // Urgent tag has the next highest priority
       if (a.isUrgent && !b.isUrgent) return -1;
       if (!a.isUrgent && b.isUrgent) return 1;
-      
+
       // Important tag has the third highest priority
       if (a.isImportant && !b.isImportant) return -1;
       if (!a.isImportant && b.isImportant) return 1;
-      
+
       // Default sort by creation time (ID is usually a timestamp)
       return parseInt(a.id) - parseInt(b.id);
     });
@@ -113,15 +111,15 @@ const TaskScreen = ({ navigation }) => {
   // Save tasks to storage
   const saveTasks = async (tasksToSave) => {
     try {
-      await AsyncStorage.setItem('tasks', JSON.stringify(tasksToSave));
+      await AsyncStorage.setItem("tasks", JSON.stringify(tasksToSave));
     } catch (error) {
-      console.log('Error saving tasks:', error);
+      console.log("Error saving tasks:", error);
     }
   };
 
   // Add new task
   const addTask = async () => {
-    if (newTaskText.trim() === '') return;
+    if (newTaskText.trim() === "") return;
 
     // If time picker is displayed, ensure time tag is activated
     if (showTimePicker) {
@@ -133,9 +131,7 @@ const TaskScreen = ({ navigation }) => {
       Alert.alert(
         "Reminder Setup",
         "You need to set a task time first to add a reminder",
-        [
-          { text: "OK", onPress: () => handleTimeTagPress() }
-        ]
+        [{ text: "OK", onPress: () => handleTimeTagPress() }],
       );
       return;
     }
@@ -148,7 +144,7 @@ const TaskScreen = ({ navigation }) => {
       isImportant: isImportant,
       isUrgent: isUrgent,
       isTimeTagged: isTimeTagged || showTimePicker, // If time picker is displayed, consider time tagged
-      taskTime: (isTimeTagged || showTimePicker) ? taskTime.toISOString() : null,
+      taskTime: isTimeTagged || showTimePicker ? taskTime.toISOString() : null,
       hasReminder: hasReminder,
       reminderTime: reminderTime, // Advance notification time (minutes)
       notifyAtDeadline: true, // Notify when deadline is reached
@@ -158,28 +154,42 @@ const TaskScreen = ({ navigation }) => {
     const sortedTasks = sortTasksByPriority(updatedTasks);
     setTasks(sortedTasks);
     await saveTasks(sortedTasks);
-    
+
     // If task has reminder, schedule notification
     if (newTask.isTimeTagged && newTask.taskTime) {
       try {
-        console.log(`Preparing notifications for task "${newTask.text}" (ID: ${newTask.id})`);
-        console.log(`Task time: ${new Date(newTask.taskTime).toLocaleString()}`);
-        console.log(`Has reminder: ${newTask.hasReminder}, Reminder minutes: ${newTask.reminderTime}`);
-        
-        const notificationId = await notificationService.scheduleTaskNotification(newTask);
+        console.log(
+          `Preparing notifications for task "${newTask.text}" (ID: ${newTask.id})`,
+        );
+        console.log(
+          `Task time: ${new Date(newTask.taskTime).toLocaleString()}`,
+        );
+        console.log(
+          `Has reminder: ${newTask.hasReminder}, Reminder minutes: ${newTask.reminderTime}`,
+        );
+
+        const notificationId =
+          await notificationService.scheduleTaskNotification(newTask);
         if (notificationId) {
-          console.log(`Task notification(s) scheduled successfully, IDs:`, notificationId);
+          console.log(
+            `Task notification(s) scheduled successfully, IDs:`,
+            notificationId,
+          );
         } else {
-          console.log(`No notifications were scheduled (possibly due to time constraints)`);
+          console.log(
+            `No notifications were scheduled (possibly due to time constraints)`,
+          );
         }
       } catch (error) {
-        console.error('Failed to schedule task notification:', error);
+        console.error("Failed to schedule task notification:", error);
       }
     } else {
-      console.log(`Task "${newTask.text}" has no time set, skipping notifications`);
+      console.log(
+        `Task "${newTask.text}" has no time set, skipping notifications`,
+      );
     }
-    
-    setNewTaskText('');
+
+    setNewTaskText("");
     setIsFrogTask(false);
     setIsImportant(false);
     setIsUrgent(false);
@@ -194,28 +204,33 @@ const TaskScreen = ({ navigation }) => {
 
   // Toggle task completion status
   const toggleComplete = async (id) => {
-    const taskToToggle = tasks.find(task => task.id === id);
+    const taskToToggle = tasks.find((task) => task.id === id);
     const isCompleting = !taskToToggle.completed;
-    
+
     const updatedTasks = tasks.map((task) =>
-      task.id === id 
-        ? { 
-            ...task, 
+      task.id === id
+        ? {
+            ...task,
             completed: !task.completed,
             // If task is marked as completed, add completion timestamp; if not completed, remove completion timestamp
-            completedAt: !task.completed ? new Date().toISOString() : null
-          } 
-        : task
+            completedAt: !task.completed ? new Date().toISOString() : null,
+          }
+        : task,
     );
-    
+
     const sortedTasks = sortTasksByPriority(updatedTasks);
     setTasks(sortedTasks);
     await saveTasks(sortedTasks);
-    
+
     // If task is marked as completed, cancel its notification
-    if (isCompleting && taskToToggle.hasReminder && taskToToggle.isTimeTagged && taskToToggle.taskTime) {
+    if (
+      isCompleting &&
+      taskToToggle.hasReminder &&
+      taskToToggle.isTimeTagged &&
+      taskToToggle.taskTime
+    ) {
       await notificationService.cancelTaskNotification(id);
-      console.log('Task completed, notification cancelled');
+      console.log("Task completed, notification cancelled");
     }
   };
 
@@ -244,25 +259,27 @@ const TaskScreen = ({ navigation }) => {
 
   // Save edited task
   const saveEditedTask = async () => {
-    if (editText.trim() === '') return;
-    
+    if (editText.trim() === "") return;
+
     // If reminder is set but time is not set, prompt user
     if (hasReminder && !isTimeTagged) {
       Alert.alert(
         "Reminder Setup",
         "You need to set a task time first to add a reminder",
-        [
-          { text: "OK", onPress: () => handleTimeTagPress() }
-        ]
+        [{ text: "OK", onPress: () => handleTimeTagPress() }],
       );
       return;
     }
 
     // Cancel original task notification (if any)
-    if (editingTask.hasReminder && editingTask.isTimeTagged && editingTask.taskTime) {
+    if (
+      editingTask.hasReminder &&
+      editingTask.isTimeTagged &&
+      editingTask.taskTime
+    ) {
       await notificationService.cancelTaskNotification(editingTask.id);
     }
-    
+
     const updatedTask = {
       ...editingTask,
       text: editText.trim(),
@@ -276,34 +293,44 @@ const TaskScreen = ({ navigation }) => {
     };
 
     const updatedTasks = tasks.map((task) =>
-      task.id === editingTask.id ? updatedTask : task
+      task.id === editingTask.id ? updatedTask : task,
     );
-    
+
     const sortedTasks = sortTasksByPriority(updatedTasks);
     setTasks(sortedTasks);
     await saveTasks(sortedTasks);
-    
+
     // If updated task has reminder, reschedule notification
-    if (updatedTask.hasReminder && updatedTask.isTimeTagged && updatedTask.taskTime) {
+    if (
+      updatedTask.hasReminder &&
+      updatedTask.isTimeTagged &&
+      updatedTask.taskTime
+    ) {
       try {
-        const notificationId = await notificationService.scheduleTaskNotification(updatedTask);
-        console.log('Task notification updated, ID:', notificationId);
+        const notificationId =
+          await notificationService.scheduleTaskNotification(updatedTask);
+        console.log("Task notification updated, ID:", notificationId);
       } catch (error) {
-        console.error('Failed to update task notification:', error);
+        console.error("Failed to update task notification:", error);
       }
     }
-    
+
     setEditModalVisible(false);
   };
 
   // Delete task
   const deleteTask = async (id) => {
     // Cancel task notification (if any)
-    const taskToDelete = tasks.find(task => task.id === id);
-    if (taskToDelete && taskToDelete.hasReminder && taskToDelete.isTimeTagged && taskToDelete.taskTime) {
+    const taskToDelete = tasks.find((task) => task.id === id);
+    if (
+      taskToDelete &&
+      taskToDelete.hasReminder &&
+      taskToDelete.isTimeTagged &&
+      taskToDelete.taskTime
+    ) {
       await notificationService.cancelTaskNotification(id);
     }
-    
+
     const filteredTasks = tasks.filter((task) => task.id !== id);
     setTasks(filteredTasks);
     await saveTasks(filteredTasks);
@@ -312,7 +339,7 @@ const TaskScreen = ({ navigation }) => {
   // Open create task modal
   const openModal = () => {
     // Reset all states
-    setNewTaskText('');
+    setNewTaskText("");
     setIsFrogTask(false);
     setIsImportant(false);
     setIsUrgent(false);
@@ -322,7 +349,7 @@ const TaskScreen = ({ navigation }) => {
     setShowReminderOptions(false);
     setHasReminder(false);
     setReminderTime(15); // Set default value to 15 minutes, but only enable when user selects it
-    
+
     // Show modal
     setModalVisible(true);
     Animated.timing(modalScaleAnim, {
@@ -358,7 +385,7 @@ const TaskScreen = ({ navigation }) => {
       useNativeDriver: true,
     }).start(() => {
       setModalVisible(false);
-      setNewTaskText('');
+      setNewTaskText("");
       setIsFrogTask(false);
       setIsImportant(false);
       setIsUrgent(false);
@@ -374,7 +401,7 @@ const TaskScreen = ({ navigation }) => {
   // Close edit modal
   const closeEditModal = () => {
     setEditModalVisible(false);
-    setEditText('');
+    setEditText("");
     setIsFrogTask(false);
     setIsImportant(false);
     setIsUrgent(false);
@@ -388,10 +415,10 @@ const TaskScreen = ({ navigation }) => {
 
   // Handle time change
   const onTimeChange = (event, selectedTime) => {
-    if (Platform.OS === 'android') {
+    if (Platform.OS === "android") {
       setShowTimePicker(false);
     }
-    
+
     if (selectedTime) {
       setTaskTime(selectedTime);
       setIsTimeTagged(true);
@@ -404,7 +431,7 @@ const TaskScreen = ({ navigation }) => {
     const currentTime = new Date();
     currentTime.setMinutes(30, 0, 0);
     setTaskTime(currentTime);
-    
+
     if (showTimePicker) {
       // If time picker is already displayed, click to close picker and cancel tag
       setShowTimePicker(false);
@@ -430,12 +457,12 @@ const TaskScreen = ({ navigation }) => {
         "You need to set a task time first to add a reminder",
         [
           { text: "Set Time", onPress: () => handleTimeTagPress() },
-          { text: "Cancel", style: "cancel" }
-        ]
+          { text: "Cancel", style: "cancel" },
+        ],
       );
       return;
     }
-    
+
     if (showReminderOptions) {
       // If reminder options are already displayed, click to close options
       setShowReminderOptions(false);
@@ -468,7 +495,9 @@ const TaskScreen = ({ navigation }) => {
         style={styles.checkboxContainer}
         onPress={() => toggleComplete(item.id)}
       >
-        <View style={[styles.checkbox, item.completed && styles.checkboxChecked]} />
+        <View
+          style={[styles.checkbox, item.completed && styles.checkboxChecked]}
+        />
       </TouchableOpacity>
       <TouchableOpacity
         style={styles.taskTextContainer}
@@ -485,55 +514,119 @@ const TaskScreen = ({ navigation }) => {
         </Text>
         <View style={styles.taskTagsContainer}>
           {item.isFrog && (
-            <View style={[
-              styles.taskTag, 
-              styles.frogTag,
-              item.completed && styles.completedTaskTag
-            ]}>
-              <FrogIcon width={14} height={14} fill={item.completed ? "#888888" : "#FFFFFF"} />
-              <Text style={[styles.taskTagText, item.completed && styles.completedTaskTagText]}>Priority</Text>
+            <View
+              style={[
+                styles.taskTag,
+                styles.frogTag,
+                item.completed && styles.completedTaskTag,
+              ]}
+            >
+              <FrogIcon
+                width={14}
+                height={14}
+                fill={item.completed ? "#888888" : "#FFFFFF"}
+              />
+              <Text
+                style={[
+                  styles.taskTagText,
+                  item.completed && styles.completedTaskTagText,
+                ]}
+              >
+                Priority
+              </Text>
             </View>
           )}
           {item.isImportant && (
-            <View style={[
-              styles.taskTag, 
-              styles.importantTag,
-              item.completed && styles.completedTaskTag
-            ]}>
-              <MaterialIcons name="star" size={14} color={item.completed ? "#888888" : "#FFFFFF"} />
-              <Text style={[styles.taskTagText, item.completed && styles.completedTaskTagText]}>Important</Text>
+            <View
+              style={[
+                styles.taskTag,
+                styles.importantTag,
+                item.completed && styles.completedTaskTag,
+              ]}
+            >
+              <MaterialIcons
+                name="star"
+                size={14}
+                color={item.completed ? "#888888" : "#FFFFFF"}
+              />
+              <Text
+                style={[
+                  styles.taskTagText,
+                  item.completed && styles.completedTaskTagText,
+                ]}
+              >
+                Important
+              </Text>
             </View>
           )}
           {item.isUrgent && (
-            <View style={[
-              styles.taskTag, 
-              styles.urgentTag,
-              item.completed && styles.completedTaskTag
-            ]}>
-              <Feather name="alert-circle" size={14} color={item.completed ? "#888888" : "#FFFFFF"} />
-              <Text style={[styles.taskTagText, item.completed && styles.completedTaskTagText]}>Urgent</Text>
+            <View
+              style={[
+                styles.taskTag,
+                styles.urgentTag,
+                item.completed && styles.completedTaskTag,
+              ]}
+            >
+              <Feather
+                name="alert-circle"
+                size={14}
+                color={item.completed ? "#888888" : "#FFFFFF"}
+              />
+              <Text
+                style={[
+                  styles.taskTagText,
+                  item.completed && styles.completedTaskTagText,
+                ]}
+              >
+                Urgent
+              </Text>
             </View>
           )}
           {item.isTimeTagged && item.taskTime && (
-            <View style={[
-              styles.taskTag, 
-              styles.timeTag,
-              item.completed && styles.completedTaskTag
-            ]}>
-              <Ionicons name="time-outline" size={14} color={item.completed ? "#888888" : "#FFFFFF"} />
-              <Text style={[styles.taskTagText, item.completed && styles.completedTaskTagText]}>
-                {new Date(item.taskTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+            <View
+              style={[
+                styles.taskTag,
+                styles.timeTag,
+                item.completed && styles.completedTaskTag,
+              ]}
+            >
+              <Ionicons
+                name="time-outline"
+                size={14}
+                color={item.completed ? "#888888" : "#FFFFFF"}
+              />
+              <Text
+                style={[
+                  styles.taskTagText,
+                  item.completed && styles.completedTaskTagText,
+                ]}
+              >
+                {new Date(item.taskTime).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
               </Text>
             </View>
           )}
           {item.hasReminder && (
-            <View style={[
-              styles.taskTag, 
-              styles.reminderTag,
-              item.completed && styles.completedTaskTag
-            ]}>
-              <MaterialIcons name="notifications" size={14} color={item.completed ? "#888888" : "#FFFFFF"} />
-              <Text style={[styles.taskTagText, item.completed && styles.completedTaskTagText]}>
+            <View
+              style={[
+                styles.taskTag,
+                styles.reminderTag,
+                item.completed && styles.completedTaskTag,
+              ]}
+            >
+              <MaterialIcons
+                name="notifications"
+                size={14}
+                color={item.completed ? "#888888" : "#FFFFFF"}
+              />
+              <Text
+                style={[
+                  styles.taskTagText,
+                  item.completed && styles.completedTaskTagText,
+                ]}
+              >
                 {item.reminderTime} min
               </Text>
             </View>
@@ -548,49 +641,40 @@ const TaskScreen = ({ navigation }) => {
     <View style={styles.tagButtonsRow}>
       {/* Frog icon button */}
       <TouchableOpacity
-        style={[
-          styles.tagButton,
-          isFrogTask && styles.tagButtonActive,
-        ]}
+        style={[styles.tagButton, isFrogTask && styles.tagButtonActive]}
         onPress={() => setIsFrogTask(!isFrogTask)}
       >
-        <FrogIcon 
-          width={20} 
-          height={20} 
-          fill={isFrogTask ? "#000000" : "#FFFFFF"} 
+        <FrogIcon
+          width={20}
+          height={20}
+          fill={isFrogTask ? "#000000" : "#FFFFFF"}
         />
       </TouchableOpacity>
-      
+
       {/* Important button */}
       <TouchableOpacity
-        style={[
-          styles.tagButton,
-          isImportant && styles.tagButtonActive,
-        ]}
+        style={[styles.tagButton, isImportant && styles.tagButtonActive]}
         onPress={() => setIsImportant(!isImportant)}
       >
-        <MaterialIcons 
-          name="star" 
-          size={20} 
-          color={isImportant ? "#000000" : "#FFFFFF"} 
+        <MaterialIcons
+          name="star"
+          size={20}
+          color={isImportant ? "#000000" : "#FFFFFF"}
         />
       </TouchableOpacity>
-      
+
       {/* Urgent button */}
       <TouchableOpacity
-        style={[
-          styles.tagButton,
-          isUrgent && styles.tagButtonActive,
-        ]}
+        style={[styles.tagButton, isUrgent && styles.tagButtonActive]}
         onPress={() => setIsUrgent(!isUrgent)}
       >
-        <Feather 
-          name="alert-circle" 
-          size={20} 
-          color={isUrgent ? "#000000" : "#FFFFFF"} 
+        <Feather
+          name="alert-circle"
+          size={20}
+          color={isUrgent ? "#000000" : "#FFFFFF"}
         />
       </TouchableOpacity>
-      
+
       {/* Time button */}
       <TouchableOpacity
         style={[
@@ -599,25 +683,22 @@ const TaskScreen = ({ navigation }) => {
         ]}
         onPress={handleTimeTagPress}
       >
-        <Ionicons 
-          name="time-outline" 
-          size={20} 
-          color={(isTimeTagged || showTimePicker) ? "#000000" : "#FFFFFF"} 
+        <Ionicons
+          name="time-outline"
+          size={20}
+          color={isTimeTagged || showTimePicker ? "#000000" : "#FFFFFF"}
         />
       </TouchableOpacity>
-      
+
       {/* Reminder button */}
       <TouchableOpacity
-        style={[
-          styles.tagButton,
-          hasReminder && styles.tagButtonActive,
-        ]}
+        style={[styles.tagButton, hasReminder && styles.tagButtonActive]}
         onPress={handleReminderPress}
       >
-        <MaterialIcons 
-          name="notifications" 
-          size={20} 
-          color={hasReminder ? "#000000" : "#FFFFFF"} 
+        <MaterialIcons
+          name="notifications"
+          size={20}
+          color={hasReminder ? "#000000" : "#FFFFFF"}
         />
       </TouchableOpacity>
     </View>
@@ -627,7 +708,7 @@ const TaskScreen = ({ navigation }) => {
   const completedCount = tasks.filter((task) => task.completed).length;
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
@@ -635,15 +716,12 @@ const TaskScreen = ({ navigation }) => {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={() => navigation.navigate('Home')}
+            onPress={() => navigation.navigate("Home")}
           >
             <Text style={styles.headerButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerText}>TASK</Text>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={openModal}
-          >
+          <TouchableOpacity style={styles.headerButton} onPress={openModal}>
             <Text style={styles.headerButtonText}>+</Text>
           </TouchableOpacity>
         </View>
@@ -652,7 +730,9 @@ const TaskScreen = ({ navigation }) => {
           {tasks.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No tasks yet</Text>
-              <Text style={styles.emptySubtext}>Add your first task to get started</Text>
+              <Text style={styles.emptySubtext}>
+                Add your first task to get started
+              </Text>
             </View>
           ) : (
             <FlatList
@@ -681,9 +761,9 @@ const TaskScreen = ({ navigation }) => {
         >
           <TouchableWithoutFeedback onPress={closeModal}>
             <View style={styles.modalOverlay}>
-              <KeyboardAvoidingView 
+              <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
-                style={{ width: '100%' }}
+                style={{ width: "100%" }}
                 keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
               >
                 <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
@@ -693,7 +773,7 @@ const TaskScreen = ({ navigation }) => {
                       { transform: [{ scale: modalScaleAnim }] },
                     ]}
                   >
-                    <ScrollView 
+                    <ScrollView
                       contentContainerStyle={{ paddingBottom: 20 }}
                       keyboardShouldPersistTaps="handled"
                     >
@@ -711,9 +791,9 @@ const TaskScreen = ({ navigation }) => {
                           onSubmitEditing={addTask}
                           keyboardAppearance="dark"
                         />
-                        
+
                         {renderTagButtons()}
-                        
+
                         {showTimePicker && (
                           <View style={styles.timePickerContainer}>
                             <CustomDateTimePicker
@@ -729,33 +809,71 @@ const TaskScreen = ({ navigation }) => {
                             />
                           </View>
                         )}
-                        
+
                         {showReminderOptions && (
                           <View style={styles.reminderOptionsContainer}>
-                            <Text style={styles.reminderOptionsTitle}>Select Reminder Time</Text>
+                            <Text style={styles.reminderOptionsTitle}>
+                              Select Reminder Time
+                            </Text>
                             <View style={styles.reminderButtonsContainer}>
                               <TouchableOpacity
-                                style={[styles.reminderButton, reminderTime === 15 && styles.reminderButtonActive]}
+                                style={[
+                                  styles.reminderButton,
+                                  reminderTime === 15 &&
+                                    styles.reminderButtonActive,
+                                ]}
                                 onPress={() => selectReminderTime(15)}
                               >
-                                <Text style={[styles.reminderButtonText, reminderTime === 15 && styles.reminderButtonTextActive]}>15 min</Text>
+                                <Text
+                                  style={[
+                                    styles.reminderButtonText,
+                                    reminderTime === 15 &&
+                                      styles.reminderButtonTextActive,
+                                  ]}
+                                >
+                                  15 min
+                                </Text>
                               </TouchableOpacity>
                               <TouchableOpacity
-                                style={[styles.reminderButton, reminderTime === 30 && styles.reminderButtonActive]}
+                                style={[
+                                  styles.reminderButton,
+                                  reminderTime === 30 &&
+                                    styles.reminderButtonActive,
+                                ]}
                                 onPress={() => selectReminderTime(30)}
                               >
-                                <Text style={[styles.reminderButtonText, reminderTime === 30 && styles.reminderButtonTextActive]}>30 min</Text>
+                                <Text
+                                  style={[
+                                    styles.reminderButtonText,
+                                    reminderTime === 30 &&
+                                      styles.reminderButtonTextActive,
+                                  ]}
+                                >
+                                  30 min
+                                </Text>
                               </TouchableOpacity>
                               <TouchableOpacity
-                                style={[styles.reminderButton, reminderTime === 60 && styles.reminderButtonActive]}
+                                style={[
+                                  styles.reminderButton,
+                                  reminderTime === 60 &&
+                                    styles.reminderButtonActive,
+                                ]}
                                 onPress={() => selectReminderTime(60)}
                               >
-                                <Text style={[styles.reminderButtonText, reminderTime === 60 && styles.reminderButtonTextActive]}>1 hour</Text>
+                                <Text
+                                  style={[
+                                    styles.reminderButtonText,
+                                    reminderTime === 60 &&
+                                      styles.reminderButtonTextActive,
+                                  ]}
+                                >
+                                  1 hour
+                                </Text>
                               </TouchableOpacity>
                             </View>
                           </View>
                         )}
-                        
+
                         <View style={styles.modalButtons}>
                           <TouchableOpacity
                             style={styles.modalButton}
@@ -767,7 +885,9 @@ const TaskScreen = ({ navigation }) => {
                             style={[styles.modalButton, styles.addTaskButton]}
                             onPress={addTask}
                           >
-                            <Text style={styles.addTaskButtonText}>Add Task</Text>
+                            <Text style={styles.addTaskButtonText}>
+                              Add Task
+                            </Text>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -788,14 +908,14 @@ const TaskScreen = ({ navigation }) => {
         >
           <TouchableWithoutFeedback onPress={closeEditModal}>
             <View style={styles.modalOverlay}>
-              <KeyboardAvoidingView 
+              <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
-                style={{ width: '100%' }}
+                style={{ width: "100%" }}
                 keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
               >
                 <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
                   <View style={styles.modalContainer}>
-                    <ScrollView 
+                    <ScrollView
                       contentContainerStyle={{ paddingBottom: 20 }}
                       keyboardShouldPersistTaps="handled"
                     >
@@ -811,9 +931,9 @@ const TaskScreen = ({ navigation }) => {
                           autoFocus={true}
                           keyboardAppearance="dark"
                         />
-                        
+
                         {renderTagButtons()}
-                        
+
                         {showTimePicker && (
                           <View style={styles.timePickerContainer}>
                             <CustomDateTimePicker
@@ -829,33 +949,71 @@ const TaskScreen = ({ navigation }) => {
                             />
                           </View>
                         )}
-                        
+
                         {showReminderOptions && (
                           <View style={styles.reminderOptionsContainer}>
-                            <Text style={styles.reminderOptionsTitle}>Select Reminder Time</Text>
+                            <Text style={styles.reminderOptionsTitle}>
+                              Select Reminder Time
+                            </Text>
                             <View style={styles.reminderButtonsContainer}>
                               <TouchableOpacity
-                                style={[styles.reminderButton, reminderTime === 15 && styles.reminderButtonActive]}
+                                style={[
+                                  styles.reminderButton,
+                                  reminderTime === 15 &&
+                                    styles.reminderButtonActive,
+                                ]}
                                 onPress={() => selectReminderTime(15)}
                               >
-                                <Text style={[styles.reminderButtonText, reminderTime === 15 && styles.reminderButtonTextActive]}>15 min</Text>
+                                <Text
+                                  style={[
+                                    styles.reminderButtonText,
+                                    reminderTime === 15 &&
+                                      styles.reminderButtonTextActive,
+                                  ]}
+                                >
+                                  15 min
+                                </Text>
                               </TouchableOpacity>
                               <TouchableOpacity
-                                style={[styles.reminderButton, reminderTime === 30 && styles.reminderButtonActive]}
+                                style={[
+                                  styles.reminderButton,
+                                  reminderTime === 30 &&
+                                    styles.reminderButtonActive,
+                                ]}
                                 onPress={() => selectReminderTime(30)}
                               >
-                                <Text style={[styles.reminderButtonText, reminderTime === 30 && styles.reminderButtonTextActive]}>30 min</Text>
+                                <Text
+                                  style={[
+                                    styles.reminderButtonText,
+                                    reminderTime === 30 &&
+                                      styles.reminderButtonTextActive,
+                                  ]}
+                                >
+                                  30 min
+                                </Text>
                               </TouchableOpacity>
                               <TouchableOpacity
-                                style={[styles.reminderButton, reminderTime === 60 && styles.reminderButtonActive]}
+                                style={[
+                                  styles.reminderButton,
+                                  reminderTime === 60 &&
+                                    styles.reminderButtonActive,
+                                ]}
                                 onPress={() => selectReminderTime(60)}
                               >
-                                <Text style={[styles.reminderButtonText, reminderTime === 60 && styles.reminderButtonTextActive]}>1 hour</Text>
+                                <Text
+                                  style={[
+                                    styles.reminderButtonText,
+                                    reminderTime === 60 &&
+                                      styles.reminderButtonTextActive,
+                                  ]}
+                                >
+                                  1 hour
+                                </Text>
                               </TouchableOpacity>
                             </View>
                           </View>
                         )}
-                        
+
                         <View style={styles.modalButtons}>
                           <TouchableOpacity
                             style={styles.modalButton}
@@ -895,12 +1053,12 @@ const TaskScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: "#000000",
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingTop: 0, // Title bar moved to top
     paddingBottom: 20,
     paddingHorizontal: 20,
@@ -908,25 +1066,25 @@ const styles = StyleSheet.create({
   headerButton: {
     width: 40,
     height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 26,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   headerText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     letterSpacing: 2,
-    textAlign: 'center',
+    textAlign: "center",
   },
   taskItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#111111',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#111111",
     paddingVertical: 15,
     paddingHorizontal: 20,
     marginBottom: 10,
@@ -940,36 +1098,36 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#666666',
+    borderColor: "#666666",
   },
   checkboxChecked: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
+    borderColor: "#FFFFFF",
   },
   taskTextContainer: {
     flex: 1,
   },
   taskText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
     marginBottom: 6,
   },
   taskTextCompleted: {
-    color: '#666666',
-    textDecorationLine: 'line-through',
+    color: "#666666",
+    textDecorationLine: "line-through",
   },
   taskTextFrog: {
-    fontWeight: 'bold', // Marked as "frog" tasks are bold
+    fontWeight: "bold", // Marked as "frog" tasks are bold
     // color: '#2E8B57', // Frog task text is displayed in green
   },
   taskTagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   taskTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#333333',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#333333",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 12,
@@ -977,106 +1135,106 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   frogTag: {
-    backgroundColor: '#2E8B57', // Add green background for frog tag
+    backgroundColor: "#2E8B57", // Add green background for frog tag
   },
   importantTag: {
-    backgroundColor: '#3D2645',
+    backgroundColor: "#3D2645",
   },
   urgentTag: {
-    backgroundColor: '#832232',
+    backgroundColor: "#832232",
   },
   timeTag: {
-    backgroundColor: '#555555', // Gray background for time tag
+    backgroundColor: "#555555", // Gray background for time tag
   },
   taskTagText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
     marginLeft: 4,
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   emptyText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 18,
-    fontWeight: '500',
+    fontWeight: "500",
     marginBottom: 10,
   },
   emptySubtext: {
-    color: '#666666',
+    color: "#666666",
     fontSize: 14,
   },
   footer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 30,
     left: 0,
     right: 0,
-    alignItems: 'center',
+    alignItems: "center",
   },
   statsText: {
-    color: '#666666',
+    color: "#666666",
     fontSize: 14,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   modalContainer: {
-    width: '100%',
-    backgroundColor: '#000000',
+    width: "100%",
+    backgroundColor: "#000000",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#FFFFFF',
-    maxHeight: '93%',
+    borderColor: "#FFFFFF",
+    maxHeight: "93%",
   },
   modalContent: {
     padding: 20,
   },
   modalTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 20,
-    textAlign: 'center',
+    textAlign: "center",
   },
   modalInput: {
-    backgroundColor: '#000000',
-    color: '#FFFFFF',
+    backgroundColor: "#000000",
+    color: "#FFFFFF",
     padding: 15,
     borderRadius: 5,
     fontSize: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: "#FFFFFF",
   },
   modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
   },
   modalButton: {
     padding: 12,
     marginLeft: 10,
   },
   addTaskButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 5,
   },
   addTaskButtonText: {
-    color: '#000000',
-    fontWeight: '600',
+    color: "#000000",
+    fontWeight: "600",
     fontSize: 16,
   },
   cancelButtonText: {
-    color: '#666666',
+    color: "#666666",
     fontSize: 16,
   },
   deleteButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
   },
   listContent: {
@@ -1084,95 +1242,95 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   tagButtonsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: 20,
-    justifyContent: 'space-around',
+    justifyContent: "space-around",
   },
   tagButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 10,
-    backgroundColor: '#222222',
+    backgroundColor: "#222222",
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: "#FFFFFF",
   },
   tagButtonActive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
+    borderColor: "#FFFFFF",
   },
   timePickerContainer: {
-    backgroundColor: '#222',
+    backgroundColor: "#222",
     borderRadius: 8,
     padding: 0,
     marginBottom: 15,
-    alignItems: 'center',
-    height: 90, 
-    overflow: 'hidden',
-    justifyContent: 'center',
+    alignItems: "center",
+    height: 90,
+    overflow: "hidden",
+    justifyContent: "center",
   },
   timePicker: {
-    width: Platform.OS === 'ios' ? '100%' : 150,
-    height: Platform.OS === 'ios' ? 100 : 90,
+    width: Platform.OS === "ios" ? "100%" : 150,
+    height: Platform.OS === "ios" ? 100 : 90,
   },
   timeConfirmButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#CCCCCC',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#CCCCCC",
+    justifyContent: "center",
+    alignItems: "center",
   },
   timeConfirmText: {
-    color: '#000000',
+    color: "#000000",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   reminderTag: {
-    backgroundColor: '#7B29BD', // Purple background for reminder tag
+    backgroundColor: "#7B29BD", // Purple background for reminder tag
   },
   reminderOptionsContainer: {
-    backgroundColor: '#222',
+    backgroundColor: "#222",
     borderRadius: 8,
     padding: 15,
     marginBottom: 20, // Increase bottom margin to make button closer to border
   },
   reminderOptionsTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
     marginBottom: 10,
-    textAlign: 'center',
+    textAlign: "center",
   },
   reminderButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   reminderButton: {
-    backgroundColor: '#333',
+    backgroundColor: "#333",
     padding: 10,
     borderRadius: 5,
     flex: 1,
     marginHorizontal: 5,
-    alignItems: 'center',
+    alignItems: "center",
   },
   reminderButtonActive: {
-    backgroundColor: '#FFFFFF', // Changed to white background
+    backgroundColor: "#FFFFFF", // Changed to white background
   },
   reminderButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
   },
   reminderButtonTextActive: {
-    color: '#000000', // Activated text is black
+    color: "#000000", // Activated text is black
   },
   completedTaskTag: {
     opacity: 0.5,
-    backgroundColor: '#333333', // Uniformly use dark gray background
+    backgroundColor: "#333333", // Uniformly use dark gray background
   },
   completedTaskTagText: {
-    color: '#888888',
+    color: "#888888",
   },
 });
 

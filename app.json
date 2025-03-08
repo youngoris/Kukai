@@ -33,9 +33,7 @@
     "androidStatusBar": {
       "hidden": true
     },
-    "plugins": [
-      "expo-asset"
-    ],
+    "plugins": ["expo-asset"],
     "scheme": "kukai",
     "extra": {
       "eas": {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,27 +8,31 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  FlatList
-} from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import googleDriveService from '../services/GoogleDriveService';
-import Constants from 'expo-constants';
+  FlatList,
+} from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
+import googleDriveService from "../services/GoogleDriveService";
+import Constants from "expo-constants";
 
 // Check if running in Expo Go
-const isExpoGo = Constants.appOwnership === 'expo';
+const isExpoGo = Constants.appOwnership === "expo";
 
-const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) => {
+const CloudBackupSection = ({
+  navigation,
+  onBackupComplete,
+  theme = "dark",
+}) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
-  const [syncFrequency, setSyncFrequency] = useState('daily');
+  const [syncFrequency, setSyncFrequency] = useState("daily");
   const [lastSyncTime, setLastSyncTime] = useState(null);
   const [showBackupListModal, setShowBackupListModal] = useState(false);
   const [backups, setBackups] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
-  
-  // 判断是否为浅色主题
-  const isLightTheme = theme === 'light';
+
+  // light or dark theme
+  const isLightTheme = theme === "light";
 
   // Initialize
   useEffect(() => {
@@ -49,7 +53,7 @@ const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) =>
         loadLastSyncTime();
       }
     } catch (error) {
-      console.error('Failed to initialize Google Drive:', error);
+      console.error("Failed to initialize Google Drive:", error);
     } finally {
       setIsLoading(false);
     }
@@ -60,9 +64,9 @@ const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) =>
     try {
       const settings = await googleDriveService.getAutoSyncSettings();
       setAutoSyncEnabled(settings.enabled);
-      setSyncFrequency(settings.frequency || 'daily');
+      setSyncFrequency(settings.frequency || "daily");
     } catch (error) {
-      console.error('Failed to load sync settings:', error);
+      console.error("Failed to load sync settings:", error);
     }
   };
 
@@ -72,7 +76,7 @@ const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) =>
       const lastSync = await googleDriveService.getLastSyncTime();
       setLastSyncTime(lastSync);
     } catch (error) {
-      console.error('Failed to load last sync time:', error);
+      console.error("Failed to load last sync time:", error);
     }
   };
 
@@ -81,51 +85,51 @@ const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) =>
     // Check if running in Expo Go
     if (isExpoGo) {
       Alert.alert(
-        'Feature Limitation',
-        'Expo Go has very limited support for Google authentication and may cause the app to crash.\n\nYou have the following options:',
+        "Feature Limitation",
+        "Expo Go has very limited support for Google authentication and may cause the app to crash.\n\nYou have the following options:",
         [
-          { 
-            text: 'Use Local Backup', 
+          {
+            text: "Use Local Backup",
             onPress: () => {
               Alert.alert(
-                'Use Local Backup',
+                "Use Local Backup",
                 'The local backup feature allows you to export data to a file without needing a Google account. You can find the "Local Backup" feature in the settings menu.',
-                [{ text: 'Got it' }]
+                [{ text: "Got it" }],
               );
-            }
+            },
           },
-          { 
-            text: 'Use Mock Account', 
+          {
+            text: "Use Mock Account",
             onPress: () => {
               useMockGoogleAccount();
-            }
+            },
           },
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Try Anyway', 
-            style: 'destructive',
-            onPress: () => attemptAuthenticate() 
-          }
-        ]
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Try Anyway",
+            style: "destructive",
+            onPress: () => attemptAuthenticate(),
+          },
+        ],
       );
       return;
     }
-    
+
     attemptAuthenticate();
   };
-  
+
   // 使用模拟Google账号（不需要实际认证）
   const useMockGoogleAccount = () => {
     setIsLoading(true);
     setTimeout(() => {
       setIsAuthenticated(true);
       setAutoSyncEnabled(false);
-      setSyncFrequency('daily');
+      setSyncFrequency("daily");
       setLastSyncTime(new Date().toISOString());
       Alert.alert(
-        'Connected to Mock Account',
-        'You are now connected to a mock Google account. Please note that this is only for interface demonstration, and actual data will not be uploaded to the cloud. Please use local backup to save important data.',
-        [{ text: 'Got it' }]
+        "Connected to Mock Account",
+        "You are now connected to a mock Google account. Please note that this is only for interface demonstration, and actual data will not be uploaded to the cloud. Please use local backup to save important data.",
+        [{ text: "Got it" }],
       );
       setIsLoading(false);
     }, 1500);
@@ -135,40 +139,46 @@ const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) =>
   const attemptAuthenticate = async () => {
     setIsLoading(true);
     try {
-      console.log('CloudBackupSection: Starting Google authentication...');
+      console.log("CloudBackupSection: Starting Google authentication...");
       const success = await googleDriveService.authenticate();
       setIsAuthenticated(success);
-      
+
       if (success) {
-        console.log('CloudBackupSection: Google authentication successful');
+        console.log("CloudBackupSection: Google authentication successful");
         loadSyncSettings();
-        Alert.alert('Success', 'Successfully connected to Google Drive');
+        Alert.alert("Success", "Successfully connected to Google Drive");
       } else {
-        console.log('CloudBackupSection: Google authentication failed');
-        Alert.alert('Error', 'Unable to connect to Google Drive, please try again');
+        console.log("CloudBackupSection: Google authentication failed");
+        Alert.alert(
+          "Error",
+          "Unable to connect to Google Drive, please try again",
+        );
       }
     } catch (error) {
-      console.error('CloudBackupSection: Authentication error:', error);
-      
+      console.error("CloudBackupSection: Authentication error:", error);
+
       // Display more specific error message
-      let errorMessage = 'An error occurred during authentication';
-      
-      if (error.message.includes('Error DEVELOPER_ERROR')) {
-        errorMessage = 'Developer Error: Client ID may be invalid or incorrectly configured. Please check app settings.';
-      } else if (error.message.includes('access_denied')) {
-        errorMessage = 'User denied the access request';
-      } else if (error.message.includes('network')) {
-        errorMessage = 'Network Error: Please check your network connection and try again';
-      } else if (error.message.includes('client_id')) {
-        errorMessage = 'Client ID Error: Google API configuration is incorrect';
+      let errorMessage = "An error occurred during authentication";
+
+      if (error.message.includes("Error DEVELOPER_ERROR")) {
+        errorMessage =
+          "Developer Error: Client ID may be invalid or incorrectly configured. Please check app settings.";
+      } else if (error.message.includes("access_denied")) {
+        errorMessage = "User denied the access request";
+      } else if (error.message.includes("network")) {
+        errorMessage =
+          "Network Error: Please check your network connection and try again";
+      } else if (error.message.includes("client_id")) {
+        errorMessage = "Client ID Error: Google API configuration is incorrect";
       }
-      
+
       // If an error occurs in Expo Go, add more guidance
       if (isExpoGo) {
-        errorMessage += '\n\nUsing Google authentication in Expo Go may be unstable. Consider creating a development build version for full functionality.';
+        errorMessage +=
+          "\n\nUsing Google authentication in Expo Go may be unstable. Consider creating a development build version for full functionality.";
       }
-      
-      Alert.alert('Authentication Error', errorMessage);
+
+      Alert.alert("Authentication Error", errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -177,13 +187,13 @@ const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) =>
   // Handle sign out
   const handleSignOut = async () => {
     Alert.alert(
-      'Disconnect',
-      'Are you sure you want to disconnect from Google Drive?',
+      "Disconnect",
+      "Are you sure you want to disconnect from Google Drive?",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Disconnect',
-          style: 'destructive',
+          text: "Disconnect",
+          style: "destructive",
           onPress: async () => {
             setIsLoading(true);
             try {
@@ -191,65 +201,70 @@ const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) =>
               if (success) {
                 setIsAuthenticated(false);
                 setAutoSyncEnabled(false);
-                Alert.alert('Success', 'Disconnected from Google Drive');
+                Alert.alert("Success", "Disconnected from Google Drive");
               } else {
-                Alert.alert('Error', 'Failed to disconnect');
+                Alert.alert("Error", "Failed to disconnect");
               }
             } catch (error) {
-              console.error('Sign out error:', error);
-              Alert.alert('Error', 'An error occurred during disconnection');
+              console.error("Sign out error:", error);
+              Alert.alert("Error", "An error occurred during disconnection");
             } finally {
               setIsLoading(false);
             }
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
   // Handle create backup
   const handleCreateBackup = async () => {
     if (!isAuthenticated) {
-      Alert.alert('Note', 'Please connect to Google Drive first');
+      Alert.alert("Note", "Please connect to Google Drive first");
       return;
     }
 
     Alert.prompt(
-      'Create Backup',
-      'Enter backup description (optional):',
+      "Create Backup",
+      "Enter backup description (optional):",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Create',
+          text: "Create",
           onPress: async (description) => {
             setIsLoading(true);
             try {
-              const result = await googleDriveService.createBackup({ description });
-              
+              const result = await googleDriveService.createBackup({
+                description,
+              });
+
               if (result.success) {
-                Alert.alert('Success', 'Backup created successfully');
+                Alert.alert("Success", "Backup created successfully");
                 loadLastSyncTime();
                 if (onBackupComplete) onBackupComplete();
               } else {
-                Alert.alert('Error', `Failed to create backup: ${result.error}`);
+                Alert.alert(
+                  "Error",
+                  `Failed to create backup: ${result.error}`,
+                );
               }
             } catch (error) {
-              console.error('Backup creation error:', error);
-              Alert.alert('Error', 'An error occurred during backup creation');
+              console.error("Backup creation error:", error);
+              Alert.alert("Error", "An error occurred during backup creation");
             } finally {
               setIsLoading(false);
             }
-          }
-        }
+          },
+        },
       ],
-      'plain-text'
+      "plain-text",
     );
   };
 
   // Handle restore backup
   const handleRestoreBackup = async () => {
     if (!isAuthenticated) {
-      Alert.alert('Note', 'Please connect to Google Drive first');
+      Alert.alert("Note", "Please connect to Google Drive first");
       return;
     }
 
@@ -258,124 +273,129 @@ const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) =>
       const backupList = await googleDriveService.getBackups();
       setBackups(backupList);
       setIsLoading(false);
-      
+
       if (backupList.length === 0) {
-        Alert.alert('Note', 'No backups available');
+        Alert.alert("Note", "No backups available");
         return;
       }
-      
+
       setShowBackupListModal(true);
     } catch (error) {
-      console.error('Error loading backups:', error);
+      console.error("Error loading backups:", error);
       setIsLoading(false);
-      Alert.alert('Error', 'Failed to load backup list');
+      Alert.alert("Error", "Failed to load backup list");
     }
   };
 
   // Confirm restore specific backup
   const confirmRestore = (backup) => {
     Alert.alert(
-      'Restore Backup',
-      'This will replace all current data with the selected backup. Continue?',
+      "Restore Backup",
+      "This will replace all current data with the selected backup. Continue?",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Restore',
-          style: 'destructive',
+          text: "Restore",
+          style: "destructive",
           onPress: async () => {
             setShowBackupListModal(false);
             setIsLoading(true);
-            
+
             try {
               const result = await googleDriveService.restoreBackup(backup.id);
-              
+
               if (result.success) {
                 Alert.alert(
-                  'Success', 
+                  "Success",
                   `Backup restored successfully. ${result.restoredItems} items restored.`,
-                  [{ 
-                    text: 'OK', 
-                    onPress: () => {
-                      if (onBackupComplete) onBackupComplete();
-                    } 
-                  }]
+                  [
+                    {
+                      text: "OK",
+                      onPress: () => {
+                        if (onBackupComplete) onBackupComplete();
+                      },
+                    },
+                  ],
                 );
               } else {
-                Alert.alert('Error', `Failed to restore backup: ${result.error}`);
+                Alert.alert(
+                  "Error",
+                  `Failed to restore backup: ${result.error}`,
+                );
               }
             } catch (error) {
-              console.error('Restore error:', error);
-              Alert.alert('Error', 'An error occurred during restoration');
+              console.error("Restore error:", error);
+              Alert.alert("Error", "An error occurred during restoration");
             } finally {
               setIsLoading(false);
             }
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
   // Handle delete backup
   const handleDeleteBackup = (backup) => {
     Alert.alert(
-      'Delete Backup',
-      'Are you sure you want to delete this backup?',
+      "Delete Backup",
+      "Are you sure you want to delete this backup?",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Delete',
-          style: 'destructive',
+          text: "Delete",
+          style: "destructive",
           onPress: async () => {
             try {
               const success = await googleDriveService.deleteBackup(backup.id);
-              
+
               if (success) {
                 // Remove deleted backup from list
-                setBackups(backups.filter(b => b.id !== backup.id));
-                Alert.alert('Success', 'Backup deleted');
+                setBackups(backups.filter((b) => b.id !== backup.id));
+                Alert.alert("Success", "Backup deleted");
               } else {
-                Alert.alert('Error', 'Failed to delete backup');
+                Alert.alert("Error", "Failed to delete backup");
               }
             } catch (error) {
-              console.error('Delete backup error:', error);
-              Alert.alert('Error', 'An error occurred during backup deletion');
+              console.error("Delete backup error:", error);
+              Alert.alert("Error", "An error occurred during backup deletion");
             }
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
   // Handle auto sync toggle
   const handleAutoSyncToggle = async (value) => {
     setAutoSyncEnabled(value);
-    
+
     try {
       await googleDriveService.setAutoSync(value, syncFrequency);
-      
+
       if (value) {
         // If auto sync is enabled, check if immediate sync is needed
-        googleDriveService.checkAndPerformAutoSync().then(performed => {
+        googleDriveService.checkAndPerformAutoSync().then((performed) => {
           if (performed) {
             loadLastSyncTime();
           }
         });
       }
     } catch (error) {
-      console.error('Failed to set auto sync:', error);
-      Alert.alert('Error', 'Failed to set auto sync');
+      console.error("Failed to set auto sync:", error);
+      Alert.alert("Error", "Failed to set auto sync");
     }
   };
 
   // Handle sync frequency change
   const handleFrequencyChange = async (frequency) => {
     setSyncFrequency(frequency);
-    
+
     try {
       await googleDriveService.setAutoSync(autoSyncEnabled, frequency);
     } catch (error) {
-      console.error('Failed to set sync frequency:', error);
-      Alert.alert('Error', 'Failed to set sync frequency');
+      console.error("Failed to set sync frequency:", error);
+      Alert.alert("Error", "Failed to set sync frequency");
     }
   };
 
@@ -386,8 +406,8 @@ const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) =>
       const backupList = await googleDriveService.getBackups();
       setBackups(backupList);
     } catch (error) {
-      console.error('Error refreshing backups:', error);
-      Alert.alert('Error', 'Failed to refresh backup list');
+      console.error("Error refreshing backups:", error);
+      Alert.alert("Error", "Failed to refresh backup list");
     } finally {
       setRefreshing(false);
     }
@@ -395,14 +415,14 @@ const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) =>
 
   // Format date
   const formatDate = (dateString) => {
-    if (!dateString) return 'Never';
+    if (!dateString) return "Never";
     const date = new Date(dateString);
     return date.toLocaleString();
   };
 
   // Format file size
   const formatSize = (bytes) => {
-    if (!bytes) return 'Unknown';
+    if (!bytes) return "Unknown";
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -417,48 +437,106 @@ const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) =>
         animationType="slide"
         onRequestClose={() => setShowBackupListModal(false)}
       >
-        <View style={[styles.modalOverlay, isLightTheme && styles.lightModalOverlay]}>
-          <View style={[styles.modalContent, isLightTheme && styles.lightModalContent]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            isLightTheme && styles.lightModalOverlay,
+          ]}
+        >
+          <View
+            style={[
+              styles.modalContent,
+              isLightTheme && styles.lightModalContent,
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, isLightTheme && styles.lightModalTitle]}>Backup History</Text>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  isLightTheme && styles.lightModalTitle,
+                ]}
+              >
+                Backup History
+              </Text>
               <TouchableOpacity
                 style={styles.closeButton}
                 onPress={() => setShowBackupListModal(false)}
               >
-                <MaterialIcons name="close" size={24} color={isLightTheme ? "#333" : "#FFF"} />
+                <MaterialIcons
+                  name="close"
+                  size={24}
+                  color={isLightTheme ? "#333" : "#FFF"}
+                />
               </TouchableOpacity>
             </View>
-            
+
             {backups.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <Text style={[styles.emptyText, isLightTheme && styles.lightEmptyText]}>No backups found</Text>
+                <Text
+                  style={[
+                    styles.emptyText,
+                    isLightTheme && styles.lightEmptyText,
+                  ]}
+                >
+                  No backups found
+                </Text>
               </View>
             ) : (
               <FlatList
                 data={backups}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
-                  <View style={[styles.backupItem, isLightTheme && styles.lightBackupItem]}>
+                  <View
+                    style={[
+                      styles.backupItem,
+                      isLightTheme && styles.lightBackupItem,
+                    ]}
+                  >
                     <View style={styles.backupInfo}>
-                      <Text style={[styles.backupDate, isLightTheme && styles.lightBackupDate]}>
+                      <Text
+                        style={[
+                          styles.backupDate,
+                          isLightTheme && styles.lightBackupDate,
+                        ]}
+                      >
                         {formatDate(item.createdTime)}
                       </Text>
-                      <Text style={[styles.backupSize, isLightTheme && styles.lightBackupSize]}>
+                      <Text
+                        style={[
+                          styles.backupSize,
+                          isLightTheme && styles.lightBackupSize,
+                        ]}
+                      >
                         {formatSize(item.size)}
                       </Text>
                     </View>
                     <View style={styles.backupActions}>
                       <TouchableOpacity
-                        style={[styles.backupAction, isLightTheme && styles.lightBackupAction]}
+                        style={[
+                          styles.backupAction,
+                          isLightTheme && styles.lightBackupAction,
+                        ]}
                         onPress={() => confirmRestore(item)}
                       >
-                        <MaterialIcons name="restore" size={20} color={isLightTheme ? "#333" : "#FFF"} />
+                        <MaterialIcons
+                          name="restore"
+                          size={20}
+                          color={isLightTheme ? "#333" : "#FFF"}
+                        />
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.backupAction, styles.deleteAction, isLightTheme && styles.lightDeleteAction]}
+                        style={[
+                          styles.backupAction,
+                          styles.deleteAction,
+                          isLightTheme && styles.lightDeleteAction,
+                        ]}
                         onPress={() => handleDeleteBackup(item)}
                       >
-                        <MaterialIcons name="delete" size={20} color={isLightTheme ? "#333" : "#FFF"} />
+                        <MaterialIcons
+                          name="delete"
+                          size={20}
+                          color={isLightTheme ? "#333" : "#FFF"}
+                        />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -477,142 +555,283 @@ const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) =>
     <View style={[styles.container, isLightTheme && styles.lightContainer]}>
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={isLightTheme ? "#333" : "#FFF"} />
-          <Text style={[styles.loadingText, isLightTheme && styles.lightText]}>Connecting to Google Drive...</Text>
+          <ActivityIndicator
+            size="large"
+            color={isLightTheme ? "#333" : "#FFF"}
+          />
+          <Text style={[styles.loadingText, isLightTheme && styles.lightText]}>
+            Connecting to Google Drive...
+          </Text>
         </View>
       ) : !isAuthenticated ? (
         <View>
-          <Text style={[styles.sectionTitle, isLightTheme && styles.lightSectionTitle]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              isLightTheme && styles.lightSectionTitle,
+            ]}
+          >
             Backup and restore data to Google Drive
           </Text>
-          
+
           <Text style={[styles.noteText, isLightTheme && styles.lightNoteText]}>
-            Note: This feature may be unstable in Expo Go. If you don't have a developer account, it's recommended to use local backup or a mock account.
+            Note: This feature may be unstable in Expo Go. If you don't have a
+            developer account, it's recommended to use local backup or a mock
+            account.
           </Text>
-          
+
           <TouchableOpacity
             style={styles.connectButton}
             onPress={handleAuthenticate}
           >
-            <MaterialIcons name="cloud" size={24} color="#FFFFFF" style={styles.connectButtonIcon} />
-            <Text style={styles.connectButtonText}>Connect to Google Drive</Text>
+            <MaterialIcons
+              name="cloud"
+              size={24}
+              color="#FFFFFF"
+              style={styles.connectButtonIcon}
+            />
+            <Text style={styles.connectButtonText}>
+              Connect to Google Drive
+            </Text>
           </TouchableOpacity>
-          
+
           {isExpoGo && (
             <TouchableOpacity
-              style={[styles.mockButton, isLightTheme && styles.lightMockButton]}
+              style={[
+                styles.mockButton,
+                isLightTheme && styles.lightMockButton,
+              ]}
               onPress={useMockGoogleAccount}
             >
-              <Text style={[styles.mockButtonText, isLightTheme && styles.lightMockButtonText]}>Use Mock Account (For Testing)</Text>
+              <Text
+                style={[
+                  styles.mockButtonText,
+                  isLightTheme && styles.lightMockButtonText,
+                ]}
+              >
+                Use Mock Account (For Testing)
+              </Text>
             </TouchableOpacity>
           )}
         </View>
       ) : (
         <View>
           <View style={styles.headerContainer}>
-            <Text style={[styles.sectionTitle, isLightTheme && styles.lightSectionTitle]}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                isLightTheme && styles.lightSectionTitle,
+              ]}
+            >
               Google Drive Backup
             </Text>
-            
+
             <TouchableOpacity
-              style={[styles.disconnectButton, isLightTheme && styles.lightDisconnectButton]}
+              style={[
+                styles.disconnectButton,
+                isLightTheme && styles.lightDisconnectButton,
+              ]}
               onPress={handleSignOut}
             >
-              <Text style={[styles.disconnectButtonText, isLightTheme && styles.lightDisconnectButtonText]}>Disconnect</Text>
+              <Text
+                style={[
+                  styles.disconnectButtonText,
+                  isLightTheme && styles.lightDisconnectButtonText,
+                ]}
+              >
+                Disconnect
+              </Text>
             </TouchableOpacity>
           </View>
-          
+
           {/* Last sync time */}
           {lastSyncTime && (
             <View style={styles.infoItem}>
-              <Text style={[styles.infoLabel, isLightTheme && styles.lightInfoLabel]}>Last sync time:</Text>
-              <Text style={[styles.infoValue, isLightTheme && styles.lightInfoValue]}>{formatDate(lastSyncTime)}</Text>
+              <Text
+                style={[
+                  styles.infoLabel,
+                  isLightTheme && styles.lightInfoLabel,
+                ]}
+              >
+                Last sync time:
+              </Text>
+              <Text
+                style={[
+                  styles.infoValue,
+                  isLightTheme && styles.lightInfoValue,
+                ]}
+              >
+                {formatDate(lastSyncTime)}
+              </Text>
             </View>
           )}
-          
+
           {/* Backup and restore buttons */}
           <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={[styles.button, isLightTheme && styles.lightButton]}
               onPress={handleCreateBackup}
             >
-              <MaterialIcons name="backup" size={24} color={isLightTheme ? "#333" : "#FFFFFF"} />
-              <Text style={[styles.buttonText, isLightTheme && styles.lightButtonText]}>Create Backup</Text>
+              <MaterialIcons
+                name="backup"
+                size={24}
+                color={isLightTheme ? "#333" : "#FFFFFF"}
+              />
+              <Text
+                style={[
+                  styles.buttonText,
+                  isLightTheme && styles.lightButtonText,
+                ]}
+              >
+                Create Backup
+              </Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               style={[styles.button, isLightTheme && styles.lightButton]}
               onPress={handleRestoreBackup}
             >
-              <MaterialIcons name="restore" size={24} color={isLightTheme ? "#333" : "#FFFFFF"} />
-              <Text style={[styles.buttonText, isLightTheme && styles.lightButtonText]}>Restore Backup</Text>
+              <MaterialIcons
+                name="restore"
+                size={24}
+                color={isLightTheme ? "#333" : "#FFFFFF"}
+              />
+              <Text
+                style={[
+                  styles.buttonText,
+                  isLightTheme && styles.lightButtonText,
+                ]}
+              >
+                Restore Backup
+              </Text>
             </TouchableOpacity>
           </View>
-          
+
           {/* Auto sync settings */}
-          <View style={[styles.settingItem, isLightTheme && styles.lightSettingItem]}>
+          <View
+            style={[
+              styles.settingItem,
+              isLightTheme && styles.lightSettingItem,
+            ]}
+          >
             <View style={styles.settingContent}>
-              <Text style={[styles.settingLabel, isLightTheme && styles.lightSettingLabel]}>Auto Sync</Text>
-              <Text style={[styles.settingDescription, isLightTheme && styles.lightSettingDescription]}>
+              <Text
+                style={[
+                  styles.settingLabel,
+                  isLightTheme && styles.lightSettingLabel,
+                ]}
+              >
+                Auto Sync
+              </Text>
+              <Text
+                style={[
+                  styles.settingDescription,
+                  isLightTheme && styles.lightSettingDescription,
+                ]}
+              >
                 Automatically backup data to Google Drive periodically
               </Text>
             </View>
-            
+
             <Switch
-              trackColor={{ false: isLightTheme ? "#DDDDDD" : "#222222", true: "#777777" }}
+              trackColor={{
+                false: isLightTheme ? "#DDDDDD" : "#222222",
+                true: "#777777",
+              }}
               thumbColor={autoSyncEnabled ? "#FFFFFF" : "#888888"}
               ios_backgroundColor={isLightTheme ? "#DDDDDD" : "#222222"}
               onValueChange={handleAutoSyncToggle}
               value={autoSyncEnabled}
             />
           </View>
-          
+
           {/* Sync frequency selector */}
           {autoSyncEnabled && (
-            <View style={[styles.frequencySelector, isLightTheme && styles.lightFrequencySelector]}>
-              <Text style={[styles.frequencyLabel, isLightTheme && styles.lightFrequencyLabel]}>Sync frequency:</Text>
+            <View
+              style={[
+                styles.frequencySelector,
+                isLightTheme && styles.lightFrequencySelector,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.frequencyLabel,
+                  isLightTheme && styles.lightFrequencyLabel,
+                ]}
+              >
+                Sync frequency:
+              </Text>
               <View style={styles.frequencyOptions}>
                 <TouchableOpacity
                   style={[
                     styles.frequencyOption,
                     isLightTheme && styles.lightFrequencyOption,
-                    syncFrequency === 'daily' && styles.frequencyOptionSelected,
-                    syncFrequency === 'daily' && isLightTheme && styles.lightFrequencyOptionSelected
+                    syncFrequency === "daily" && styles.frequencyOptionSelected,
+                    syncFrequency === "daily" &&
+                      isLightTheme &&
+                      styles.lightFrequencyOptionSelected,
                   ]}
-                  onPress={() => handleFrequencyChange('daily')}
+                  onPress={() => handleFrequencyChange("daily")}
                 >
-                  <Text style={[styles.frequencyText, isLightTheme && styles.lightFrequencyText]}>Daily</Text>
+                  <Text
+                    style={[
+                      styles.frequencyText,
+                      isLightTheme && styles.lightFrequencyText,
+                    ]}
+                  >
+                    Daily
+                  </Text>
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity
                   style={[
                     styles.frequencyOption,
                     isLightTheme && styles.lightFrequencyOption,
-                    syncFrequency === 'weekly' && styles.frequencyOptionSelected,
-                    syncFrequency === 'weekly' && isLightTheme && styles.lightFrequencyOptionSelected
+                    syncFrequency === "weekly" &&
+                      styles.frequencyOptionSelected,
+                    syncFrequency === "weekly" &&
+                      isLightTheme &&
+                      styles.lightFrequencyOptionSelected,
                   ]}
-                  onPress={() => handleFrequencyChange('weekly')}
+                  onPress={() => handleFrequencyChange("weekly")}
                 >
-                  <Text style={[styles.frequencyText, isLightTheme && styles.lightFrequencyText]}>Weekly</Text>
+                  <Text
+                    style={[
+                      styles.frequencyText,
+                      isLightTheme && styles.lightFrequencyText,
+                    ]}
+                  >
+                    Weekly
+                  </Text>
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity
                   style={[
                     styles.frequencyOption,
                     isLightTheme && styles.lightFrequencyOption,
-                    syncFrequency === 'monthly' && styles.frequencyOptionSelected,
-                    syncFrequency === 'monthly' && isLightTheme && styles.lightFrequencyOptionSelected
+                    syncFrequency === "monthly" &&
+                      styles.frequencyOptionSelected,
+                    syncFrequency === "monthly" &&
+                      isLightTheme &&
+                      styles.lightFrequencyOptionSelected,
                   ]}
-                  onPress={() => handleFrequencyChange('monthly')}
+                  onPress={() => handleFrequencyChange("monthly")}
                 >
-                  <Text style={[styles.frequencyText, isLightTheme && styles.lightFrequencyText]}>Monthly</Text>
+                  <Text
+                    style={[
+                      styles.frequencyText,
+                      isLightTheme && styles.lightFrequencyText,
+                    ]}
+                  >
+                    Monthly
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
         </View>
       )}
-      
+
       {renderBackupListModal()}
     </View>
   );
@@ -620,320 +839,320 @@ const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) =>
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#111',
+    backgroundColor: "#111",
     borderRadius: 10,
     padding: 20,
   },
   lightContainer: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   sectionTitle: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 18,
-    fontWeight: '500',
+    fontWeight: "500",
     marginBottom: 15,
   },
   lightSectionTitle: {
-    color: '#111',
+    color: "#111",
   },
   noteText: {
-    color: '#888',
+    color: "#888",
     fontSize: 14,
     marginBottom: 15,
   },
   lightNoteText: {
-    color: '#555',
+    color: "#555",
   },
   settingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#222',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#222",
     borderRadius: 10,
     padding: 10,
     marginBottom: 10,
     height: 60,
   },
   lightSettingItem: {
-    backgroundColor: '#DDD',
+    backgroundColor: "#DDD",
   },
   settingContent: {
     flex: 1,
   },
   settingLabel: {
-    color: '#CCC',
+    color: "#CCC",
     fontSize: 16,
   },
   lightSettingLabel: {
-    color: '#333',
+    color: "#333",
   },
   settingDescription: {
-    color: '#888',
+    color: "#888",
     fontSize: 11,
     marginTop: 2,
   },
   lightSettingDescription: {
-    color: '#555',
+    color: "#555",
   },
   connectButton: {
-    backgroundColor: '#4285F4', // Google blue
+    backgroundColor: "#4285F4", // Google blue
     padding: 15,
     borderRadius: 8,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
     marginBottom: 15,
   },
   connectButtonText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   disconnectButton: {
-    backgroundColor: '#444',
+    backgroundColor: "#444",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 5,
   },
   lightDisconnectButton: {
-    backgroundColor: '#DDD',
+    backgroundColor: "#DDD",
   },
   disconnectButtonText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 14,
   },
   lightDisconnectButtonText: {
-    color: '#333',
+    color: "#333",
   },
   infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 10,
     paddingHorizontal: 5,
   },
   infoLabel: {
-    color: '#888',
+    color: "#888",
     fontSize: 14,
     marginRight: 5,
   },
   lightInfoLabel: {
-    color: '#555',
+    color: "#555",
   },
   infoValue: {
-    color: '#CCC',
+    color: "#CCC",
     fontSize: 14,
   },
   lightInfoValue: {
-    color: '#333',
+    color: "#333",
   },
   buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 15,
   },
   button: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#333',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#333",
     padding: 12,
     borderRadius: 8,
     marginHorizontal: 5,
   },
   lightButton: {
-    backgroundColor: '#4285F4',
+    backgroundColor: "#4285F4",
   },
   buttonText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 14,
     marginLeft: 8,
   },
   lightButtonText: {
-    color: '#FFF',
+    color: "#FFF",
   },
   frequencySelector: {
-    backgroundColor: '#222',
+    backgroundColor: "#222",
     borderRadius: 8,
     padding: 10,
     marginBottom: 10,
   },
   lightFrequencySelector: {
-    backgroundColor: '#DDD',
+    backgroundColor: "#DDD",
   },
   frequencyLabel: {
-    color: '#CCC',
+    color: "#CCC",
     fontSize: 14,
     marginBottom: 8,
   },
   lightFrequencyLabel: {
-    color: '#333',
+    color: "#333",
   },
   frequencyOptions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   frequencyOption: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#333',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#333",
     padding: 8,
     borderRadius: 5,
     marginHorizontal: 3,
   },
   lightFrequencyOption: {
-    backgroundColor: '#CCC',
+    backgroundColor: "#CCC",
   },
   frequencyOptionSelected: {
-    backgroundColor: '#4285F4',
+    backgroundColor: "#4285F4",
   },
   lightFrequencyOptionSelected: {
-    backgroundColor: '#4285F4',
+    backgroundColor: "#4285F4",
   },
   frequencyText: {
-    color: '#CCC',
+    color: "#CCC",
     fontSize: 12,
   },
   lightFrequencyText: {
-    color: '#333',
+    color: "#333",
   },
   modalOverlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
   },
   modalContent: {
-    width: '90%',
-    maxHeight: '80%',
-    backgroundColor: '#111',
+    width: "90%",
+    maxHeight: "80%",
+    backgroundColor: "#111",
     borderRadius: 10,
     padding: 20,
   },
   lightModalContent: {
-    backgroundColor: '#FFF',
+    backgroundColor: "#FFF",
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
   },
   modalTitle: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   lightModalTitle: {
-    color: '#111',
+    color: "#111",
   },
   closeButton: {
     padding: 5,
   },
   emptyContainer: {
     padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyText: {
-    color: '#888',
+    color: "#888",
     fontSize: 16,
   },
   lightEmptyText: {
-    color: '#555',
+    color: "#555",
   },
   backupItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#222',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#222",
     borderRadius: 8,
     padding: 15,
     marginBottom: 10,
   },
   lightBackupItem: {
-    backgroundColor: '#EEE',
+    backgroundColor: "#EEE",
   },
   backupInfo: {
     flex: 1,
   },
   backupDate: {
-    color: '#CCC',
+    color: "#CCC",
     fontSize: 14,
   },
   lightBackupDate: {
-    color: '#333',
+    color: "#333",
   },
   backupSize: {
-    color: '#888',
+    color: "#888",
     fontSize: 12,
     marginTop: 4,
   },
   lightBackupSize: {
-    color: '#555',
+    color: "#555",
   },
   backupActions: {
-    flexDirection: 'row',
+    flexDirection: "row",
   },
   backupAction: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#333',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#333",
+    alignItems: "center",
+    justifyContent: "center",
     marginLeft: 8,
   },
   lightBackupAction: {
-    backgroundColor: '#4285F4',
+    backgroundColor: "#4285F4",
   },
   deleteAction: {
-    backgroundColor: '#661111',
+    backgroundColor: "#661111",
   },
   lightDeleteAction: {
-    backgroundColor: '#FF6B6B',
+    backgroundColor: "#FF6B6B",
   },
   loadingContainer: {
     padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   loadingText: {
-    color: '#CCC',
+    color: "#CCC",
     fontSize: 16,
     marginTop: 10,
   },
   lightText: {
-    color: '#333',
+    color: "#333",
   },
   headerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 15,
   },
   connectButtonIcon: {
     marginRight: 10,
   },
   mockButton: {
-    backgroundColor: '#333',
+    backgroundColor: "#333",
     padding: 12,
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 10,
   },
   lightMockButton: {
-    backgroundColor: '#DDD',
+    backgroundColor: "#DDD",
   },
   mockButtonText: {
-    color: '#CCC',
+    color: "#CCC",
     fontSize: 14,
   },
   lightMockButtonText: {
-    color: '#333',
+    color: "#333",
   },
 });
 
-export default CloudBackupSection; 
+export default CloudBackupSection;

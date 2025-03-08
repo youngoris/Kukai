@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useState, useCallback } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /**
  * Custom hook for AsyncStorage operations with error handling
- * 
+ *
  * @param {string} key - Storage key
  * @param {any} initialValue - Initial value if nothing is stored
  * @returns {Array} - [storedValue, setValue, loading, error]
@@ -30,23 +30,27 @@ const useAsyncStorage = (key, initialValue = null) => {
   }, [key, initialValue]);
 
   // Save data to storage
-  const setValue = useCallback(async (value) => {
-    try {
-      setLoading(true);
-      // Allow value to be a function for previous state updates
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-      await AsyncStorage.setItem(key, JSON.stringify(valueToStore));
-      setError(null);
-      return true;
-    } catch (e) {
-      console.error(`Error writing to AsyncStorage (${key}):`, e);
-      setError(e);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }, [key, storedValue]);
+  const setValue = useCallback(
+    async (value) => {
+      try {
+        setLoading(true);
+        // Allow value to be a function for previous state updates
+        const valueToStore =
+          value instanceof Function ? value(storedValue) : value;
+        setStoredValue(valueToStore);
+        await AsyncStorage.setItem(key, JSON.stringify(valueToStore));
+        setError(null);
+        return true;
+      } catch (e) {
+        console.error(`Error writing to AsyncStorage (${key}):`, e);
+        setError(e);
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [key, storedValue],
+  );
 
   // Remove data from storage
   const removeValue = useCallback(async () => {
@@ -73,4 +77,4 @@ const useAsyncStorage = (key, initialValue = null) => {
   return [storedValue, setValue, removeValue, loading, error, initialize];
 };
 
-export default useAsyncStorage; 
+export default useAsyncStorage;

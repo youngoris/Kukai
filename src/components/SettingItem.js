@@ -1,10 +1,10 @@
-import React from 'react';
-import { View, Text, Switch, TouchableOpacity, StyleSheet } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import React from "react";
+import { View, Text, Switch, TouchableOpacity, StyleSheet } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 
 /**
  * SettingItem component for displaying various types of settings
- * 
+ *
  * @param {Object} props - Component props
  * @param {string} props.label - Setting label
  * @param {string} [props.description] - Optional description
@@ -25,10 +25,10 @@ const SettingItem = ({
   isDropdown = false,
   selectedValue,
   onPress,
-  theme = 'dark'
+  theme = "dark",
 }) => {
-  const isDarkTheme = theme === 'dark';
-  
+  const isDarkTheme = theme === "dark";
+
   return (
     <TouchableOpacity
       style={styles.settingItem}
@@ -36,38 +36,39 @@ const SettingItem = ({
       disabled={isSwitch}
     >
       <View style={styles.settingTextContainer}>
-        <Text style={[
-          styles.settingLabel,
-          !isDarkTheme && styles.lightText
-        ]}>
+        <Text style={[styles.settingLabel, !isDarkTheme && styles.lightText]}>
           {label}
         </Text>
         {description && (
-          <Text style={[
-            styles.settingDescription,
-            !isDarkTheme && styles.lightDescriptionText
-          ]}>
+          <Text
+            style={[
+              styles.settingDescription,
+              !isDarkTheme && styles.lightDescriptionText,
+            ]}
+          >
             {description}
           </Text>
         )}
       </View>
-      
+
       {isSwitch && (
         <Switch
           value={value}
           onValueChange={onValueChange}
-          trackColor={{ false: '#444', true: '#4CAF50' }}
-          thumbColor={value ? '#fff' : '#f4f3f4'}
+          trackColor={{ false: "#444", true: "#4CAF50" }}
+          thumbColor={value ? "#fff" : "#f4f3f4"}
           ios_backgroundColor="#444"
         />
       )}
-      
+
       {isDropdown && (
         <View style={styles.dropdownContainer}>
-          <Text style={[
-            styles.selectedValue,
-            !isDarkTheme && styles.lightSelectedValue
-          ]}>
+          <Text
+            style={[
+              styles.selectedValue,
+              !isDarkTheme && styles.lightSelectedValue,
+            ]}
+          >
             {selectedValue}
           </Text>
           <MaterialIcons
@@ -83,44 +84,44 @@ const SettingItem = ({
 
 const styles = StyleSheet.create({
   settingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#222',
+    borderBottomColor: "#222",
   },
   settingTextContainer: {
     flex: 1,
     paddingRight: 10,
   },
   settingLabel: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
     marginBottom: 4,
   },
   settingDescription: {
-    color: '#999999',
+    color: "#999999",
     fontSize: 14,
   },
   dropdownContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   selectedValue: {
-    color: '#CCCCCC',
+    color: "#CCCCCC",
     fontSize: 16,
     marginRight: 8,
   },
   lightText: {
-    color: '#000000',
+    color: "#000000",
   },
   lightDescriptionText: {
-    color: '#666666',
+    color: "#666666",
   },
   lightSelectedValue: {
-    color: '#666666',
+    color: "#666666",
   },
 });
 
-export default SettingItem; 
+export default SettingItem;

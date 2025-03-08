@@ -2,6 +2,8 @@
 
 Kukai is a multifunctional application focused on personal life management and spiritual growth, integrating meditation, task management, focus mode, journaling, and statistical summaries to help users improve their quality of life and work efficiency.
 
+
+
 ## Prerequisites
 
 Before installing and running Kukai, ensure your development environment meets the following requirements:
@@ -35,7 +37,6 @@ yarn install
 ### 3. Environment Configuration (Optional)
 
 Create a `.env` file and configure the necessary environment variables if you need the following features:
-
 - Weather API key: Required for weather information display
 - Google API credentials: Required for Google Drive synchronization
 
@@ -100,26 +101,24 @@ npx expo run:android
 
 **Note:** You do not need to log in to an Expo account when developing or testing with Expo Go in development mode.
 
+
+
 ## Troubleshooting
 
 ### Common Issues
 
 1. **Cannot start Metro server**
-
    - Try clearing the cache: `npm start -- --reset-cache`
 
 2. **iOS build fails**
-
    - Ensure all CocoaPods dependencies are correctly installed
    - Check if your Xcode version is compatible
 
 3. **Android type conversion errors**
-
    - String types on Android platforms do not automatically convert to double types; ensure all values are explicitly converted to number types (using parseFloat) before passing them to animation and style properties
    - Use Platform.OS to detect the platform and provide different implementations
 
 4. **Notifications not working**
-
    - Check application permission settings
    - On Android, ensure notification channels are properly created
 
@@ -194,7 +193,6 @@ kukai/
 The application follows a well-organized structure:
 
 1. **src/**: Contains all the source code of the application
-
    - **screens/**: Each major feature has its own screen component
    - **components/**: Reusable UI components used across screens
    - **services/**: Backend service integrations and API wrappers

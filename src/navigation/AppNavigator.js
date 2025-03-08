@@ -1,18 +1,18 @@
-import React from 'react';
-import { Dimensions } from 'react-native';
-import { createStackNavigator } from '@react-navigation/stack';
+import React from "react";
+import { Dimensions } from "react-native";
+import { createStackNavigator } from "@react-navigation/stack";
 
 // Import screens
-import HomeScreen from '../screens/HomeScreen';
-import MeditationScreen from '../screens/MeditationScreen';
-import TaskScreen from '../screens/TaskScreen';
-import FocusScreen from '../screens/FocusScreen';
-import SummaryScreen from '../screens/SummaryScreen';
-import JournalScreen from '../screens/JournalScreen';
-import JournalEditScreen from '../screens/JournalEditScreen';
-import SettingsScreen from '../screens/SettingsScreen';
+import HomeScreen from "../screens/HomeScreen";
+import MeditationScreen from "../screens/MeditationScreen";
+import TaskScreen from "../screens/TaskScreen";
+import FocusScreen from "../screens/FocusScreen";
+import SummaryScreen from "../screens/SummaryScreen";
+import JournalScreen from "../screens/JournalScreen";
+import JournalEditScreen from "../screens/JournalEditScreen";
+import SettingsScreen from "../screens/SettingsScreen";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 const Stack = createStackNavigator();
 
 const AppNavigator = () => {
@@ -21,17 +21,19 @@ const AppNavigator = () => {
       initialRouteName="Home"
       screenOptions={({ route, navigation }) => ({
         headerShown: false,
-        cardStyle: { backgroundColor: '#000' },
+        cardStyle: { backgroundColor: "#000" },
         animationEnabled: true,
-        gestureEnabled: route.name !== 'Home' && route.name !== 'Settings',
-        gestureDirection: route.name === 'Home' ? 'horizontal-inverted' : 'horizontal',
+        gestureEnabled: route.name !== "Home" && route.name !== "Settings",
+        gestureDirection:
+          route.name === "Home" ? "horizontal-inverted" : "horizontal",
         gestureResponseDistance: {
           horizontal: width * 0.5,
         },
         cardStyleInterpolator: ({ current, layouts, next }) => {
           // Check if navigating back to Home screen
-          const isGoingHome = next?.route?.name === 'Home' || route.name === 'Home';
-          
+          const isGoingHome =
+            next?.route?.name === "Home" || route.name === "Home";
+
           // If going back to Home, use opposite animation direction
           if (isGoingHome) {
             return {
@@ -47,7 +49,7 @@ const AppNavigator = () => {
               },
             };
           }
-          
+
           // Default right to left animation
           return {
             cardStyle: {
@@ -76,4 +78,4 @@ const AppNavigator = () => {
   );
 };
 
-export default AppNavigator; 
+export default AppNavigator;

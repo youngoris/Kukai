@@ -1,20 +1,26 @@
-import React, { useState } from 'react';
-import { View, Platform, Button, Modal, TouchableOpacity, Text, StyleSheet } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import React, { useState } from "react";
+import {
+  View,
+  Platform,
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+} from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 /**
  * Platform-compatible date time picker component
  * On iOS, it directly uses the native DateTimePicker
  * On Android, it uses a Modal-wrapped picker to avoid TurboModule issues
  */
-const CustomDateTimePicker = ({ 
-  value, 
-  mode = 'date', 
+const CustomDateTimePicker = ({
+  value,
+  mode = "date",
   display,
   onChange,
   minimumDate,
   maximumDate,
-  ...props 
+  ...props
 }) => {
   // Ensure value is a valid Date object
   const ensureDate = (dateValue) => {
@@ -25,9 +31,9 @@ const CustomDateTimePicker = ({
 
   const [isPickerVisible, setPickerVisible] = useState(false);
   const [tempDate, setTempDate] = useState(ensureDate(value));
-  
+
   // iOS directly uses native DateTimePicker
-  if (Platform.OS === 'ios') {
+  if (Platform.OS === "ios") {
     return (
       <DateTimePicker
         value={ensureDate(value)}
@@ -56,15 +62,18 @@ const CustomDateTimePicker = ({
 
   // Format date display for Android button
   const formatDate = (date) => {
-    if (!date) return '';
-    
+    if (!date) return "";
+
     // Ensure date is a Date object
     const safeDate = ensureDate(date);
-    
-    if (mode === 'date') {
+
+    if (mode === "date") {
       return safeDate.toLocaleDateString();
-    } else if (mode === 'time') {
-      return safeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (mode === "time") {
+      return safeDate.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
     }
     return safeDate.toLocaleString();
   };
@@ -80,7 +89,7 @@ const CustomDateTimePicker = ({
           value={tempDate}
           mode={mode}
           is24Hour={true}
-          display={display || 'default'}
+          display={display || "default"}
           onChange={handleAndroidChange}
           minimumDate={minimumDate ? ensureDate(minimumDate) : undefined}
           maximumDate={maximumDate ? ensureDate(maximumDate) : undefined}
@@ -94,15 +103,15 @@ const CustomDateTimePicker = ({
 const styles = StyleSheet.create({
   androidButton: {
     padding: 10,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: "#f0f0f0",
     borderRadius: 5,
     borderWidth: 1,
-    borderColor: '#cccccc',
+    borderColor: "#cccccc",
   },
   androidButtonText: {
     fontSize: 16,
-    textAlign: 'center',
-  }
+    textAlign: "center",
+  },
 });
 
-export default CustomDateTimePicker; 
+export default CustomDateTimePicker;
