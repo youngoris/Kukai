@@ -20,9 +20,9 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons, Ionicons, AntDesign, Feather } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import FrogIcon from './assets/frog.svg';
-import CustomDateTimePicker from './components/CustomDateTimePicker';
-import notificationService from './services/NotificationService';
+import FrogIcon from '../assets/frog.svg';
+import CustomDateTimePicker from '../components/CustomDateTimePicker';
+import notificationService from '../services/NotificationService';
 
 const TaskScreen = ({ navigation }) => {
   const [tasks, setTasks] = useState([]);

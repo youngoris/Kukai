@@ -21,8 +21,8 @@ import { MaterialIcons, Feather, Ionicons, MaterialCommunityIcons } from '@expo/
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import Markdown from 'react-native-markdown-display'; // Import Markdown component
-import useWeather from './utils/useWeather'; // Import weather Hook
-import { getTemplateContent } from './constants/JournalTemplates'; // Import template functionality
+import useWeather from '../utils/useWeather'; // Import weather Hook
+import { getTemplateContent } from '../constants/JournalTemplates'; // Import template functionality
 
 const JournalEditScreen = ({ navigation, route }) => {
   const { savedJournal, date, viewOnly = false, location: routeLocation, weather: routeWeather, temperature: routeTemperature, mood: routeMood } = route.params;

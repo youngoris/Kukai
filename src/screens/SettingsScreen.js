@@ -19,11 +19,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
-import CustomDateTimePicker from './components/CustomDateTimePicker';
-import CloudBackupSection from './components/CloudBackupSection';
-import JournalTemplateManager from './components/JournalTemplateManager';
-import notificationService from './services/NotificationService';
-import { AVAILABLE_TEMPLATES } from './constants/JournalTemplates';
+import CustomDateTimePicker from '../components/CustomDateTimePicker';
+import CloudBackupSection from '../components/CloudBackupSection';
+import JournalTemplateManager from '../components/JournalTemplateManager';
+import notificationService from '../services/NotificationService';
+import { AVAILABLE_TEMPLATES } from '../constants/JournalTemplates';
 
 const SettingsScreen = ({ navigation }) => {
   // Meditation Settings

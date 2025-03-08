@@ -14,8 +14,8 @@ import * as Notifications from 'expo-notifications';
 import * as Progress from 'react-native-progress';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { COLORS } from './constants/DesignSystem';
-import notificationService from './services/NotificationService';
+import { COLORS } from '../constants/DesignSystem';
+import notificationService from '../services/NotificationService';
 
 // Configure notification handler
 Notifications.setNotificationHandler({

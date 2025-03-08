@@ -22,7 +22,7 @@ import { Audio } from 'expo-av';
 import * as Progress from 'react-native-progress';
 import { useFocusEffect } from '@react-navigation/native';
 import Slider from '@react-native-community/slider';
-import { SPACING, FONT_SIZE, FONT_FAMILY, COLORS, LAYOUT, SHADOWS } from './constants/DesignSystem';
+import { SPACING, FONT_SIZE, FONT_FAMILY, COLORS, LAYOUT, SHADOWS } from '../constants/DesignSystem';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Ignore specific warnings
@@ -63,13 +63,13 @@ const configureAudioSession = async () => {
 // Define sound themes
 const soundThemes = [
   { id: 'silence', label: 'Silence', icon: 'volume-mute', source: null },
-  { id: 'whitenoise', label: 'Bright', icon: 'sunny', source: require('./assets/whitenoise.m4a') },
-  { id: 'brownnoise', label: 'Dark', icon: 'moon', source: require('./assets/brownnoise.m4a') },
-  { id: 'rain', label: 'Rain', icon: 'rainy', source: require('./assets/rain.m4a') },
-  { id: 'forest', label: 'Forest', icon: 'leaf', source: require('./assets/forest.m4a') },
-  { id: 'ocean', label: 'Ocean', icon: 'water', source: require('./assets/ocean.m4a') },
-  { id: 'fire', label: 'Fire', icon: 'flame', source: require('./assets/fire.m4a') },
-  { id: 'plane', label: 'Plane', icon: 'airplane', source: require('./assets/plane.m4a') }
+  { id: 'whitenoise', label: 'Bright', icon: 'sunny', source: require('../assets/whitenoise.m4a') },
+  { id: 'brownnoise', label: 'Dark', icon: 'moon', source: require('../assets/brownnoise.m4a') },
+  { id: 'rain', label: 'Rain', icon: 'rainy', source: require('../assets/rain.m4a') },
+  { id: 'forest', label: 'Forest', icon: 'leaf', source: require('../assets/forest.m4a') },
+  { id: 'ocean', label: 'Ocean', icon: 'water', source: require('../assets/ocean.m4a') },
+  { id: 'fire', label: 'Fire', icon: 'flame', source: require('../assets/fire.m4a') },
+  { id: 'plane', label: 'Plane', icon: 'airplane', source: require('../assets/plane.m4a') }
 ];
 
 // Define quick duration options
