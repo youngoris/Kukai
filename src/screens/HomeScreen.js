@@ -7,12 +7,15 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
+  Platform,
+  StatusBar as RNStatusBar,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { MaterialIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import useWeather from "../utils/useWeather";
 import { navigateWithDirection } from "../navigation/AppNavigator";
 
@@ -72,6 +75,12 @@ const HomeScreen = ({ navigation }) => {
 
   // Add a ref in HomeScreen component to track if it's initial load
   const isInitialMount = useRef(true);
+
+  // Get safe area insets
+  const insets = useSafeAreaInsets();
+  
+  // Get status bar height for Android
+  const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
 
   // Load completed tasks state
   const loadCompletedTasks = async () => {
@@ -270,27 +279,52 @@ const HomeScreen = ({ navigation }) => {
       : `weather-${errorIcon}`;
   };
 
+  // Platform-independent color for weather error
+  const weatherErrorColor = "#fff";
+
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[
+      styles.container, 
+      { 
+        // Add padding for notch and other safe areas
+        paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 10 : insets.top,
+        paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
+        paddingLeft: insets.left > 0 ? insets.left : 20,
+        paddingRight: insets.right > 0 ? insets.right : 20,
+      }
+    ]}>
       {/* Top date */}
-      <View style={styles.headerContainer}>
+      <View style={[styles.headerContainer, { marginTop: Platform.OS === 'android' ? 10 : 0 }]}>
         <Text style={styles.dateText}>{formatDate()}</Text>
 
-        {/* Weather display */}
+        {/* Weather display with enhanced error handling */}
         {isLoadingWeather ? (
           <View style={styles.weatherContainer}>
-            <Text style={styles.weatherText}>...</Text>
+            <MaterialCommunityIcons
+              name="weather-partly-cloudy"
+              size={22}
+              color="#aaa"
+              style={[styles.weatherIcon, { opacity: 0.7 }]}
+            />
+            <Text style={[styles.weatherText, { color: "#aaa" }]}>...</Text>
           </View>
         ) : weatherError ? (
-          <View style={styles.weatherContainer}>
+          <TouchableOpacity 
+            style={styles.weatherContainer} 
+            onPress={retryWeatherFetch}
+            activeOpacity={0.7}
+          >
             <MaterialCommunityIcons
               name={getWeatherErrorIcon()}
               size={22}
-              color="#ff6b6b"
+              color={weatherErrorColor}
               style={styles.weatherIcon}
             />
-            <Text style={[styles.weatherText, { color: "#ff6b6b" }]}>--°C</Text>
-          </View>
+            <View>
+              <Text style={[styles.weatherText, { color: weatherErrorColor }]}>--°C</Text>
+              <Text style={[styles.weatherErrorText, { color: weatherErrorColor }]}>{getWeatherErrorMessage()}</Text>
+            </View>
+          </TouchableOpacity>
         ) : (
           weather && (
             <View style={styles.weatherContainer}>
@@ -312,7 +346,13 @@ const HomeScreen = ({ navigation }) => {
       </Animated.View>
 
       {/* Main menu - Absolute positioning in screen center */}
-      <View style={styles.menuContainer}>
+      <View style={[styles.menuContainer, {
+        // Adjust for notch and other safe areas
+        top: Platform.OS === 'android' ? STATUSBAR_HEIGHT : 0,
+        bottom: insets.bottom,
+        left: insets.left,
+        right: insets.right,
+      }]}>
         <TouchableOpacity
           style={styles.menuItem}
           onPress={() => handleFunctionAccess("meditation")}
@@ -358,7 +398,11 @@ const HomeScreen = ({ navigation }) => {
       </View>
 
       {/* Settings button - Bottom center */}
-      <View style={styles.settingsContainer}>
+      <View style={[styles.settingsContainer, {
+        bottom: insets.bottom > 0 ? insets.bottom + 10 : 30,
+        left: insets.left,
+        right: insets.right,
+      }]}>
         <TouchableOpacity
           style={styles.settingsButton}
           onPress={() => navigation.navigate("Settings")}
@@ -368,8 +412,10 @@ const HomeScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <StatusBar style="light" />
-    </SafeAreaView>
+      {Platform.OS === 'ios' ? (
+        <StatusBar style="light" />
+      ) : null}
+    </View>
   );
 };
 
@@ -377,7 +423,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
-    padding: 20,
   },
   headerContainer: {
     flexDirection: "row",

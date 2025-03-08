@@ -25,13 +25,17 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.andre.kukai"
+      "package": "com.andre.kukai",
+      "softwareKeyboardLayoutMode": "pan",
+      "allowsNotchDisplay": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "androidStatusBar": {
-      "hidden": true
+      "hidden": true,
+      "translucent": true,
+      "barStyle": "light-content"
     },
     "plugins": ["expo-asset"],
     "scheme": "kukai",

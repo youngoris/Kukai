@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from "react";
-import { StatusBar } from "expo-status-bar";
+import { StatusBar, Platform, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import "react-native-gesture-handler";
 import {
   useFonts,
@@ -114,13 +115,23 @@ export default function App() {
     }
   }, [navigationRef.current]);
 
+  // Set status bar for Android
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      StatusBar.setTranslucent(true);
+      StatusBar.setBackgroundColor('transparent');
+    }
+  }, []);
+
   return (
     <>
-      <StatusBar hidden={true} />
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <NavigationContainer ref={navigationRef}>
-          <AppNavigator />
-        </NavigationContainer>
+      {Platform.OS === 'android' && <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />}
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
+        <SafeAreaProvider>
+          <NavigationContainer ref={navigationRef}>
+            <AppNavigator />
+          </NavigationContainer>
+        </SafeAreaProvider>
       </GestureHandlerRootView>
     </>
   );
