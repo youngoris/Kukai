@@ -1,6 +1,6 @@
 import React from "react";
 import { Dimensions } from "react-native";
-import { createStackNavigator } from "@react-navigation/stack";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 // Import screens
 import HomeScreen from "../screens/HomeScreen";
@@ -13,7 +13,7 @@ import JournalEditScreen from "../screens/JournalEditScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 
 const { width } = Dimensions.get("window");
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator();
 
 const AppNavigator = () => {
   return (
@@ -21,49 +21,11 @@ const AppNavigator = () => {
       initialRouteName="Home"
       screenOptions={({ route, navigation }) => ({
         headerShown: false,
-        cardStyle: { backgroundColor: "#000" },
-        animationEnabled: true,
+        contentStyle: { backgroundColor: "#000" },
+        animation: "slide_from_right",
         gestureEnabled: route.name !== "Home" && route.name !== "Settings",
-        gestureDirection:
-          route.name === "Home" ? "horizontal-inverted" : "horizontal",
-        gestureResponseDistance: {
-          horizontal: width * 0.5,
-        },
-        cardStyleInterpolator: ({ current, layouts, next }) => {
-          // Check if navigating back to Home screen
-          const isGoingHome =
-            next?.route?.name === "Home" || route.name === "Home";
-
-          // If going back to Home, use opposite animation direction
-          if (isGoingHome) {
-            return {
-              cardStyle: {
-                transform: [
-                  {
-                    translateX: current.progress.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [-layouts.screen.width, 0],
-                    }),
-                  },
-                ],
-              },
-            };
-          }
-
-          // Default right to left animation
-          return {
-            cardStyle: {
-              transform: [
-                {
-                  translateX: current.progress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [layouts.screen.width, 0],
-                  }),
-                },
-              ],
-            },
-          };
-        },
+        // Native stack uses different animation configuration
+        // No need for gestureDirection and gestureResponseDistance in native stack
       })}
     >
       <Stack.Screen name="Home" component={HomeScreen} />
