@@ -152,7 +152,7 @@ const SettingsScreen = ({ navigation }) => {
   // New state for CloudBackupSection visibility
   const [showCloudBackup, setShowCloudBackup] = useState(false);
   
-  // 添加新的通知设置状态
+  // Add new notification settings state
   const [taskNotifications, setTaskNotifications] = useState(true);
   const [notificationSound, setNotificationSound] = useState('default');
   const [quietHoursEnabled, setQuietHoursEnabled] = useState(false);
@@ -169,23 +169,23 @@ const SettingsScreen = ({ navigation }) => {
     checkNotificationPermissions();
   }, []);
   
-  // 添加自动保存功能的useEffect
+  // Add useEffect for auto-save functionality
   useEffect(() => {
-    // 只有当设置已更改时才自动保存
+    // Only auto-save when settings have changed
     if (settingsChanged) {
-      // 清除之前的定时器
+      // Clear previous timer
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
       
-      // 设置新的定时器，延迟1秒后保存
+      // Set new timer, delay save by 1 second
       saveTimeoutRef.current = setTimeout(() => {
         autoSaveSettings();
         setSettingsChanged(false);
       }, 1000);
     }
     
-    // 组件卸载时清除定时器
+    // Clear timer on component unmount
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
@@ -202,7 +202,7 @@ const SettingsScreen = ({ navigation }) => {
     meditationReminder, meditationReminderTime
   ]);
   
-  // 自动保存设置的函数
+  // Auto-save settings function
   const autoSaveSettings = async () => {
     try {
       const settings = {
@@ -270,7 +270,7 @@ const SettingsScreen = ({ navigation }) => {
       await AsyncStorage.setItem('quietHoursStart', quietHoursStart.toString());
       await AsyncStorage.setItem('quietHoursEnd', quietHoursEnd.toString());
       
-      // 更新通知服务配置
+      // Update notification service configuration
       await notificationService.updateConfig({
         taskNotifications,
         notificationSound,
@@ -326,7 +326,7 @@ const SettingsScreen = ({ navigation }) => {
         }
         setSelectedJournalTemplate(parsedSettings.selectedJournalTemplate || 'default');
         
-        // 加载冥想提醒设置
+        // Load meditation reminder settings
         setMeditationReminder(parsedSettings.meditationReminder || false);
         if (parsedSettings.meditationReminderTime) {
           setMeditationReminderTime(new Date(parsedSettings.meditationReminderTime));
@@ -339,7 +339,7 @@ const SettingsScreen = ({ navigation }) => {
         setNotificationsEnabled(parsedSettings.notificationsEnabled !== false);
         setSyncEnabled(parsedSettings.syncEnabled || false);
         
-        // 加载通知设置
+        // Load notification settings
         const taskNotificationsValue = await AsyncStorage.getItem('taskNotifications');
         if (taskNotificationsValue !== null) {
           setTaskNotifications(JSON.parse(taskNotificationsValue));
@@ -394,7 +394,7 @@ const SettingsScreen = ({ navigation }) => {
         journalReminderTime: journalReminderTime.toISOString(),
         selectedJournalTemplate,
         
-        // 冥想提醒设置
+        // Meditation reminder settings
         meditationReminder,
         meditationReminderTime: meditationReminderTime.toISOString(),
         
@@ -416,21 +416,21 @@ const SettingsScreen = ({ navigation }) => {
         await notificationService.scheduleJournalReminder(0, 0, false);
       }
       
-      // 设置冥想提醒通知（如果启用）
+      // Set meditation reminder notification (if enabled)
       if (meditationReminder && notificationsEnabled) {
         await scheduleMeditationReminder();
       } else {
         await notificationService.scheduleMeditationReminder(0, 0, false);
       }
       
-      // 保存通知设置
+      // Save notification settings
       await AsyncStorage.setItem('taskNotifications', JSON.stringify(taskNotifications));
       await AsyncStorage.setItem('notificationSound', notificationSound);
       await AsyncStorage.setItem('quietHoursEnabled', JSON.stringify(quietHoursEnabled));
       await AsyncStorage.setItem('quietHoursStart', quietHoursStart.toString());
       await AsyncStorage.setItem('quietHoursEnd', quietHoursEnd.toString());
       
-      // 更新通知服务配置
+      // Update notification service configuration
       await notificationService.updateConfig({
         taskNotifications,
         notificationSound,
@@ -439,7 +439,7 @@ const SettingsScreen = ({ navigation }) => {
         quietHoursEnd: new Date(quietHoursEnd)
       });
       
-      // 延迟显示保存成功的提示，避免与可能的通知冲突
+      // Delay showing save success message to avoid conflicts with notifications
       setTimeout(() => {
         Alert.alert('Settings Saved', 'Your preferences have been updated.');
       }, 1000);
@@ -455,11 +455,11 @@ const SettingsScreen = ({ navigation }) => {
         const hours = journalReminderTime.getHours();
         const minutes = journalReminderTime.getMinutes();
         
-        // 使用通知服务调度日志提醒
+        // Schedule journal reminder using notification service
         await notificationService.scheduleJournalReminder(hours, minutes, true);
         console.log('Journal reminder scheduled for:', hours, ':', minutes);
       } else {
-        // 如果禁用了提醒，取消调度
+        // Cancel scheduling if reminder is disabled
         await notificationService.scheduleJournalReminder(0, 0, false);
         console.log('Journal reminder disabled');
       }
@@ -468,18 +468,18 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
   
-  // 调度冥想提醒
+  // Schedule meditation reminder
   const scheduleMeditationReminder = async () => {
     try {
       if (meditationReminder && notificationsEnabled) {
         const hours = meditationReminderTime.getHours();
         const minutes = meditationReminderTime.getMinutes();
         
-        // 使用通知服务调度冥想提醒
+        // Schedule meditation reminder using notification service
         await notificationService.scheduleMeditationReminder(hours, minutes, true);
         console.log('Meditation reminder scheduled for:', hours, ':', minutes);
       } else {
-        // 如果禁用了提醒，取消调度
+        // Cancel scheduling if reminder is disabled
         await notificationService.scheduleMeditationReminder(0, 0, false);
         console.log('Meditation reminder disabled');
       }
@@ -643,7 +643,7 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
   
-  // 修改设置开关渲染函数
+  // Modify settings switch render function
   const renderSettingSwitch = (value, setter, label, description = null) => {
     const toggleSwitch = () => {
       setter(!value);
@@ -705,15 +705,15 @@ const SettingsScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
   
-  // 修改时间选择器处理函数
+  // Modify time picker handler function
   const handleTimeChange = (event, selectedTime) => {
     if (selectedTime) {
-      // 只更新临时状态，不立即应用
+      // Only update temporary state, do not apply immediately
       setTempSelectedTime(selectedTime);
     }
   };
   
-  // 添加确认时间的函数
+  // Add function to confirm time selection
   const confirmTimeSelection = () => {
     if (tempSelectedTime) {
       if (currentTimePickerMode === 'journalReminder') {
@@ -727,15 +727,15 @@ const SettingsScreen = ({ navigation }) => {
     setTempSelectedTime(null);
   };
   
-  // 取消时间选择
+  // Cancel time selection
   const cancelTimeSelection = () => {
     setTimePickerVisible(false);
     setTempSelectedTime(null);
   };
   
-  // 处理备份完成后的操作
+  // Handle operations after backup completion
   const handleBackupComplete = () => {
-    // 重新加载设置
+    // Reload settings
     loadSettings();
   };
   
@@ -819,7 +819,7 @@ const SettingsScreen = ({ navigation }) => {
     Alert.alert('Send Feedback', 'Thank you for your feedback, it helps us improve the app.');
   };
   
-  // 处理静音时段开始时间变更
+  // Handle quiet hours start time change
   const handleQuietHoursStartChange = (event, selectedTime) => {
     setShowQuietHoursStartPicker(false);
     if (selectedTime) {
@@ -828,7 +828,7 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
   
-  // 处理静音时段结束时间变更
+  // Handle quiet hours end time change
   const handleQuietHoursEndChange = (event, selectedTime) => {
     setShowQuietHoursEndPicker(false);
     if (selectedTime) {
@@ -1328,7 +1328,7 @@ const SettingsScreen = ({ navigation }) => {
         </View>
       </Modal>
       
-      {/* 静音时段开始时间选择器 */}
+      {/* Quiet hours start time picker */}
       {showQuietHoursStartPicker && (
         <CustomDateTimePicker
           value={new Date(quietHoursStart)}
@@ -1339,7 +1339,7 @@ const SettingsScreen = ({ navigation }) => {
         />
       )}
       
-      {/* 静音时段结束时间选择器 */}
+      {/* Quiet hours end time picker */}
       {showQuietHoursEndPicker && (
         <CustomDateTimePicker
           value={new Date(quietHoursEnd)}

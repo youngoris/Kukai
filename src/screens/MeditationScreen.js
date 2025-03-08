@@ -217,7 +217,7 @@ const MeditationScreen = ({ navigation }) => {
   // Function to release all audio resources
   const releaseAllAudioResources = async () => {
     try {
-      // 如果已经在释放中，避免重复执行
+      // If already releasing, avoid duplicate execution
       if (isAudioReleasing) {
         console.log("[Audio Debug] Release already in progress, skipping");
         return;

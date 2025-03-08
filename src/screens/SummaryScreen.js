@@ -66,9 +66,8 @@ const SummaryScreen = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
-    // 检查是否需要每日重置
+    // Check if daily reset is needed
     checkDailyReset();
-    
     loadData();
 
     Animated.parallel([
@@ -85,13 +84,12 @@ const SummaryScreen = ({ navigation }) => {
     ]).start();
   }, []);
 
-  // 添加键盘事件监听
+  // Add keyboard event listeners
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
       (event) => {
-        setKeyboardVisible(true);
-        // 获取键盘高度
+        // Get keyboard height
         const keyboardHeight = event.endCoordinates.height;
         scrollToInput(keyboardHeight);
       }
@@ -99,8 +97,7 @@ const SummaryScreen = ({ navigation }) => {
     const keyboardDidHideListener = Keyboard.addListener(
       'keyboardDidHide',
       () => {
-        setKeyboardVisible(false);
-        // 键盘隐藏时，可以选择滚动到特定位置或不做处理
+        // When keyboard hides, can choose to scroll to a specific position or do nothing
       }
     );
 
@@ -110,29 +107,24 @@ const SummaryScreen = ({ navigation }) => {
     };
   }, []);
 
-  // 检查是否需要每日重置
   const checkDailyReset = async () => {
     try {
-      // 获取当前日期
+      // Check if daily reset is needed
+      
+      // Get current date
       const today = new Date().toISOString().split('T')[0];
       
-      // 获取上次记录的日期
-      const lastRecordedDate = await AsyncStorage.getItem('lastRecordedDate');
+      // Get last recorded date
+      const lastDateJson = await AsyncStorage.getItem('lastDate');
       
-      // 如果日期不同或没有记录过日期，执行每日重置
-      if (!lastRecordedDate || lastRecordedDate !== today) {
-        console.log('Performing daily reset...');
+      // If date is different or no date has been recorded, perform daily reset
+      if (!lastDateJson || JSON.parse(lastDateJson) !== today) {
+        await resetDailyPomodoroCount(lastDateJson ? JSON.parse(lastDateJson) : null);
         
-        // 更新最后记录日期为今天
-        await AsyncStorage.setItem('lastRecordedDate', today);
+        // Update last recorded date to today
+        await AsyncStorage.setItem('lastDate', JSON.stringify(today));
         
-        // 重置番茄钟计数（保存历史记录，但重置当日计数）
-        await resetDailyPomodoroCount(lastRecordedDate);
-        
-        // 可以在这里添加其他每日重置逻辑
-        // 例如：将昨天未完成的任务标记为过期，或者转移到今天的任务中
-        
-        // 自动将昨天"明日计划"中的任务转移到今天的任务列表中
+        // Auto transfer tomorrow's tasks to today's tasks if enabled
         await autoTransferTomorrowTasks();
       }
     } catch (error) {
@@ -140,78 +132,89 @@ const SummaryScreen = ({ navigation }) => {
     }
   };
 
-  // 重置每日番茄钟计数
+  // Reset daily pomodoro count but keep history
   const resetDailyPomodoroCount = async (lastDate) => {
     try {
-      // 读取旧的番茄钟记录
+      // Reset daily pomodoro count but keep history
       const pomodorosJson = await AsyncStorage.getItem('pomodoros');
-      let pomodoros = [];
-      
       if (pomodorosJson) {
-        pomodoros = JSON.parse(pomodorosJson);
+        const pomodoros = JSON.parse(pomodorosJson);
+        // Keep the history but reset today's count
+        setPomodoroCount(0);
       }
-      
-      // 如果是新的一天，保存旧的记录并清空计数器
-      // 注意：这里只是重置计数器，保留历史记录
-      await AsyncStorage.setItem('pomodoros', JSON.stringify(pomodoros));
-      
-      // Reset today's pomodoro count (UI reset only, doesn't affect historical data)
-      setPomodoroCount(0);
     } catch (error) {
       console.error('Error resetting pomodoro count:', error);
     }
   };
 
-  // 自动将昨天"明日计划"中的任务转移到今天的任务列表中
+  // If auto transfer is enabled, move tomorrow's tasks to today's tasks
   const autoTransferTomorrowTasks = async () => {
     try {
-      const tomorrowTasksJson = await AsyncStorage.getItem('tomorrowTasks');
-      if (tomorrowTasksJson && JSON.parse(tomorrowTasksJson).length > 0) {
-        const tomorrowTasks = JSON.parse(tomorrowTasksJson);
-        
-        // 获取现有任务
+      // Get user settings to check if auto transfer is enabled
+      const userSettingsJson = await AsyncStorage.getItem('userSettings');
+      let autoTransfer = false;
+      
+      if (userSettingsJson) {
+        const userSettings = JSON.parse(userSettingsJson);
+        autoTransfer = userSettings.autoTransferTasks || false;
+      }
+      
+      // If auto transfer is enabled, move tomorrow's tasks to today's tasks
+      if (autoTransfer) {
+        const tomorrowTasksJson = await AsyncStorage.getItem('tomorrowTasks');
         const tasksJson = await AsyncStorage.getItem('tasks');
-        let existingTasks = tasksJson ? JSON.parse(tasksJson) : [];
         
-        // 将明日任务添加到任务列表中
-        const formattedTasks = tomorrowTasks.map((task) => ({
-          ...task,
-          priority: 'medium',
-        }));
-        
-        const updatedTasks = [...existingTasks, ...formattedTasks];
-        await AsyncStorage.setItem('tasks', JSON.stringify(updatedTasks));
-        
-        // 清空明日任务列表
-        await AsyncStorage.setItem('tomorrowTasks', JSON.stringify([]));
-        
-        console.log('Automatically transferred tasks from tomorrow\'s plan to today\'s task list');
+        if (tomorrowTasksJson) {
+          const tomorrowTasks = JSON.parse(tomorrowTasksJson);
+          
+          if (tomorrowTasks.length > 0) {
+            let allTasks = [];
+            
+            if (tasksJson) {
+              allTasks = JSON.parse(tasksJson);
+            }
+            
+            // Add tomorrow's tasks to the task list
+            const updatedTasks = [...allTasks, ...tomorrowTasks.map(task => ({
+              ...task,
+              completed: false,
+              completedAt: null,
+              createdAt: new Date().toISOString()
+            }))];
+            
+            // Save updated tasks
+            await AsyncStorage.setItem('tasks', JSON.stringify(updatedTasks));
+            
+            // Clear tomorrow's tasks
+            await AsyncStorage.setItem('tomorrowTasks', JSON.stringify([]));
+            setTomorrowTasks([]);
+          }
+        }
       }
     } catch (error) {
-      console.error('Error automatically transferring tomorrow\'s tasks:', error);
+      console.error('Error auto-transferring tasks:', error);
     }
   };
 
   const loadData = async () => {
     try {
-      // Get today's date string (format: YYYY-MM-DD)
       const today = new Date().toISOString().split('T')[0];
       
-      // 加载任务数据
+      // Load task data
       const tasksJson = await AsyncStorage.getItem('tasks');
       let allTasks = [];
       
-      // 处理任务数据
+      // Process task data
       if (tasksJson) {
         allTasks = JSON.parse(tasksJson);
-        // 筛选今天完成的任务和今天未完成的任务
+        // Filter completed and pending tasks for today
         const todayTasks = allTasks.filter((task) => {
-          // 如果任务有完成时间，检查是否是今天完成的
+          // If task has a completion time, check if it's today's task
           if (task.completedAt) {
             const completedDate = new Date(task.completedAt).toISOString().split('T')[0];
             return completedDate === today;
           }
-          // 对于未完成的任务，默认显示所有未完成任务
+          // For pending tasks, default to showing all pending tasks
           return !task.completed;
         });
         
@@ -221,19 +224,19 @@ const SummaryScreen = ({ navigation }) => {
         setCompletedTasks(completed);
         setPendingTasks(pending);
         
-        // 计算今日任务完成率（只考虑今天的任务）
+        // Calculate today's task completion rate (only consider today's tasks)
         const rate = todayTasks.length > 0 ? (completed.length / todayTasks.length) * 100 : 0;
         setCompletionRate(Math.round(rate));
       } else {
-        // 如果没有任务数据，初始化为空数组
+        // If no task data, initialize as empty array
         setCompletedTasks([]);
         setPendingTasks([]);
         setCompletionRate(0);
-        // 创建初始空任务数组并保存
+        // Create initial empty task array and save
         await AsyncStorage.setItem('tasks', JSON.stringify([]));
       }
 
-      // 加载冥想数据（只加载今天的冥想时间）
+      // Load meditation data (only load today's meditation time)
       const meditationSessionsJson = await AsyncStorage.getItem('meditationSessions');
       let todayMeditationMinutes = 0;
       if (meditationSessionsJson) {
@@ -248,7 +251,7 @@ const SummaryScreen = ({ navigation }) => {
       }
       setTotalMeditationMinutes(todayMeditationMinutes);
 
-      // 加载专注时间数据（只加载今天的专注时间）
+      // Load focus time data (only load today's focus time)
       const focusSessionsJson = await AsyncStorage.getItem('focusSessions');
       if (focusSessionsJson) {
         const focusSessions = JSON.parse(focusSessionsJson);
@@ -264,32 +267,32 @@ const SummaryScreen = ({ navigation }) => {
         setTotalFocusMinutes(0);
       }
 
-      // 加载番茄钟数量（只加载今天的番茄钟数量）
+      // Load pomodoro count (only load today's pomodoro count)
       const pomodorosJson = await AsyncStorage.getItem('pomodoros');
       if (pomodorosJson) {
         const pomodoros = JSON.parse(pomodorosJson);
-        // 筛选今天的番茄钟记录
+        // Filter today's pomodoro records
         const todayPomodoros = pomodoros.filter(
           (pomodoro) => pomodoro.date === today
         );
-        // 设置今天的番茄钟数量
+        // Set today's pomodoro count
         setPomodoroCount(todayPomodoros.length);
       } else {
         setPomodoroCount(0);
       }
 
-      // 加载明天的任务
+      // Load tomorrow's tasks
       const tomorrowTasksJson = await AsyncStorage.getItem('tomorrowTasks');
       if (tomorrowTasksJson) {
         setTomorrowTasks(JSON.parse(tomorrowTasksJson));
       } else {
-        // 如果没有明天任务数据，初始化为空数组
+        // If no tomorrow task data, initialize as empty array
         setTomorrowTasks([]);
         await AsyncStorage.setItem('tomorrowTasks', JSON.stringify([]));
       }
     } catch (error) {
       console.error('Error loading data:', error);
-      // 显示友好的错误消息并提供重试选项
+      // Show friendly error message and provide retry option
       Alert.alert(
         'Data Loading Error',
         'Unable to load summary data.',
@@ -310,12 +313,12 @@ const SummaryScreen = ({ navigation }) => {
   const addTomorrowTask = async () => {
     if (newTomorrowTask.trim() === '') return;
     try {
-      // 如果显示了时间选择器，确保时间标签被激活
+      // If time picker is displayed, ensure time tag is activated
       if (showTimePicker) {
         setIsTimeTagged(true);
       }
       
-      // 如果设置了提醒但没有设置时间，提示用户
+      // If reminder is set but time is not set, prompt user
       if (hasReminder && !isTimeTagged && !showTimePicker) {
         Alert.alert(
           "Reminder Setup",
@@ -383,7 +386,7 @@ const SummaryScreen = ({ navigation }) => {
       const formattedTasks = tomorrowTasks.map((task) => ({
         ...task,
         priority: 'medium',
-        // 保留原有的标签信息，不覆盖
+        // Keep original tag information, do not overwrite
       }));
       const updatedTasks = [...existingTasks, ...formattedTasks];
       await AsyncStorage.setItem('tasks', JSON.stringify(updatedTasks));
@@ -398,7 +401,7 @@ const SummaryScreen = ({ navigation }) => {
     }
   };
 
-  // 处理时间变更
+  // Handle time change
   const onTimeChange = (event, selectedTime) => {
     if (Platform.OS === 'android') {
       setShowTimePicker(false);
@@ -410,7 +413,7 @@ const SummaryScreen = ({ navigation }) => {
     }
   };
 
-  // 处理时间标签点击
+  // Handle time tag press
   const handleTimeTagPress = () => {
     // Update time to current hour and 30 minutes
     const currentTime = new Date();
@@ -418,31 +421,31 @@ const SummaryScreen = ({ navigation }) => {
     setTaskTime(currentTime);
     
     if (showTimePicker) {
-      // 如果时间选择器已经显示，点击后关闭选择器并取消标签
+      // If time picker is already displayed, click to close picker and remove tag
       setShowTimePicker(false);
       setIsTimeTagged(false);
-      // 同时关闭提醒功能
+      // Also close reminder functionality
       setHasReminder(false);
       setShowReminderOptions(false);
     } else if (isTimeTagged) {
-      // 如果已经有时间标签但选择器未显示，点击后取消标签
+      // If there's already a time tag but picker is not displayed, click to remove tag
       setIsTimeTagged(false);
       setShowTimePicker(false);
-      // 同时关闭提醒功能
+      // Also close reminder functionality
       setHasReminder(false);
       setShowReminderOptions(false);
     } else {
-      // 如果没有时间标签，点击后显示选择器并激活标签
+      // If there's no time tag, click to display picker and activate tag
       setShowTimePicker(true);
       setIsTimeTagged(true);
-      // 滚动到可见区域
+      // Scroll to visible area
       setTimeout(() => scrollToInput(), 100);
     }
   };
 
-  // 处理提醒标签点击
+  // Handle reminder tag press
   const handleReminderPress = () => {
-    // 如果没有设置时间，先提示设置时间
+    // If time is not set, first prompt to set time
     if (!isTimeTagged && !showTimePicker) {
       Alert.alert(
         "Reminder Setup",
@@ -456,33 +459,33 @@ const SummaryScreen = ({ navigation }) => {
     }
     
     if (showReminderOptions) {
-      // 如果选项已显示，则隐藏选项（但不更改提醒状态）
+      // If options are displayed, hide options (but do not change reminder status)
       setShowReminderOptions(false);
     } else if (hasReminder) {
-      // 如果已有提醒，则取消提醒
+      // If reminder is already set, cancel reminder
       setHasReminder(false);
       setShowReminderOptions(false);
     } else {
-      // 如果没有提醒，则显示选项并激活提醒状态
+      // If there's no reminder, display options and activate reminder status
       setShowReminderOptions(true);
-      // 设置默认提醒时间并激活
+      // Set default reminder time and activate
       setReminderTime(15);
       setHasReminder(true);
-      // 显示提醒选项时关闭时间选择器，避免界面过于拥挤
+      // Close time picker when reminder options are displayed to avoid interface crowding
       setShowTimePicker(false);
-      // 滚动到可见区域
+      // Scroll to visible area
       setTimeout(() => scrollToInput(), 100);
     }
   };
 
-  // 选择提醒时间
+  // Select reminder time
   const selectReminderTime = (minutes) => {
     setReminderTime(minutes);
     setHasReminder(true);
     setShowReminderOptions(false);
   };
 
-  // 渲染标签按钮
+  // Render tag buttons
   const renderTagButtons = () => (
     <View style={styles.tagButtonsContainer}>
       <TouchableOpacity
@@ -557,12 +560,12 @@ const SummaryScreen = ({ navigation }) => {
     </View>
   );
 
-  // 添加自动滚动到输入区域的函数
+  // Add automatic scroll to input area function
   const scrollToInput = (keyboardHeight = 300) => {
-    // 给键盘弹出时间，再滚动
+    // Give keyboard pop time, then scroll
     setTimeout(() => {
       if (scrollViewRef.current && addTaskContainerRef.current) {
-        // 测量添加任务容器在滚动视图中的位置
+        // Measure added task container in scroll view
         addTaskContainerRef.current.measureLayout(
           scrollViewRef.current,
           (x, y, width, height) => {
@@ -635,9 +638,9 @@ const SummaryScreen = ({ navigation }) => {
               
               <View style={styles.statDivider} />
               
-              {/* 使用水平布局容器 */}
+              {/* Use horizontal layout container */}
               <View style={styles.statRowContainer}>
-                {/* 冥想时间 */}
+                {/* Meditation Time */}
                 <View style={styles.statItemHalf}>
                   <Text style={styles.statTitle}>Meditation</Text>
                   <View style={styles.focusTimeContainer}>
@@ -646,10 +649,10 @@ const SummaryScreen = ({ navigation }) => {
                   </View>
                 </View>
                 
-                {/* 垂直分隔线 */}
+                {/* Vertical divider */}
                 <View style={styles.verticalDivider} />
                 
-                {/* 番茄钟会话 */}
+                {/* Pomodoro Sessions */}
                 <View style={styles.statItemHalf}>
                   <Text style={styles.statTitle}>Pomodoros</Text>
                   <View style={styles.focusTimeContainer}>
@@ -829,7 +832,7 @@ const SummaryScreen = ({ navigation }) => {
               </View>
             )}
             
-            {/* 明日任务列表 */}
+            {/* Tomorrow task list */}
             {tomorrowTasks.length > 0 ? (
               <>
                 <FlatList
@@ -1218,10 +1221,10 @@ const styles = StyleSheet.create({
     height: Platform.OS === 'ios' ? 140 : 120,
   },
   timeTag: {
-    backgroundColor: '#555555', // 时间标签的灰色背景
+    backgroundColor: '#555555', // Time tag gray background
   },
   reminderTag: {
-    backgroundColor: '#9C27B0', // 紫色背景
+    backgroundColor: '#9C27B0', // Purple background
   },
   reminderOptionsContainer: {
     marginTop: 15,
