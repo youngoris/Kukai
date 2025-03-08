@@ -458,6 +458,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1,
   },
-});
+}); 
 
 export default HomeScreen; 

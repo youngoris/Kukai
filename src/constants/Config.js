@@ -9,6 +9,9 @@ import {
   LOCATION_CHANGE_THRESHOLD_KM
 } from '@env';
 
+// Log the source of the API key without exposing the actual key
+console.log('Weather API Key source:', WEATHER_API_KEY ? 'Environment variable (.env)' : 'Default fallback value');
+
 // Weather API configuration
 export const WEATHER_API = {
   API_KEY: WEATHER_API_KEY || '847915028262f4981a07546eb43696ce',

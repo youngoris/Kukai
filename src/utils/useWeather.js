@@ -148,6 +148,13 @@ export default function useWeather(options = {}) {
       // Use OpenWeather API to get weather data
       const url = `${WEATHER_API.BASE_URL}/weather?lat=${latitude}&lon=${longitude}&units=${WEATHER_API.UNITS}&appid=${WEATHER_API.API_KEY}`;
       
+      // Log API request information without exposing the key
+      console.log('Making Weather API request:', {
+        baseUrl: WEATHER_API.BASE_URL,
+        units: WEATHER_API.UNITS,
+        keySource: WEATHER_API.API_KEY === '847915028262f4981a07546eb43696ce' ? 'Default fallback value' : 'Environment variable (.env)'
+      });
+      
       // Add timeout handling
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds timeout
@@ -170,6 +177,11 @@ export default function useWeather(options = {}) {
       }
       
       const weatherData = await response.json();
+      console.log('Weather API response successful:', {
+        city: weatherData.name,
+        weatherCondition: weatherData.weather[0].main,
+        responseStatus: response.status
+      });
       
       // Set states
       const weatherMain = weatherData.weather[0].main;
