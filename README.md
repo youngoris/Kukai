@@ -1,62 +1,213 @@
-# 总结页面更新说明
+# Kukai App
 
-## 主要修改
+Kukai is a multifunctional application focused on personal life management and spiritual growth, integrating meditation, task management, focus mode, journaling, and statistical summaries to help users improve their quality of life and work efficiency.
 
-1. **修改了总结页面数据统计逻辑**
-   - 现在任务完成率、冥想时间和番茄钟数量都只统计当天的数据
-   - 每天初始值都为0，重新开始计算
-   
-2. **添加了任务完成时间戳**
-   - 在TaskScreen中添加了`completedAt`字段，记录任务完成的具体时间
-   - 在NotificationService中也添加了相同逻辑，确保通知完成任务时也记录时间戳
-   
-3. **添加了每日重置功能**
-   - 新增`checkDailyReset`函数，在每天第一次进入页面时执行重置
-   - 重置番茄钟计数，但保留历史记录
-   - 自动将昨天的"明日计划"转移到当天任务列表
-   
-4. **修改了番茄钟保存方式**
-   - 在FocusScreen中，每完成一个番茄钟，都会记录日期和时间信息
-   - 以数组形式保存到AsyncStorage中，便于按日期统计
 
-## 数据结构
 
-### 任务数据
-```javascript
-{
-  id: "1234567890",
-  text: "任务内容",
-  completed: true,
-  completedAt: "2023-01-01T12:00:00.000Z", // 完成时间ISO格式
-  // 其他字段...
-}
+## Prerequisites
+
+Before installing and running Kukai, ensure your development environment meets the following requirements:
+
+- Node.js (recommended v16.0.0 or higher)
+- npm (v8.0.0 or higher) or yarn (v1.22.0 or higher)
+
+## Installation Guide
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/yourusername/kukai.git
+cd kukai
 ```
 
-### 番茄钟数据
-```javascript
-[
-  {
-    id: "1234567890",
-    date: "2023-01-01", // YYYY-MM-DD格式
-    duration: 25, // 时长（分钟）
-    timestamp: "2023-01-01T12:00:00.000Z" // 完成时间ISO格式
-  },
-  // 更多番茄钟记录...
-]
+### 2. Install Dependencies
+
+Using npm:
+
+```bash
+npm install
 ```
 
-## 总体效果
+Or using yarn:
 
-- 现在，总结页面只显示当天的进度数据
-- 每天初始都从0开始重新计算
-- 不再累计显示历史数据
-- 便于用户专注于当天的工作情况
+```bash
+yarn install
+```
 
-## 环境变量配置
+### 3. Environment Configuration (Optional)
 
-项目使用 `.env` 文件存储环境变量，如API密钥等敏感信息。
+Create a `.env` file and configure the necessary environment variables if you need the following features:
+- Weather API key: Required for weather information display
+- Google API credentials: Required for Google Drive synchronization
 
-1. 复制 `.env.example` 文件并重命名为 `.env`
-2. 在 `.env` 文件中填入你的API密钥和其他配置
+```
+WEATHER_API_KEY=your_weather_api_key
+GOOGLE_EXPO_CLIENT_ID=your_google_client_id
+GOOGLE_IOS_CLIENT_ID=your_ios_client_id
+GOOGLE_ANDROID_CLIENT_ID=your_android_client_id
+GOOGLE_WEB_CLIENT_ID=your_web_client_id
+```
 
-注意：`.env` 文件不应该提交到版本控制系统中。 
+The app will still function without these environment variables, but certain features will be limited or unavailable.
+
+## Running the Application
+
+### Using the Expo Development Server
+
+Start the Expo development server using one of the following commands:
+
+```bash
+# Using npm script
+npm start
+
+# Using npx (recommended if you don't have expo-cli installed globally)
+npx expo start
+```
+
+After executing this command:
+
+- Press `i` to run in the iOS simulator (macOS only)
+- Press `a` to run on an Android emulator or connected device
+- Scan the QR code with a physical device (requires the Expo Go app)
+
+### Running on Specific Platforms
+
+#### iOS
+
+```bash
+# Using npm script
+npm run ios
+
+# Using npx
+npx expo run:ios
+```
+
+#### Android
+
+```bash
+# Using npm script
+npm run android
+
+# Using npx
+npx expo run:android
+```
+
+### Using the Expo Go App
+
+1. Install the [Expo Go](https://expo.dev/client) app on your iOS or Android device
+2. Ensure your phone is on the same Wi-Fi network as your development computer
+3. Start the project: `npm start`
+4. Scan the QR code in the terminal or web page with the Expo Go app
+
+**Note:** You do not need to log in to an Expo account when developing or testing with Expo Go in development mode.
+
+
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Cannot start Metro server**
+   - Try clearing the cache: `npm start -- --reset-cache`
+
+2. **iOS build fails**
+   - Ensure all CocoaPods dependencies are correctly installed
+   - Check if your Xcode version is compatible
+
+3. **Android type conversion errors**
+   - String types on Android platforms do not automatically convert to double types; ensure all values are explicitly converted to number types (using parseFloat) before passing them to animation and style properties
+   - Use Platform.OS to detect the platform and provide different implementations
+
+4. **Notifications not working**
+   - Check application permission settings
+   - On Android, ensure notification channels are properly created
+
+5. **Google Drive synchronization issues**
+   - Verify that OAuth client ID configuration is correct
+   - Check network connection
+
+## Project Structure
+
+```
+kukai/
+├── README.md                # Project documentation
+├── app.json                 # Expo configuration
+├── babel.config.js          # Babel transpiler configuration
+├── eas.json                 # EAS Build configuration
+├── index.js                 # JavaScript entry point
+├── metro.config.js          # Metro bundler configuration
+├── package.json             # NPM dependencies and scripts
+├── assets/                  # Static resources
+│   ├── adaptive-icon.png
+│   ├── brownnoise.m4a       # Meditation sound files
+│   ├── favicon.png
+│   ├── fire.m4a
+│   ├── forest.m4a
+│   ├── frog.svg
+│   ├── icon.png
+│   ├── ocean.m4a
+│   ├── plane.m4a
+│   ├── rain.m4a
+│   ├── splash-icon.png
+│   └── whitenoise.m4a
+├── android/                 # Android-specific files
+│   ├── app/
+│   ├── build/
+│   ├── build.gradle
+│   ├── gradle/
+│   ├── gradle.properties
+│   ├── gradlew
+│   ├── gradlew.bat
+│   └── settings.gradle
+├── ios/                     # iOS-specific files
+│   ├── Podfile
+│   ├── Podfile.lock
+│   ├── Pods/
+│   ├── kukai/
+│   ├── kukai.xcodeproj/
+│   └── kukai.xcworkspace/
+└── src/                     # Source code directory
+    ├── App.js               # Main application component
+    ├── assets/              # Application assets
+    ├── components/          # Reusable UI components
+    ├── constants/           # Application constants and configuration
+    ├── hooks/               # Custom React hooks
+    ├── navigation/          # Navigation configuration
+    ├── screens/             # Screen components
+    │   ├── HomeScreen.js       # Home screen
+    │   ├── MeditationScreen.js # Meditation functionality
+    │   ├── TaskScreen.js       # Task management
+    │   ├── FocusScreen.js      # Pomodoro focus timer
+    │   ├── SummaryScreen.js    # Daily summary and statistics
+    │   ├── JournalScreen.js    # Journal entry list
+    │   ├── JournalEditScreen.js # Journal editing interface
+    │   └── SettingsScreen.js   # App settings
+    ├── services/            # Service modules
+    │   ├── NotificationService.js  # Notifications management
+    │   └── GoogleDriveService.js   # Google Drive integration
+    ├── store/               # State management
+    └── utils/               # Utility functions
+        └── useWeather.js        # Weather API integration hook
+```
+
+The application follows a well-organized structure:
+
+1. **src/**: Contains all the source code of the application
+   - **screens/**: Each major feature has its own screen component
+   - **components/**: Reusable UI components used across screens
+   - **services/**: Backend service integrations and API wrappers
+   - **navigation/**: Navigation configuration and routing
+   - **hooks/**: Custom React hooks for shared functionality
+   - **constants/**: Application-wide constants and configuration
+   - **utils/**: Helper functions and utilities
+   - **store/**: State management for the application
+
+2. **assets/**: Contains static resources like sounds, images, and icons
+
+3. **Platform-specific directories**:
+   - **android/**: Contains Android-specific configuration and build files
+   - **ios/**: Contains iOS-specific configuration and build files
+
+## License
+
+[Detailed License Information]

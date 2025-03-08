@@ -17,7 +17,7 @@ import Constants from 'expo-constants';
 // Check if running in Expo Go
 const isExpoGo = Constants.appOwnership === 'expo';
 
-const CloudBackupSection = ({ navigation, onBackupComplete }) => {
+const CloudBackupSection = ({ navigation, onBackupComplete, theme = 'dark' }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
@@ -26,6 +26,9 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
   const [showBackupListModal, setShowBackupListModal] = useState(false);
   const [backups, setBackups] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // 判断是否为浅色主题
+  const isLightTheme = theme === 'light';
 
   // Initialize
   useEffect(() => {
@@ -410,54 +413,60 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
     return (
       <Modal
         visible={showBackupListModal}
-        animationType="slide"
         transparent={true}
+        animationType="slide"
         onRequestClose={() => setShowBackupListModal(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Backup</Text>
+        <View style={[styles.modalOverlay, isLightTheme && styles.lightModalOverlay]}>
+          <View style={[styles.modalContent, isLightTheme && styles.lightModalContent]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, isLightTheme && styles.lightModalTitle]}>Backup History</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowBackupListModal(false)}
+              >
+                <MaterialIcons name="close" size={24} color={isLightTheme ? "#333" : "#FFF"} />
+              </TouchableOpacity>
+            </View>
             
-            <FlatList
-              data={backups}
-              keyExtractor={item => item.id}
-              renderItem={({ item }) => (
-                <View style={styles.backupItem}>
-                  <TouchableOpacity
-                    style={styles.backupInfo}
-                    onPress={() => confirmRestore(item)}
-                  >
-                    <Text style={styles.backupName}>{item.name}</Text>
-                    <Text style={styles.backupDate}>
-                      {formatDate(item.createdAt)}
-                    </Text>
-                    {item.description && (
-                      <Text style={styles.backupDescription}>{item.description}</Text>
-                    )}
-                    <Text style={styles.backupSize}>{formatSize(item.size)}</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => handleDeleteBackup(item)}
-                  >
-                    <MaterialIcons name="delete" size={24} color="#FF6B6B" />
-                  </TouchableOpacity>
-                </View>
-              )}
-              ListEmptyComponent={
-                <Text style={styles.emptyListText}>No backups available</Text>
-              }
-              refreshing={refreshing}
-              onRefresh={refreshBackups}
-            />
-            
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowBackupListModal(false)}
-            >
-              <Text style={styles.closeButtonText}>Close</Text>
-            </TouchableOpacity>
+            {backups.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={[styles.emptyText, isLightTheme && styles.lightEmptyText]}>No backups found</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={backups}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <View style={[styles.backupItem, isLightTheme && styles.lightBackupItem]}>
+                    <View style={styles.backupInfo}>
+                      <Text style={[styles.backupDate, isLightTheme && styles.lightBackupDate]}>
+                        {formatDate(item.createdTime)}
+                      </Text>
+                      <Text style={[styles.backupSize, isLightTheme && styles.lightBackupSize]}>
+                        {formatSize(item.size)}
+                      </Text>
+                    </View>
+                    <View style={styles.backupActions}>
+                      <TouchableOpacity
+                        style={[styles.backupAction, isLightTheme && styles.lightBackupAction]}
+                        onPress={() => confirmRestore(item)}
+                      >
+                        <MaterialIcons name="restore" size={20} color={isLightTheme ? "#333" : "#FFF"} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.backupAction, styles.deleteAction, isLightTheme && styles.lightDeleteAction]}
+                        onPress={() => handleDeleteBackup(item)}
+                      >
+                        <MaterialIcons name="delete" size={20} color={isLightTheme ? "#333" : "#FFF"} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+                refreshing={refreshing}
+                onRefresh={refreshBackups}
+              />
+            )}
           </View>
         </View>
       </Modal>
@@ -465,86 +474,94 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.sectionDescription}>
-        Backup and restore data to Google Drive
-      </Text>
-      
-      {!isAuthenticated && (
-        <Text style={styles.noDevAccountNote}>
-          Note: This feature may be unstable in Expo Go. If you don't have a developer account, it's recommended to use local backup or a mock account.
-        </Text>
-      )}
-      
-      {isLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
+    <View style={[styles.container, isLightTheme && styles.lightContainer]}>
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={isLightTheme ? "#333" : "#FFF"} />
+          <Text style={[styles.loadingText, isLightTheme && styles.lightText]}>Connecting to Google Drive...</Text>
         </View>
-      )}
-      
-      {!isAuthenticated ? (
-        // Unauthenticated state, show Connect to Google Drive button
-        <TouchableOpacity
-          style={styles.connectButton}
-          onPress={handleAuthenticate}
-          disabled={isLoading}
-        >
-          <MaterialIcons name="cloud" size={24} color="#FFFFFF" />
-          <Text style={styles.connectButtonText}>Connect to Google Drive</Text>
-        </TouchableOpacity>
-      ) : (
-        // Authenticated state, show disconnect button
-        <View style={styles.authenticatedContainer}>
-          <View style={styles.statusContainer}>
-            <Text style={styles.statusText}>Connected to Google Drive</Text>
+      ) : !isAuthenticated ? (
+        <View>
+          <Text style={[styles.sectionTitle, isLightTheme && styles.lightSectionTitle]}>
+            Backup and restore data to Google Drive
+          </Text>
+          
+          <Text style={[styles.noteText, isLightTheme && styles.lightNoteText]}>
+            Note: This feature may be unstable in Expo Go. If you don't have a developer account, it's recommended to use local backup or a mock account.
+          </Text>
+          
+          <TouchableOpacity
+            style={styles.connectButton}
+            onPress={handleAuthenticate}
+          >
+            <MaterialIcons name="cloud" size={24} color="#FFFFFF" style={styles.connectButtonIcon} />
+            <Text style={styles.connectButtonText}>Connect to Google Drive</Text>
+          </TouchableOpacity>
+          
+          {isExpoGo && (
             <TouchableOpacity
-              style={styles.disconnectButton}
+              style={[styles.mockButton, isLightTheme && styles.lightMockButton]}
+              onPress={useMockGoogleAccount}
+            >
+              <Text style={[styles.mockButtonText, isLightTheme && styles.lightMockButtonText]}>Use Mock Account (For Testing)</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : (
+        <View>
+          <View style={styles.headerContainer}>
+            <Text style={[styles.sectionTitle, isLightTheme && styles.lightSectionTitle]}>
+              Google Drive Backup
+            </Text>
+            
+            <TouchableOpacity
+              style={[styles.disconnectButton, isLightTheme && styles.lightDisconnectButton]}
               onPress={handleSignOut}
             >
-              <Text style={styles.disconnectButtonText}>Disconnect</Text>
+              <Text style={[styles.disconnectButtonText, isLightTheme && styles.lightDisconnectButtonText]}>Disconnect</Text>
             </TouchableOpacity>
           </View>
           
           {/* Last sync time */}
           {lastSyncTime && (
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Last sync time:</Text>
-              <Text style={styles.infoValue}>{formatDate(lastSyncTime)}</Text>
+              <Text style={[styles.infoLabel, isLightTheme && styles.lightInfoLabel]}>Last sync time:</Text>
+              <Text style={[styles.infoValue, isLightTheme && styles.lightInfoValue]}>{formatDate(lastSyncTime)}</Text>
             </View>
           )}
           
           {/* Backup and restore buttons */}
           <View style={styles.buttonContainer}>
             <TouchableOpacity
-              style={styles.button}
+              style={[styles.button, isLightTheme && styles.lightButton]}
               onPress={handleCreateBackup}
             >
-              <MaterialIcons name="backup" size={24} color="#FFFFFF" />
-              <Text style={styles.buttonText}>Create Backup</Text>
+              <MaterialIcons name="backup" size={24} color={isLightTheme ? "#333" : "#FFFFFF"} />
+              <Text style={[styles.buttonText, isLightTheme && styles.lightButtonText]}>Create Backup</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={styles.button}
+              style={[styles.button, isLightTheme && styles.lightButton]}
               onPress={handleRestoreBackup}
             >
-              <MaterialIcons name="restore" size={24} color="#FFFFFF" />
-              <Text style={styles.buttonText}>Restore Backup</Text>
+              <MaterialIcons name="restore" size={24} color={isLightTheme ? "#333" : "#FFFFFF"} />
+              <Text style={[styles.buttonText, isLightTheme && styles.lightButtonText]}>Restore Backup</Text>
             </TouchableOpacity>
           </View>
           
           {/* Auto sync settings */}
-          <View style={styles.settingItem}>
+          <View style={[styles.settingItem, isLightTheme && styles.lightSettingItem]}>
             <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Auto Sync</Text>
-              <Text style={styles.settingDescription}>
+              <Text style={[styles.settingLabel, isLightTheme && styles.lightSettingLabel]}>Auto Sync</Text>
+              <Text style={[styles.settingDescription, isLightTheme && styles.lightSettingDescription]}>
                 Automatically backup data to Google Drive periodically
               </Text>
             </View>
             
             <Switch
-              trackColor={{ false: "#222222", true: "#777777" }}
+              trackColor={{ false: isLightTheme ? "#DDDDDD" : "#222222", true: "#777777" }}
               thumbColor={autoSyncEnabled ? "#FFFFFF" : "#888888"}
-              ios_backgroundColor="#222222"
+              ios_backgroundColor={isLightTheme ? "#DDDDDD" : "#222222"}
               onValueChange={handleAutoSyncToggle}
               value={autoSyncEnabled}
             />
@@ -552,37 +569,43 @@ const CloudBackupSection = ({ navigation, onBackupComplete }) => {
           
           {/* Sync frequency selector */}
           {autoSyncEnabled && (
-            <View style={styles.frequencySelector}>
-              <Text style={styles.frequencyLabel}>Sync frequency:</Text>
+            <View style={[styles.frequencySelector, isLightTheme && styles.lightFrequencySelector]}>
+              <Text style={[styles.frequencyLabel, isLightTheme && styles.lightFrequencyLabel]}>Sync frequency:</Text>
               <View style={styles.frequencyOptions}>
                 <TouchableOpacity
                   style={[
                     styles.frequencyOption,
-                    syncFrequency === 'daily' && styles.frequencyOptionSelected
+                    isLightTheme && styles.lightFrequencyOption,
+                    syncFrequency === 'daily' && styles.frequencyOptionSelected,
+                    syncFrequency === 'daily' && isLightTheme && styles.lightFrequencyOptionSelected
                   ]}
                   onPress={() => handleFrequencyChange('daily')}
                 >
-                  <Text style={styles.frequencyText}>Daily</Text>
+                  <Text style={[styles.frequencyText, isLightTheme && styles.lightFrequencyText]}>Daily</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity
                   style={[
                     styles.frequencyOption,
-                    syncFrequency === 'weekly' && styles.frequencyOptionSelected
+                    isLightTheme && styles.lightFrequencyOption,
+                    syncFrequency === 'weekly' && styles.frequencyOptionSelected,
+                    syncFrequency === 'weekly' && isLightTheme && styles.lightFrequencyOptionSelected
                   ]}
                   onPress={() => handleFrequencyChange('weekly')}
                 >
-                  <Text style={styles.frequencyText}>Weekly</Text>
+                  <Text style={[styles.frequencyText, isLightTheme && styles.lightFrequencyText]}>Weekly</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity
                   style={[
                     styles.frequencyOption,
-                    syncFrequency === 'monthly' && styles.frequencyOptionSelected
+                    isLightTheme && styles.lightFrequencyOption,
+                    syncFrequency === 'monthly' && styles.frequencyOptionSelected,
+                    syncFrequency === 'monthly' && isLightTheme && styles.lightFrequencyOptionSelected
                   ]}
                   onPress={() => handleFrequencyChange('monthly')}
                 >
-                  <Text style={styles.frequencyText}>Monthly</Text>
+                  <Text style={[styles.frequencyText, isLightTheme && styles.lightFrequencyText]}>Monthly</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -601,48 +624,56 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 20,
   },
+  lightContainer: {
+    backgroundColor: 'transparent',
+  },
   sectionTitle: {
     color: '#FFF',
     fontSize: 18,
     fontWeight: '500',
     marginBottom: 15,
   },
+  lightSectionTitle: {
+    color: '#111',
+  },
+  noteText: {
+    color: '#888',
+    fontSize: 14,
+    marginBottom: 15,
+  },
+  lightNoteText: {
+    color: '#555',
+  },
   settingItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#111',
+    backgroundColor: '#222',
     borderRadius: 10,
     padding: 10,
     marginBottom: 10,
     height: 60,
   },
+  lightSettingItem: {
+    backgroundColor: '#DDD',
+  },
   settingContent: {
     flex: 1,
-  },
-  settingLabelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  settingIcon: {
-    marginRight: 8,
   },
   settingLabel: {
     color: '#CCC',
     fontSize: 16,
+  },
+  lightSettingLabel: {
+    color: '#333',
   },
   settingDescription: {
     color: '#888',
     fontSize: 11,
     marginTop: 2,
   },
-  actionButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  lightSettingDescription: {
+    color: '#555',
   },
   connectButton: {
     backgroundColor: '#4285F4', // Google blue
@@ -653,18 +684,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 15,
   },
+  connectButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '500',
+  },
   disconnectButton: {
     backgroundColor: '#444',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 5,
   },
-  actionButtonIcon: {
-    marginRight: 5,
+  lightDisconnectButton: {
+    backgroundColor: '#DDD',
   },
-  actionButtonText: {
+  disconnectButtonText: {
     color: '#FFF',
-    fontSize: 12,
+    fontSize: 14,
+  },
+  lightDisconnectButtonText: {
+    color: '#333',
   },
   infoItem: {
     flexDirection: 'row',
@@ -677,9 +716,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginRight: 5,
   },
+  lightInfoLabel: {
+    color: '#555',
+  },
   infoValue: {
     color: '#CCC',
     fontSize: 14,
+  },
+  lightInfoValue: {
+    color: '#333',
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -696,19 +741,33 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginHorizontal: 5,
   },
+  lightButton: {
+    backgroundColor: '#4285F4',
+  },
   buttonText: {
     color: '#FFF',
     fontSize: 14,
     marginLeft: 8,
   },
+  lightButtonText: {
+    color: '#FFF',
+  },
   frequencySelector: {
-    marginBottom: 15,
-    paddingHorizontal: 5,
+    backgroundColor: '#222',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+  },
+  lightFrequencySelector: {
+    backgroundColor: '#DDD',
   },
   frequencyLabel: {
-    color: '#888',
+    color: '#CCC',
     fontSize: 14,
     marginBottom: 8,
+  },
+  lightFrequencyLabel: {
+    color: '#333',
   },
   frequencyOptions: {
     flexDirection: 'row',
@@ -716,27 +775,30 @@ const styles = StyleSheet.create({
   },
   frequencyOption: {
     flex: 1,
-    backgroundColor: '#222',
-    padding: 10,
     alignItems: 'center',
-    marginHorizontal: 5,
+    justifyContent: 'center',
+    backgroundColor: '#333',
+    padding: 8,
     borderRadius: 5,
+    marginHorizontal: 3,
+  },
+  lightFrequencyOption: {
+    backgroundColor: '#CCC',
   },
   frequencyOptionSelected: {
-    backgroundColor: '#444',
+    backgroundColor: '#4285F4',
+  },
+  lightFrequencyOptionSelected: {
+    backgroundColor: '#4285F4',
   },
   frequencyText: {
     color: '#CCC',
-    fontSize: 14,
+    fontSize: 12,
   },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
+  lightFrequencyText: {
+    color: '#333',
   },
-  modalContainer: {
+  modalOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -749,105 +811,128 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 20,
   },
-  modalTitle: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 15,
-    textAlign: 'center',
+  lightModalContent: {
+    backgroundColor: '#FFF',
   },
-  backupItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#222',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 10,
-  },
-  backupInfo: {
-    flex: 1,
-  },
-  backupName: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  backupDate: {
-    color: '#AAA',
-    fontSize: 14,
-    marginTop: 5,
-  },
-  backupDescription: {
-    color: '#888',
-    fontSize: 14,
-    marginTop: 5,
-    fontStyle: 'italic',
-  },
-  backupSize: {
-    color: '#666',
-    fontSize: 12,
-    marginTop: 5,
-  },
-  deleteButton: {
-    padding: 5,
-  },
-  closeButton: {
-    backgroundColor: '#333',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  closeButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-  },
-  emptyListText: {
-    color: '#888',
-    textAlign: 'center',
-    padding: 20,
-  },
-  sectionDescription: {
-    color: '#FFF',
-    fontSize: 16,
-    marginBottom: 20,
-  },
-  connectButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '500',
-    marginLeft: 10,
-  },
-  authenticatedContainer: {
-    backgroundColor: '#222',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 15,
-  },
-  statusContainer: {
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
   },
-  statusText: {
+  modalTitle: {
     color: '#FFF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  lightModalTitle: {
+    color: '#111',
+  },
+  closeButton: {
+    padding: 5,
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    color: '#888',
     fontSize: 16,
   },
-  disconnectButton: {
-    backgroundColor: '#444',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 5,
+  lightEmptyText: {
+    color: '#555',
   },
-  disconnectButtonText: {
-    color: '#FF6B6B',
+  backupItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#222',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 10,
+  },
+  lightBackupItem: {
+    backgroundColor: '#EEE',
+  },
+  backupInfo: {
+    flex: 1,
+  },
+  backupDate: {
+    color: '#CCC',
     fontSize: 14,
   },
-  noDevAccountNote: {
+  lightBackupDate: {
+    color: '#333',
+  },
+  backupSize: {
     color: '#888',
     fontSize: 12,
-    marginBottom: 10,
+    marginTop: 4,
+  },
+  lightBackupSize: {
+    color: '#555',
+  },
+  backupActions: {
+    flexDirection: 'row',
+  },
+  backupAction: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#333',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  lightBackupAction: {
+    backgroundColor: '#4285F4',
+  },
+  deleteAction: {
+    backgroundColor: '#661111',
+  },
+  lightDeleteAction: {
+    backgroundColor: '#FF6B6B',
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: '#CCC',
+    fontSize: 16,
+    marginTop: 10,
+  },
+  lightText: {
+    color: '#333',
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  connectButtonIcon: {
+    marginRight: 10,
+  },
+  mockButton: {
+    backgroundColor: '#333',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  lightMockButton: {
+    backgroundColor: '#DDD',
+  },
+  mockButtonText: {
+    color: '#CCC',
+    fontSize: 14,
+  },
+  lightMockButtonText: {
+    color: '#333',
   },
 });
 

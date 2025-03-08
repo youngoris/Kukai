@@ -50,6 +50,7 @@ const SummaryScreen = ({ navigation }) => {
     return defaultTime;
   });
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [appTheme, setAppTheme] = useState('dark');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -57,6 +58,9 @@ const SummaryScreen = ({ navigation }) => {
   const inputRef = useRef(null);
   const scrollViewRef = useRef(null);
   const addTaskContainerRef = useRef(null);
+
+  // 检查是否为浅色主题
+  const isLightTheme = appTheme === 'light';
 
   useEffect(() => {
     StatusBar.setHidden(true);
@@ -204,14 +208,14 @@ const SummaryScreen = ({ navigation }) => {
       // 处理任务数据
       if (tasksJson) {
         allTasks = JSON.parse(tasksJson);
-        // 筛选今天完成的任务和今天未完成的任务
+        // Filter tasks completed today and pending tasks
         const todayTasks = allTasks.filter((task) => {
-          // 如果任务有完成时间，检查是否是今天完成的
+          // If task has completion time, check if it was completed today
           if (task.completedAt) {
             const completedDate = new Date(task.completedAt).toISOString().split('T')[0];
             return completedDate === today;
           }
-          // 对于未完成的任务，默认显示所有未完成任务
+          // For incomplete tasks, display all by default
           return !task.completed;
         });
         
@@ -221,19 +225,19 @@ const SummaryScreen = ({ navigation }) => {
         setCompletedTasks(completed);
         setPendingTasks(pending);
         
-        // 计算今日任务完成率（只考虑今天的任务）
+        // Calculate today's task completion rate (considering only today's tasks)
         const rate = todayTasks.length > 0 ? (completed.length / todayTasks.length) * 100 : 0;
         setCompletionRate(Math.round(rate));
       } else {
-        // 如果没有任务数据，初始化为空数组
+        // If no task data exists, initialize with empty arrays
         setCompletedTasks([]);
         setPendingTasks([]);
         setCompletionRate(0);
-        // 创建初始空任务数组并保存
+        // Create initial empty task array and save
         await AsyncStorage.setItem('tasks', JSON.stringify([]));
       }
 
-      // 加载冥想数据（只加载今天的冥想时间）
+      // Load meditation data (only today's meditation time)
       const meditationSessionsJson = await AsyncStorage.getItem('meditationSessions');
       let todayMeditationMinutes = 0;
       if (meditationSessionsJson) {
@@ -248,7 +252,7 @@ const SummaryScreen = ({ navigation }) => {
       }
       setTotalMeditationMinutes(todayMeditationMinutes);
 
-      // 加载专注时间数据（只加载今天的专注时间）
+      // Load focus time data (only today's focus time)
       const focusSessionsJson = await AsyncStorage.getItem('focusSessions');
       if (focusSessionsJson) {
         const focusSessions = JSON.parse(focusSessionsJson);
@@ -264,26 +268,26 @@ const SummaryScreen = ({ navigation }) => {
         setTotalFocusMinutes(0);
       }
 
-      // 加载番茄钟数量（只加载今天的番茄钟数量）
+      // Load pomodoro count (only today's pomodoros)
       const pomodorosJson = await AsyncStorage.getItem('pomodoros');
       if (pomodorosJson) {
         const pomodoros = JSON.parse(pomodorosJson);
-        // 筛选今天的番茄钟记录
+        // Filter today's pomodoro records
         const todayPomodoros = pomodoros.filter(
           (pomodoro) => pomodoro.date === today
         );
-        // 设置今天的番茄钟数量
+        // Set today's pomodoro count
         setPomodoroCount(todayPomodoros.length);
       } else {
         setPomodoroCount(0);
       }
 
-      // 加载明天的任务
+      // Load tomorrow's tasks
       const tomorrowTasksJson = await AsyncStorage.getItem('tomorrowTasks');
       if (tomorrowTasksJson) {
         setTomorrowTasks(JSON.parse(tomorrowTasksJson));
       } else {
-        // 如果没有明天任务数据，初始化为空数组
+        // If no tomorrow's tasks data, initialize as empty array
         setTomorrowTasks([]);
         await AsyncStorage.setItem('tomorrowTasks', JSON.stringify([]));
       }
@@ -586,75 +590,78 @@ const SummaryScreen = ({ navigation }) => {
     }, 300);
   };
 
-  return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-    >
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => navigation.navigate('Home')}
-          >
-            <Text style={styles.headerButtonText}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>SUMMARY</Text>
-          <View style={styles.headerButton} />
-        </View>
+  // Load user settings
+  useEffect(() => {
+    const loadUserSettings = async () => {
+      try {
+        const settingsData = await AsyncStorage.getItem('userSettings');
+        if (settingsData) {
+          const parsedSettings = JSON.parse(settingsData);
+          if (parsedSettings.appTheme) {
+            setAppTheme(parsedSettings.appTheme);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading user settings:', error);
+      }
+    };
+    
+    loadUserSettings();
+  }, []);
 
-        <Animated.ScrollView
-          ref={scrollViewRef}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          style={[
-            { 
-              opacity: fadeAnim, 
-              transform: [{ translateY: slideAnim }] 
-            }
-          ]}
-          keyboardDismissMode="interactive"
-          showsVerticalScrollIndicator={false}
+  return (
+    <SafeAreaView style={[styles.container, isLightTheme && styles.lightContainer]}>
+      <StatusBar barStyle={isLightTheme ? "dark-content" : "light-content"} />
+      <View style={[styles.header, isLightTheme && styles.lightHeader]}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
         >
-          <View style={styles.headerContainer}>
-            <Text style={styles.headerSubtitle}>Today</Text>
-            <Text style={styles.dateText}>{new Date().toLocaleDateString()}</Text>
-          </View>
-          
-          {/* Daily Statistics */}
+          <MaterialIcons name="arrow-back" size={24} color={isLightTheme ? "#000000" : "#FFFFFF"} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, isLightTheme && styles.lightHeaderTitle]}>SUMMARY</Text>
+        <View style={styles.headerRight} />
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollViewContent}
+        ref={scrollViewRef}
+      >
+        <View style={styles.content}>
+          {/* Stats Card */}
           <View style={styles.statsContainer}>
-            <View style={styles.statsCard}>
+            <View style={[styles.statsCard, isLightTheme && styles.lightStatsCard]}>
               <View style={styles.statItem}>
-                <Text style={styles.statTitle}>Completion Rate</Text>
+                <Text style={[styles.statTitle, isLightTheme && styles.lightStatTitle]}>Completion Rate</Text>
                 <View style={styles.progressContainer}>
                   <View style={[styles.progressBar, { width: `${completionRate}%` }]} />
-                  <Text style={styles.progressText}>{completionRate}%</Text>
+                  <Text style={[styles.progressText, isLightTheme && styles.lightProgressText]}>{completionRate}%</Text>
                 </View>
               </View>
               
-              <View style={styles.statDivider} />
+              <View style={[styles.statDivider, isLightTheme && styles.lightStatDivider]} />
               
               {/* 使用水平布局容器 */}
               <View style={styles.statRowContainer}>
                 {/* 冥想时间 */}
                 <View style={styles.statItemHalf}>
-                  <Text style={styles.statTitle}>Meditation</Text>
+                  <Text style={[styles.statTitle, isLightTheme && styles.lightStatTitle]}>Meditation</Text>
                   <View style={styles.focusTimeContainer}>
-                    <MaterialIcons name="self-improvement" size={22} color="#CCCCCC" />
-                    <Text style={styles.focusTimeText}>{totalMeditationMinutes} min</Text>
+                    <MaterialIcons name="self-improvement" size={22} color={isLightTheme ? "#333333" : "#CCCCCC"} />
+                    <Text style={[styles.focusTimeText, isLightTheme && styles.lightFocusTimeText]}>{totalMeditationMinutes} min</Text>
                   </View>
                 </View>
                 
                 {/* 垂直分隔线 */}
-                <View style={styles.verticalDivider} />
+                <View style={[styles.verticalDivider, isLightTheme && styles.lightVerticalDivider]} />
                 
                 {/* 番茄钟会话 */}
                 <View style={styles.statItemHalf}>
-                  <Text style={styles.statTitle}>Pomodoros</Text>
+                  <Text style={[styles.statTitle, isLightTheme && styles.lightStatTitle]}>Pomodoros</Text>
                   <View style={styles.focusTimeContainer}>
-                    <MaterialIcons name="timer" size={22} color="#CCCCCC" />
-                    <Text style={styles.focusTimeText}>{pomodoroCount} sessions</Text>
+                    <MaterialIcons name="timer" size={22} color={isLightTheme ? "#333333" : "#CCCCCC"} />
+                    <Text style={[styles.focusTimeText, isLightTheme && styles.lightFocusTimeText]}>{pomodoroCount} sessions</Text>
                   </View>
                 </View>
               </View>
@@ -663,42 +670,42 @@ const SummaryScreen = ({ navigation }) => {
 
           {/* Completed Tasks */}
           <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Completed Tasks</Text>
+            <Text style={[styles.sectionTitle, isLightTheme && styles.lightSectionTitle]}>Completed Tasks</Text>
             {completedTasks.length > 0 ? (
               <FlatList
                 data={completedTasks}
                 renderItem={({ item }) => (
-                  <View style={styles.taskItem}>
+                  <View style={[styles.taskItem, isLightTheme && styles.lightTaskItem]}>
                     <View
                       style={[styles.taskPriorityIndicator, { backgroundColor: PRIORITY_COLORS[item.priority] }]}
                     />
                     <View style={styles.taskContent}>
-                      <Text style={styles.taskText}>{item.text}</Text>
+                      <Text style={[styles.taskText, isLightTheme && styles.lightTaskText]}>{item.text}</Text>
                     </View>
-                    <MaterialIcons name="check-circle" size={20} color="#CCCCCC" />
+                    <MaterialIcons name="check-circle" size={20} color={isLightTheme ? "#333333" : "#CCCCCC"} />
                   </View>
                 )}
                 keyExtractor={(item) => item.id}
                 scrollEnabled={false}
               />
             ) : (
-              <Text style={styles.emptyText}>No tasks completed today</Text>
+              <Text style={[styles.emptyText, isLightTheme && styles.lightEmptyText]}>No tasks completed today</Text>
             )}
           </View>
 
           {/* Pending Tasks */}
           <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Pending Tasks</Text>
+            <Text style={[styles.sectionTitle, isLightTheme && styles.lightSectionTitle]}>Pending Tasks</Text>
             {pendingTasks.length > 0 ? (
               <FlatList
                 data={pendingTasks}
                 renderItem={({ item }) => (
-                  <View style={styles.taskItem}>
+                  <View style={[styles.taskItem, isLightTheme && styles.lightTaskItem]}>
                     <View
                       style={[styles.taskPriorityIndicator, { backgroundColor: PRIORITY_COLORS[item.priority] }]}
                     />
                     <View style={styles.taskContent}>
-                      <Text style={styles.taskText}>{item.text}</Text>
+                      <Text style={[styles.taskText, isLightTheme && styles.lightTaskText]}>{item.text}</Text>
                     </View>
                   </View>
                 )}
@@ -706,26 +713,22 @@ const SummaryScreen = ({ navigation }) => {
                 scrollEnabled={false}
               />
             ) : (
-              <Text style={styles.emptyText}>All tasks completed!</Text>
+              <Text style={[styles.emptyText, isLightTheme && styles.lightEmptyText]}>All tasks completed!</Text>
             )}
           </View>
 
           {/* Tomorrow's Plan */}
           <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Tomorrow's Plan</Text>
+            <Text style={[styles.sectionTitle, isLightTheme && styles.lightSectionTitle]}>Tomorrow's Plan</Text>
             {!isAddingTask ? (
               <TouchableOpacity
-                style={styles.addTaskButton}
+                style={[styles.addTaskButton, isLightTheme && styles.lightAddTaskButton]}
                 onPress={() => {
                   setIsAddingTask(true);
-                  setTimeout(() => {
-                    inputRef.current?.focus();
-                    scrollToInput();
-                  }, 100);
                 }}
               >
-                <AntDesign name="plus" size={20} color="#CCCCCC" />
-                <Text style={styles.addTaskText}>Add Tomorrow Task</Text>
+                <AntDesign name="plus" size={20} color={isLightTheme ? "#333333" : "#FFFFFF"} />
+                <Text style={[styles.addTaskText, isLightTheme && styles.lightAddTaskText]}>Add task for tomorrow</Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.addTaskWrapperContainer}>
@@ -889,9 +892,9 @@ const SummaryScreen = ({ navigation }) => {
               <Text style={styles.emptyText}>No tasks for tomorrow</Text>
             )}
           </View>
-        </Animated.ScrollView>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -900,127 +903,153 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+  lightContainer: {
+    backgroundColor: '#f5f5f5',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    justifyContent: 'center',
     paddingVertical: 15,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#222',
   },
-  headerButton: {
-    width: 24,
+  lightHeader: {
+    borderBottomColor: '#e0e0e0',
   },
-  headerButtonText: {
-    color: '#FFFFFF',
-    fontSize: 26,
-    fontWeight: 'bold',
+  backButton: {
+    position: 'absolute',
+    left: 20,
   },
   headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  scrollContent: {
-    paddingTop: 20,
-    paddingHorizontal: 20,
-    paddingBottom: 50,
-  },
-  headerContainer: {
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#222',
-  },
-  headerSubtitle: {
     color: '#fff',
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 8,
-    letterSpacing: 2,
     textAlign: 'center',
   },
-  dateText: {
-    color: '#aaa',
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 15,
-  },
-  statsContainer: {
-    marginBottom: 20,
+  lightHeaderTitle: {
+    color: '#333',
   },
   statsCard: {
     backgroundColor: '#111',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
+    borderRadius: 10,
+    margin: 15,
+    padding: 15,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  lightStatsCard: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
   },
   statItem: {
-    marginBottom: 20,
+    marginBottom: 15,
   },
   statTitle: {
-    color: '#aaa',
     fontSize: 16,
+    color: '#aaa',
     marginBottom: 10,
   },
+  lightStatTitle: {
+    color: '#666',
+  },
   progressContainer: {
-    height: 24,
+    height: 20,
     backgroundColor: '#222',
-    borderRadius: 12,
+    borderRadius: 10,
     overflow: 'hidden',
-    position: 'relative',
+    marginBottom: 15,
+  },
+  lightProgressContainer: {
+    backgroundColor: '#e0e0e0',
   },
   progressBar: {
-    height: 24,
-    backgroundColor: '#CCCCCC', // Monochrome light gray
-    borderRadius: 12,
+    height: '100%',
+    backgroundColor: '#4CAF50',
   },
   progressText: {
     position: 'absolute',
     right: 10,
-    top: 2,
+    top: 0,
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
+    lineHeight: 20,
+  },
+  lightProgressText: {
+    color: '#333',
   },
   statDivider: {
-    height: 1,
+    width: 1,
+    height: '100%',
     backgroundColor: '#333',
-    marginVertical: 20,
+  },
+  lightStatDivider: {
+    backgroundColor: '#e0e0e0',
+  },
+  statRowContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statItemHalf: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  verticalDivider: {
+    width: 1,
+    backgroundColor: '#333',
+    marginHorizontal: 15,
+  },
+  lightVerticalDivider: {
+    backgroundColor: '#e0e0e0',
   },
   focusTimeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 5,
   },
   focusTimeText: {
+    fontSize: 24,
+    fontWeight: 'bold',
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 10,
+    textAlign: 'center',
+  },
+  lightFocusTimeText: {
+    color: '#333',
   },
   sectionContainer: {
-    marginBottom: 20,
+    marginTop: 20,
+    paddingHorizontal: 15,
   },
   sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
     marginBottom: 15,
-    marginTop: 20,
-    letterSpacing: 1,
+  },
+  lightSectionTitle: {
+    color: '#333',
   },
   taskItem: {
-    flexDirection: 'row',
     backgroundColor: '#111',
     borderRadius: 8,
-    padding: 20,
-    marginBottom: 15,
+    padding: 15,
+    marginBottom: 10,
+    flexDirection: 'row',
     alignItems: 'center',
+  },
+  lightTaskItem: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   taskPriorityIndicator: {
     width: 4,
@@ -1032,62 +1061,46 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   taskText: {
-    color: '#fff',
+    flex: 1,
     fontSize: 16,
-  },
-  taskTagsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  taskTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#333333',
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    marginRight: 6,
-    marginBottom: 4,
-  },
-  frogTag: {
-    backgroundColor: '#2E8B57', // Green background for frog tag
-  },
-  importantTag: {
-    backgroundColor: '#3D2645', // Purple background for important tag
-  },
-  urgentTag: {
-    backgroundColor: '#832232', // Red background for urgent tag
-  },
-  taskTagText: {
     color: '#fff',
-    fontSize: 12,
-    marginLeft: 4,
+  },
+  lightTaskText: {
+    color: '#333',
   },
   emptyText: {
-    color: '#666666',
-    fontSize: 14,
+    fontSize: 16,
+    color: '#777',
     textAlign: 'center',
+    marginVertical: 20,
     fontStyle: 'italic',
-    marginTop: 10,
+  },
+  lightEmptyText: {
+    color: '#999',
   },
   addTaskButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#111',
+    backgroundColor: '#333',
     borderRadius: 8,
     padding: 15,
-    marginBottom: 20,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  lightAddTaskButton: {
+    backgroundColor: '#e0e0e0',
   },
   addTaskText: {
-    color: '#CCCCCC',
     fontSize: 16,
-    marginLeft: 8,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  lightAddTaskText: {
+    color: '#333',
   },
   addTaskContainer: {
     backgroundColor: '#111',
     borderRadius: 8,
     padding: 15,
-    marginBottom: 20,
+    marginBottom: 10,
   },
   taskInput: {
     color: '#fff',
@@ -1156,37 +1169,22 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 6,
   },
-  statRowContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statItemHalf: {
-    flex: 1,
-    paddingHorizontal: 10,
-  },
-  verticalDivider: {
-    width: 1,
-    backgroundColor: '#333',
-    alignSelf: 'stretch',
-  },
   tagButtonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
+    marginTop: 15,
+    justifyContent: 'space-between',
   },
   tagButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#333',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000',
-    borderWidth: 1,
-    borderColor: '#666666',
-    marginRight: 10,
+    marginHorizontal: 5,
   },
   tagButtonActive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#FFFFFF',
+    backgroundColor: '#4CAF50',
   },
   frogButtonActive: {
     backgroundColor: '#FFFFFF',
