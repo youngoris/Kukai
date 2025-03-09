@@ -656,8 +656,6 @@ const SummaryScreen = ({ navigation }) => {
               </View>
             </View>
 
-            <View style={styles.statDivider} />
-
             {/* Use horizontal layout container */}
             <View style={styles.statRowContainer}>
               {/* Meditation Time */}
@@ -1038,20 +1036,20 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   scrollContent: {
-    paddingTop: 20,
+    paddingTop: 10,
     paddingHorizontal: 20,
     paddingBottom: 50,
   },
   headerContainer: {
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#222",
+    padding: 10,
+    marginBottom: 10,
+    borderBottomWidth: 0,
   },
   headerSubtitle: {
     color: "#fff",
     fontSize: 28,
     fontWeight: "700",
-    marginBottom: 8,
+    marginBottom: 4,
     letterSpacing: 2,
     textAlign: "center",
   },
@@ -1059,28 +1057,29 @@ const styles = StyleSheet.create({
     color: "#aaa",
     fontSize: 16,
     textAlign: "center",
-    marginBottom: 15,
+    marginBottom: 0,
   },
   statsContainer: {
-    marginBottom: 20,
+    marginBottom: 15,
+    marginTop: 10,
   },
   statsCard: {
     backgroundColor: "#111",
     borderRadius: 12,
     padding: 20,
-    marginBottom: 20,
+    marginBottom: 15,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
   statItem: {
-    marginBottom: 20,
+    marginBottom: 15,
   },
   statTitle: {
     color: "#aaa",
     fontSize: 16,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   progressContainer: {
     height: 24,
@@ -1103,9 +1102,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   statDivider: {
-    height: 1,
-    backgroundColor: "#333",
-    marginVertical: 20,
+    height: 0,
+    backgroundColor: "transparent",
+    marginVertical: 0,
   },
   focusTimeContainer: {
     flexDirection: "row",
@@ -1118,14 +1117,14 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   sectionContainer: {
-    marginBottom: 20,
+    marginBottom: 15,
   },
   sectionTitle: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
-    marginBottom: 15,
-    marginTop: 20,
+    marginBottom: 12,
+    marginTop: 15,
     letterSpacing: 1,
   },
   taskItem: {
@@ -1273,6 +1272,7 @@ const styles = StyleSheet.create({
   statRowContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
+    marginTop: 15,
   },
   statItemHalf: {
     flex: 1,

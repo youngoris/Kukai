@@ -71,6 +71,7 @@ const HomeScreen = ({ navigation }) => {
     error: weatherError,
     getWeatherIcon,
     getErrorIcon,
+    fetchWeather,
   } = useWeather();
 
   // Add a ref in HomeScreen component to track if it's initial load
@@ -81,6 +82,11 @@ const HomeScreen = ({ navigation }) => {
   
   // Get status bar height for Android
   const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
+
+  // 在组件挂载时加载已完成任务
+  useEffect(() => {
+    loadCompletedTasks();
+  }, []);
 
   // Load completed tasks state
   const loadCompletedTasks = async () => {
@@ -94,8 +100,9 @@ const HomeScreen = ({ navigation }) => {
 
         // If it's a new day, reset all task states
         if (!parsedTasks[today]) {
-          const newState = { [today]: {} };
+          const newState = { ...parsedTasks, [today]: {} };
           setCompletedTasks(newState);
+          await saveCompletedTasks(newState);
         } else {
           setCompletedTasks(parsedTasks);
         }
@@ -103,6 +110,7 @@ const HomeScreen = ({ navigation }) => {
         // Initialize with today's empty object
         const newState = { [today]: {} };
         setCompletedTasks(newState);
+        await saveCompletedTasks(newState);
       }
     } catch (error) {
       console.error("Error loading completed tasks:", error);
@@ -204,8 +212,16 @@ const HomeScreen = ({ navigation }) => {
   // Handle function access
   const handleFunctionAccess = (taskName) => {
     // Record function access status
+    const today = new Date().toISOString().split("T")[0];
     const newCompletedTasks = { ...completedTasks };
-    newCompletedTasks[taskName] = true;
+    
+    // 确保今天的日期键存在
+    if (!newCompletedTasks[today]) {
+      newCompletedTasks[today] = {};
+    }
+    
+    // 更新特定任务的完成状态
+    newCompletedTasks[today][taskName] = true;
     setCompletedTasks(newCompletedTasks);
     saveCompletedTasks(newCompletedTasks);
 
@@ -237,11 +253,13 @@ const HomeScreen = ({ navigation }) => {
   // Get current highlighted function
   const getCurrentHighlightedFunction = () => {
     const hours = currentTime.getHours();
+    const today = new Date().toISOString().split("T")[0];
+    const todayTasks = completedTasks[today] || {};
 
     // Morning time (6:00-12:00)
     if (hours >= 6 && hours < 12) {
-      if (!completedTasks.meditation) return "MEDITATION";
-      if (!completedTasks.task) return "TASK";
+      if (!todayTasks.meditation) return "MEDITATION";
+      if (!todayTasks.task) return "TASK";
       return "FOCUS";
     }
 
@@ -251,7 +269,7 @@ const HomeScreen = ({ navigation }) => {
     }
 
     // Evening time (18:00-6:00)
-    if (!completedTasks.summary) return "SUMMARY";
+    if (!todayTasks.summary) return "SUMMARY";
     return "JOURNAL";
   };
 
@@ -281,6 +299,13 @@ const HomeScreen = ({ navigation }) => {
 
   // Platform-independent color for weather error
   const weatherErrorColor = "#fff";
+
+  // Function to retry weather fetch when error occurs
+  const retryWeatherFetch = () => {
+    if (fetchWeather) {
+      fetchWeather(true); // Force refresh
+    }
+  };
 
   return (
     <View style={[
