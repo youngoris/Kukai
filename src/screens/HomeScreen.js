@@ -83,7 +83,7 @@ const HomeScreen = ({ navigation }) => {
   // Get status bar height for Android
   const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
 
-  // 在组件挂载时加载已完成任务
+  // Load completed tasks on component mount
   useEffect(() => {
     loadCompletedTasks();
   }, []);
@@ -215,12 +215,12 @@ const HomeScreen = ({ navigation }) => {
     const today = new Date().toISOString().split("T")[0];
     const newCompletedTasks = { ...completedTasks };
     
-    // 确保今天的日期键存在
+    // Ensure today's date key exists
     if (!newCompletedTasks[today]) {
       newCompletedTasks[today] = {};
     }
     
-    // 更新特定任务的完成状态
+    // Update specific task completion status
     newCompletedTasks[today][taskName] = true;
     setCompletedTasks(newCompletedTasks);
     saveCompletedTasks(newCompletedTasks);
