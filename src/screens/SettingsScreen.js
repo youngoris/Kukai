@@ -13,12 +13,14 @@ import {
   Share,
   TouchableWithoutFeedback,
   Platform,
+  StatusBar as RNStatusBar,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
 import * as DocumentPicker from "expo-document-picker";
 import * as Notifications from "expo-notifications";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CustomDateTimePicker from "../components/CustomDateTimePicker";
 import CloudBackupSection from "../components/CloudBackupSection";
 import JournalTemplateManager from "../components/JournalTemplateManager";
@@ -28,6 +30,12 @@ import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 
 const SettingsScreen = ({ navigation }) => {
+  // Get safe area insets
+  const insets = useSafeAreaInsets();
+  
+  // Get status bar height for Android
+  const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
+
   // Meditation Settings
   const [meditationDuration, setMeditationDuration] = useState(10);
   const [selectedSoundTheme, setSelectedSoundTheme] = useState("rain");
@@ -1130,7 +1138,10 @@ const SettingsScreen = ({ navigation }) => {
       style={[
         styles.container, 
         appTheme === "light" && styles.lightContainer,
-        { paddingTop: 0 }
+        { 
+          paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 20
+        }
       ]}
     >
       <CustomHeader 
