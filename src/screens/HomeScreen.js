@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import useWeather from "../utils/useWeather";
 import { navigateWithDirection } from "../navigation/NavigationUtils";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
+import { ERROR_TYPES } from "../constants/Config";
 
 // Quote database
 const quotes = {
@@ -72,6 +73,7 @@ const HomeScreen = ({ navigation }) => {
     error: weatherError,
     getWeatherIcon,
     getErrorIcon,
+    getWeatherErrorMessage,
     fetchWeather,
   } = useWeather();
 
@@ -303,13 +305,18 @@ const HomeScreen = ({ navigation }) => {
 
   // Modify weather error display logic
   const getWeatherErrorIcon = () => {
-    if (!weatherError) return "weather-cloudy-alert";
+    if (!weatherError) return "weather-cloudy";
 
+    // 获取错误图标但不添加"weather-"前缀，因为某些图标可能不在weather类别中
     const errorIcon = getErrorIcon();
-    // If error icon is not prefixed with 'weather-', add prefix
-    return errorIcon.startsWith("weather-")
-      ? errorIcon
-      : `weather-${errorIcon}`;
+    
+    // 检查是否是位置错误，如果是则使用问号图标
+    if (weatherError.type === ERROR_TYPES.LOCATION) {
+      return "help-circle-outline";
+    }
+    
+    // 对于其他错误类型，使用适当的图标
+    return errorIcon;
   };
 
   // Platform-independent color for weather error
@@ -360,10 +367,7 @@ const HomeScreen = ({ navigation }) => {
               color={weatherErrorColor}
               style={styles.weatherIcon}
             />
-            <View>
-              <Text style={[styles.weatherText, { color: weatherErrorColor }]}>--°C</Text>
-              <Text style={[styles.weatherErrorText, { color: weatherErrorColor }]}>{getWeatherErrorMessage()}</Text>
-            </View>
+            <Text style={[styles.weatherText, { color: weatherErrorColor }]}>--°C</Text>
           </TouchableOpacity>
         ) : (
           weather && (

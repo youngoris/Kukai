@@ -135,30 +135,52 @@ export default function useWeather(options = {}) {
         return { error: permissionError };
       }
 
-      // Get current location
-      const locationData = await Location.getCurrentPositionAsync({});
-      if (!locationData) {
+      // Check if location services are enabled
+      const isLocationServicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!isLocationServicesEnabled) {
         const locationError = {
           type: ERROR_TYPES.LOCATION,
-          message: "Unable to get location information",
-          details: "Please ensure location services are enabled",
+          message: "Location services disabled",
+          details: "Please enable location services in device settings",
         };
         setError(locationError);
         setIsLoading(false);
         return { error: locationError };
       }
 
-      const { latitude, longitude } = locationData.coords;
+      // Get current location
+      let locationData;
+      try {
+        locationData = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 5000,
+        });
+        
+        if (!locationData) {
+          throw new Error("Location data unavailable");
+        }
+        
+        // Save location coordinates for future reference
+        await AsyncStorage.setItem(
+          STORAGE_KEYS.LAST_LOCATION,
+          JSON.stringify({
+            latitude: locationData.coords.latitude,
+            longitude: locationData.coords.longitude,
+            timestamp: new Date().toISOString(),
+          })
+        );
+      } catch (locationError) {
+        const errorObj = {
+          type: ERROR_TYPES.LOCATION,
+          message: "Unable to get location information",
+          details: locationError.message || "Please ensure location services are enabled",
+        };
+        setError(errorObj);
+        setIsLoading(false);
+        return { error: errorObj };
+      }
 
-      // Save location information for future comparison
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.LAST_LOCATION,
-        JSON.stringify({
-          latitude,
-          longitude,
-          timestamp: new Date().toISOString(),
-        }),
-      );
+      const { latitude, longitude } = locationData.coords;
 
       // Use OpenWeather API to get weather data
       const url = `${WEATHER_API.BASE_URL}/weather?lat=${latitude}&lon=${longitude}&units=${WEATHER_API.UNITS}&appid=${WEATHER_API.API_KEY}`;
@@ -377,9 +399,27 @@ export default function useWeather(options = {}) {
       case ERROR_TYPES.API:
         return "cloud-alert";
       case ERROR_TYPES.LOCATION:
-        return "map-marker-alert";
+        return "map-marker-off";
       default:
         return "cloudy-alert";
+    }
+  };
+
+  // Get weather error message
+  const getWeatherErrorMessage = () => {
+    if (!error) return "Unknown error";
+
+    switch (error.type) {
+      case ERROR_TYPES.PERMISSION:
+        return "Location permission denied";
+      case ERROR_TYPES.NETWORK:
+        return "Network error";
+      case ERROR_TYPES.API:
+        return "Weather service error";
+      case ERROR_TYPES.LOCATION:
+        return "NA";
+      default:
+        return "Weather unavailable";
     }
   };
 
@@ -409,5 +449,6 @@ export default function useWeather(options = {}) {
     fetchWeather,
     getWeatherIcon,
     getErrorIcon,
+    getWeatherErrorMessage,
   };
 }

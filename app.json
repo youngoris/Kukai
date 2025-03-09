@@ -37,12 +37,15 @@
       "translucent": true,
       "barStyle": "light-content"
     },
-    "plugins": ["expo-asset"],
+    "plugins": [
+      "expo-asset"
+    ],
     "scheme": "kukai",
     "extra": {
       "eas": {
-        "projectId": "fc032ba7-99e6-4ba8-a1ac-94d54f358eec"
+        "projectId": "8ee33501-ec7b-4c56-a239-e273a87a6f87"
       }
-    }
+    },
+    "owner": "andreho"
   }
 }
