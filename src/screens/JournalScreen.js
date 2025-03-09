@@ -388,9 +388,11 @@ const JournalScreen = ({ navigation }) => {
             <MaterialIcons name="chevron-right" size={20} color="#666" />
           </TouchableOpacity>
         )}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No journal entries yet</Text>
-        }
+        ListEmptyComponent={() => (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>no journal written yet</Text>
+          </View>
+        )}
         contentContainerStyle={styles.flatListContent}
       />
     </View>
@@ -508,7 +510,20 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   journalItemPreview: { color: "#aaa", fontSize: 14 },
-  emptyText: { color: "#666", fontSize: 14, textAlign: "center", padding: 20 },
+  emptyContainer: {
+    backgroundColor: '#171717',
+    borderRadius: 10,
+    padding: 20,
+    marginTop: 10,
+    marginBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    color: '#666',
+    fontSize: 16,
+    textAlign: 'center',
+  },
   flatListContent: { paddingHorizontal: 20, paddingBottom: 40 },
   journalItemMeta: {
     color: "#888",
