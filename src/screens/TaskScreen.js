@@ -23,6 +23,7 @@ import FrogIcon from "../../assets/frog.svg";
 import CustomDateTimePicker from "../components/CustomDateTimePicker";
 import notificationService from "../services/NotificationService";
 import HeaderBar from "../components/HeaderBar";
+import { getSettingsWithDefaults } from "../utils/defaultSettings";
 
 const TaskScreen = ({ navigation }) => {
   const [tasks, setTasks] = useState([]);
@@ -55,16 +56,13 @@ const TaskScreen = ({ navigation }) => {
   // Define isLightTheme based on appTheme
   const isLightTheme = appTheme === 'light';
 
-  // Load user settings including theme
+  // Load user settings
   useEffect(() => {
     const loadUserSettings = async () => {
       try {
-        const userSettings = await AsyncStorage.getItem('userSettings');
-        if (userSettings) {
-          const settings = JSON.parse(userSettings);
-          if (settings.appTheme) {
-            setAppTheme(settings.appTheme);
-          }
+        const settings = await getSettingsWithDefaults(AsyncStorage);
+        if (settings.appTheme) {
+          setAppTheme(settings.appTheme);
         }
       } catch (error) {
         console.error('Error loading user settings:', error);

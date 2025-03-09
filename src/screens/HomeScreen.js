@@ -17,7 +17,8 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import useWeather from "../utils/useWeather";
-import { navigateWithDirection } from "../navigation/AppNavigator";
+import { navigateWithDirection } from "../navigation/NavigationUtils";
+import { getSettingsWithDefaults } from "../utils/defaultSettings";
 
 // Quote database
 const quotes = {
@@ -82,6 +83,20 @@ const HomeScreen = ({ navigation }) => {
   
   // Get status bar height for Android
   const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
+
+  // Load user settings
+  useEffect(() => {
+    const loadUserSettings = async () => {
+      try {
+        const settings = await getSettingsWithDefaults(AsyncStorage);
+        // Apply any settings needed for HomeScreen
+      } catch (error) {
+        console.error('Error loading user settings:', error);
+      }
+    };
+    
+    loadUserSettings();
+  }, []);
 
   // Load completed tasks on component mount
   useEffect(() => {

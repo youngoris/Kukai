@@ -1308,7 +1308,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - react-native-safe-area-context (4.12.0):
+  - react-native-safe-area-context (4.14.1):
     - React-Core
   - react-native-slider (4.5.5):
     - DoubleConversion
@@ -2058,10 +2058,10 @@ SPEC CHECKSUMS:
   ExpoSystemUI: ba4507df7d8d15f5e1694a3c7fc6bc3cca3803e5
   ExpoWebBrowser: 6890a769e6c9d83da938dceb9a03e764afc3ec9c
   FBLazyVector: ca8044c9df513671c85167838b4188791b6f37e1
-  fmt: 10c6e61f4be25dc963c36bd73fc7b1705fe975be
-  glog: 08b301085f15bcbb6ff8632a8ebaf239aae04e6a
-  hermes-engine: eb4a80f6bf578536c58a44198ec93a30f6e69218
-  RCT-Folly: bf5c0376ffe4dd2cf438dcf86db385df9fdce648
+  fmt: fad7775865bb4340e98e10997c965fd61b3c749e
+  glog: 94308668c25e8ccac76f853cda1931c7aa3f5fae
+  hermes-engine: e66b0c7010c9043ef2c688fc74a5a82e16186fd2
+  RCT-Folly: aac5a2e8a7b6b8108945e58a66d08f78b800a1ea
   RCTDeprecation: 7691283dd69fed46f6653d376de6fa83aaad774c
   RCTRequired: eac044a04629288f272ee6706e31f81f3a2b4bfe
   RCTTypeSafety: cfe499e127eda6dd46e5080e12d80d0bfe667228
@@ -2090,7 +2090,7 @@ SPEC CHECKSUMS:
   React-logger: f9d104eace4ce03d7d5ab96802069d9905082225
   React-Mapbuffer: 23ffe602d0f5ca53b861ef8534cb8c63c4479671
   React-microtasksnativemodule: 258cde5410c578c4739e1d3a3bc902b7a28d4625
-  react-native-safe-area-context: 142fade490cbebbe428640b8cbdb09daf17e8191
+  react-native-safe-area-context: 141eca0fd4e4191288dfc8b96a7c7e1c2983447a
   react-native-slider: 4a0f3386a38fc3d2d955efc515aef7096f7d1ee4
   React-nativeconfig: 67fa7a63ea288cb5b1d0dd2deaf240405fec164f
   React-NativeModulesApple: cbf1a34443e1f67b56344547f4b0af69e1c685ba

@@ -13,6 +13,7 @@ import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import HeaderBar from "../components/HeaderBar";
+import { getSettingsWithDefaults } from "../utils/defaultSettings";
 
 const CALENDAR_DOT_SIZE = 8;
 
@@ -33,16 +34,13 @@ const JournalScreen = ({ navigation }) => {
   // Define isLightTheme based on appTheme
   const isLightTheme = appTheme === 'light';
 
-  // Load user settings including theme
+  // Load user settings
   useEffect(() => {
     const loadUserSettings = async () => {
       try {
-        const userSettings = await AsyncStorage.getItem('userSettings');
-        if (userSettings) {
-          const settings = JSON.parse(userSettings);
-          if (settings.appTheme) {
-            setAppTheme(settings.appTheme);
-          }
+        const settings = await getSettingsWithDefaults(AsyncStorage);
+        if (settings.appTheme) {
+          setAppTheme(settings.appTheme);
         }
       } catch (error) {
         console.error('Error loading user settings:', error);

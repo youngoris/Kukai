@@ -19,6 +19,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import notificationService from "../services/NotificationService";
 import HeaderBar from "../components/HeaderBar";
+import { getSettingsWithDefaults } from "../utils/defaultSettings";
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -62,17 +63,29 @@ export default function FocusScreen({ navigation }) {
   const sessionStartTime = useRef(null);
   const appState = useRef(AppState.currentState);
 
-  // Load user settings including theme
+  // Load user settings
   useEffect(() => {
     const loadUserSettings = async () => {
       try {
-        const userSettings = await AsyncStorage.getItem('userSettings');
-        if (userSettings) {
-          const settings = JSON.parse(userSettings);
-          if (settings.appTheme) {
-            setAppTheme(settings.appTheme);
-          }
+        const settings = await getSettingsWithDefaults(AsyncStorage);
+        if (settings.appTheme) {
+          setAppTheme(settings.appTheme);
         }
+        
+        // Load focus settings
+        if (settings.focusDuration) {
+          setFocusDuration(settings.focusDuration);
+        }
+        if (settings.breakDuration) {
+          setBreakDuration(settings.breakDuration);
+        }
+        if (settings.longBreakDuration) {
+          setLongBreakDuration(settings.longBreakDuration);
+        }
+        if (settings.longBreakInterval) {
+          setLongBreakInterval(settings.longBreakInterval);
+        }
+        setAutoStartNextFocus(settings.autoStartNextFocus || false);
       } catch (error) {
         console.error('Error loading user settings:', error);
       }

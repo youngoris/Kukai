@@ -24,6 +24,7 @@ import JournalTemplateManager from "../components/JournalTemplateManager";
 import notificationService from "../services/NotificationService";
 import { AVAILABLE_TEMPLATES } from "../constants/JournalTemplates";
 import HeaderBar from "../components/HeaderBar";
+import { getSettingsWithDefaults } from "../utils/defaultSettings";
 
 const SettingsScreen = ({ navigation }) => {
   // Meditation Settings
@@ -339,82 +340,80 @@ const SettingsScreen = ({ navigation }) => {
 
   const loadSettings = async () => {
     try {
-      const settings = await AsyncStorage.getItem("userSettings");
-      if (settings) {
-        const parsedSettings = JSON.parse(settings);
-        console.log("Loading settings from storage:", parsedSettings);
+      // Use getSettingsWithDefaults to get settings with defaults
+      const parsedSettings = await getSettingsWithDefaults(AsyncStorage);
+      console.log("Loading settings from storage:", parsedSettings);
 
-        // Meditation settings
-        setMeditationDuration(parsedSettings.meditationDuration || 10);
-        setSelectedSoundTheme(parsedSettings.selectedSoundTheme || "rain");
+      // Meditation settings
+      setMeditationDuration(parsedSettings.meditationDuration || 10);
+      setSelectedSoundTheme(parsedSettings.selectedSoundTheme || "rain");
 
-        // Focus settings
-        setFocusDuration(parsedSettings.focusDuration || 25);
-        setBreakDuration(parsedSettings.breakDuration || 5);
-        setLongBreakDuration(parsedSettings.longBreakDuration || 15);
-        setLongBreakInterval(parsedSettings.longBreakInterval || 4);
-        setFocusNotifications(parsedSettings.focusNotifications !== false);
-        setAutoStartNextFocus(parsedSettings.autoStartNextFocus || false);
-        setDifferentWeekendSettings(
-          parsedSettings.differentWeekendSettings || false,
+      // Focus settings
+      setFocusDuration(parsedSettings.focusDuration || 25);
+      setBreakDuration(parsedSettings.breakDuration || 5);
+      setLongBreakDuration(parsedSettings.longBreakDuration || 15);
+      setLongBreakInterval(parsedSettings.longBreakInterval || 4);
+      setFocusNotifications(parsedSettings.focusNotifications !== false);
+      setAutoStartNextFocus(parsedSettings.autoStartNextFocus || false);
+      setDifferentWeekendSettings(
+        parsedSettings.differentWeekendSettings || false,
+      );
+
+      // Journal settings
+      setIncludeWeather(parsedSettings.includeWeather !== false);
+      setIncludeLocation(parsedSettings.includeLocation !== false);
+      setMarkdownSupport(parsedSettings.markdownSupport !== false);
+      setJournalReminder(parsedSettings.journalReminder || false);
+      if (parsedSettings.journalReminderTime) {
+        setJournalReminderTime(new Date(parsedSettings.journalReminderTime));
+      }
+      setSelectedJournalTemplate(
+        parsedSettings.selectedJournalTemplate || "default",
+      );
+
+      // Load meditation reminder settings
+      setMeditationReminder(parsedSettings.meditationReminder || false);
+      if (parsedSettings.meditationReminderTime) {
+        setMeditationReminderTime(
+          new Date(parsedSettings.meditationReminderTime),
         );
+      }
 
-        // Journal settings
-        setIncludeWeather(parsedSettings.includeWeather !== false);
-        setIncludeLocation(parsedSettings.includeLocation !== false);
-        setMarkdownSupport(parsedSettings.markdownSupport !== false);
-        setJournalReminder(parsedSettings.journalReminder || false);
-        if (parsedSettings.journalReminderTime) {
-          setJournalReminderTime(new Date(parsedSettings.journalReminderTime));
-        }
-        setSelectedJournalTemplate(
-          parsedSettings.selectedJournalTemplate || "default",
-        );
+      // General settings
+      setDarkMode(parsedSettings.darkMode !== false);
+      setAppTheme(parsedSettings.appTheme || "dark");
+      setFontSizeScale(parsedSettings.fontSizeScale || "medium");
+      setNotificationsEnabled(parsedSettings.notificationsEnabled !== false);
+      setSyncEnabled(parsedSettings.syncEnabled || false);
 
-        // Load meditation reminder settings
-        setMeditationReminder(parsedSettings.meditationReminder || false);
-        if (parsedSettings.meditationReminderTime) {
-          setMeditationReminderTime(
-            new Date(parsedSettings.meditationReminderTime),
-          );
-        }
+      // Load notification settings
+      const taskNotificationsValue =
+        await AsyncStorage.getItem("taskNotifications");
+      if (taskNotificationsValue !== null) {
+        setTaskNotifications(JSON.parse(taskNotificationsValue));
+      }
 
-        // General settings
-        setDarkMode(parsedSettings.darkMode !== false);
-        setAppTheme(parsedSettings.appTheme || "dark");
-        setFontSizeScale(parsedSettings.fontSizeScale || "medium");
-        setNotificationsEnabled(parsedSettings.notificationsEnabled !== false);
-        setSyncEnabled(parsedSettings.syncEnabled || false);
+      const notificationSoundValue =
+        await AsyncStorage.getItem("notificationSound");
+      if (notificationSoundValue !== null) {
+        setNotificationSound(notificationSoundValue);
+      }
 
-        // Load notification settings
-        const taskNotificationsValue =
-          await AsyncStorage.getItem("taskNotifications");
-        if (taskNotificationsValue !== null) {
-          setTaskNotifications(JSON.parse(taskNotificationsValue));
-        }
+      const quietHoursEnabledValue =
+        await AsyncStorage.getItem("quietHoursEnabled");
+      if (quietHoursEnabledValue !== null) {
+        setQuietHoursEnabled(JSON.parse(quietHoursEnabledValue));
+      }
 
-        const notificationSoundValue =
-          await AsyncStorage.getItem("notificationSound");
-        if (notificationSoundValue !== null) {
-          setNotificationSound(notificationSoundValue);
-        }
+      const quietHoursStartValue =
+        await AsyncStorage.getItem("quietHoursStart");
+      if (quietHoursStartValue !== null) {
+        setQuietHoursStart(parseInt(quietHoursStartValue));
+      }
 
-        const quietHoursEnabledValue =
-          await AsyncStorage.getItem("quietHoursEnabled");
-        if (quietHoursEnabledValue !== null) {
-          setQuietHoursEnabled(JSON.parse(quietHoursEnabledValue));
-        }
-
-        const quietHoursStartValue =
-          await AsyncStorage.getItem("quietHoursStart");
-        if (quietHoursStartValue !== null) {
-          setQuietHoursStart(parseInt(quietHoursStartValue));
-        }
-
-        const quietHoursEndValue = await AsyncStorage.getItem("quietHoursEnd");
-        if (quietHoursEndValue !== null) {
-          setQuietHoursEnd(parseInt(quietHoursEndValue));
-        }
+      const quietHoursEndValue = await AsyncStorage.getItem("quietHoursEnd");
+      if (quietHoursEndValue !== null) {
+        setQuietHoursEnd(parseInt(quietHoursEndValue));
       }
     } catch (error) {
       console.error("Error loading settings:", error);

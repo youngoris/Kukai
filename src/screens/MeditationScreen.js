@@ -27,8 +27,9 @@ import {
   SHADOWS,
 } from "../constants/DesignSystem";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { goBackToHome } from "../navigation/AppNavigator";
+import { goBackToHome } from "../navigation/NavigationUtils";
 import HeaderBar from "../components/HeaderBar";
+import { getSettingsWithDefaults } from "../utils/defaultSettings";
 
 // Ignore specific warnings
 LogBox.ignoreLogs(["Animated: `useNativeDriver`"]);
@@ -178,31 +179,26 @@ const MeditationScreen = ({ navigation }) => {
     useCallback(() => {
       const loadMeditationSettings = async () => {
         try {
-          // Use userSettings as storage key to match SettingsScreen.js
-          const settingsData = await AsyncStorage.getItem("userSettings");
-          if (settingsData) {
-            const parsedSettings = JSON.parse(settingsData);
-            console.log("Loaded meditation settings:", parsedSettings);
+          // Use getSettingsWithDefaults to get default settings
+          const settings = await getSettingsWithDefaults(AsyncStorage);
+          console.log("Loaded meditation settings:", settings);
 
-            // Update meditation duration from settings
-            if (parsedSettings.meditationDuration) {
-              console.log(
-                "Setting meditation duration to:",
-                parsedSettings.meditationDuration,
-              );
-              setCustomDuration(parsedSettings.meditationDuration);
-            }
+          // Update meditation duration from settings
+          if (settings.meditationDuration) {
+            console.log(
+              "Setting meditation duration to:",
+              settings.meditationDuration,
+            );
+            setCustomDuration(settings.meditationDuration);
+          }
 
-            // Update sound theme from settings
-            if (parsedSettings.selectedSoundTheme) {
-              console.log(
-                "Setting sound theme to:",
-                parsedSettings.selectedSoundTheme,
-              );
-              setSelectedSoundTheme(parsedSettings.selectedSoundTheme);
-            }
-          } else {
-            console.log("No settings data found");
+          // Update sound theme from settings
+          if (settings.selectedSoundTheme) {
+            console.log(
+              "Setting sound theme to:",
+              settings.selectedSoundTheme,
+            );
+            setSelectedSoundTheme(settings.selectedSoundTheme);
           }
         } catch (error) {
           console.error("Error loading meditation settings:", error);

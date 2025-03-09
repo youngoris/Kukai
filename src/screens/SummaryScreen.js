@@ -26,6 +26,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import FrogIcon from "../../assets/frog.svg";
 import CustomDateTimePicker from "../components/CustomDateTimePicker";
 import HeaderBar from "../components/HeaderBar";
+import { getSettingsWithDefaults } from "../utils/defaultSettings";
 
 const PRIORITY_COLORS = {
   high: "#666666", // Dark gray
@@ -67,16 +68,13 @@ const SummaryScreen = ({ navigation }) => {
   // Define isLightTheme based on appTheme
   const isLightTheme = appTheme === 'light';
 
-  // Load user settings including theme
+  // Load user settings
   useEffect(() => {
     const loadUserSettings = async () => {
       try {
-        const userSettings = await AsyncStorage.getItem('userSettings');
-        if (userSettings) {
-          const settings = JSON.parse(userSettings);
-          if (settings.appTheme) {
-            setAppTheme(settings.appTheme);
-          }
+        const settings = await getSettingsWithDefaults(AsyncStorage);
+        if (settings.appTheme) {
+          setAppTheme(settings.appTheme);
         }
       } catch (error) {
         console.error('Error loading user settings:', error);
@@ -1177,11 +1175,14 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   emptyText: {
-    color: "#666666",
+    color: "#999999",
     fontSize: 14,
     textAlign: "center",
     fontStyle: "italic",
-    marginTop: 10,
+    backgroundColor: "#111",
+    borderRadius: 8,
+    padding: 20,
+    marginBottom: 15,
   },
   addTaskButton: {
     flexDirection: "row",
