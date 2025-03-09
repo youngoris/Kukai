@@ -13,6 +13,7 @@ import {
   Platform,
   Alert,
   BackHandler,
+  StatusBar as RNStatusBar,
 } from "react-native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
@@ -28,8 +29,9 @@ import {
 } from "../constants/DesignSystem";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { goBackToHome } from "../navigation/NavigationUtils";
-import HeaderBar from "../components/HeaderBar";
+import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Ignore specific warnings
 LogBox.ignoreLogs(["Animated: `useNativeDriver`"]);
@@ -173,6 +175,12 @@ const MeditationScreen = ({ navigation }) => {
   const [isAudioReleasing, setIsAudioReleasing] = useState(false); // Add state flag
   const audioLoopCountRef = useRef(0);
   const statusLogTimeRef = useRef(0);
+
+  // Get safe area insets
+  const insets = useSafeAreaInsets();
+  
+  // Get status bar height for Android
+  const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
 
   // Load settings from AsyncStorage when screen focuses
   useFocusEffect(
@@ -885,11 +893,18 @@ const MeditationScreen = ({ navigation }) => {
   // Render Web compatibility message if on web platform
   if (isWeb) {
     return (
-      <SafeAreaView style={[styles.container, isLightTheme && styles.lightContainer]}>
-        <HeaderBar 
+      <View style={[
+        styles.container, 
+        isLightTheme && styles.lightContainer,
+        { 
+          paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
+        }
+      ]}>
+        <CustomHeader 
           title="MEDITATION"
           onBackPress={() => goBackToHome(navigation)}
-          appTheme={appTheme}
+          showBottomBorder={false}
         />
         
         <View style={[styles.contentContainer, {justifyContent: 'center', alignItems: 'center'}]}>
@@ -911,17 +926,24 @@ const MeditationScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, isLightTheme && styles.lightContainer]}>
+    <View style={[
+      styles.container, 
+      isLightTheme && styles.lightContainer,
+      { 
+        paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
+        paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
+      }
+    ]}>
       {!isMeditating && !isCountingDown && (
-        <HeaderBar 
+        <CustomHeader 
           title="MEDITATION"
           onBackPress={() => goBackToHome(navigation)}
-          appTheme={appTheme}
+          showBottomBorder={false}
         />
       )}
 
@@ -1144,7 +1166,7 @@ const MeditationScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -1152,38 +1174,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-    padding: 0,
-    justifyContent: "center",
+    position: "relative",
   },
   lightContainer: {
-    backgroundColor: COLORS.backgroundLight,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: SPACING.l,
-    paddingTop: SPACING.m,
-    paddingBottom: SPACING.m,
-    width: "100%",
-    position: "absolute",
-    top: SPACING.xl,
-    left: 0,
-    zIndex: 10,
-  },
-  backButton: {
-    color: COLORS.text.primary,
-    fontSize: FONT_SIZE.xl,
-    fontWeight: "bold",
-  },
-  headerSpacer: {
-    width: 24,
-  },
-  headerText: {
-    color: COLORS.text.primary,
-    fontSize: FONT_SIZE.xl,
-    fontWeight: "bold",
-    textAlign: "center",
+    backgroundColor: "#fff",
   },
   selectionContent: {
     flex: 1,
@@ -1196,6 +1190,7 @@ const styles = StyleSheet.create({
   durationSection: {
     width: "100%",
     marginBottom: SPACING.xl,
+    marginTop:  -40,
   },
   soundSection: {
     width: "100%",

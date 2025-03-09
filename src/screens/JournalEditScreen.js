@@ -7,7 +7,7 @@ import {
   TextInput,
   TouchableOpacity,
   Platform,
-  StatusBar,
+  StatusBar as RNStatusBar,
   Keyboard,
   Alert,
   ScrollView,
@@ -25,6 +25,9 @@ import * as Location from "expo-location";
 import Markdown from "react-native-markdown-display"; // Import Markdown component
 import useWeather from "../utils/useWeather"; // Import weather Hook
 import { getTemplateContent } from "../constants/JournalTemplates"; // Import template functionality
+import { getSettingsWithDefaults } from "../utils/defaultSettings"; // Import settings utility
+import CustomHeader from "../components/CustomHeader"; // Import custom header component
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const JournalEditScreen = ({ navigation, route }) => {
   const {
@@ -47,6 +50,13 @@ const JournalEditScreen = ({ navigation, route }) => {
   const [locationError, setLocationError] = useState(null);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false); // Add template menu state
   const [currentTemplate, setCurrentTemplate] = useState("default"); // Add current template state
+  const [appTheme, setAppTheme] = useState('dark'); // 添加主题状态
+
+  // Get safe area insets
+  const insets = useSafeAreaInsets();
+  
+  // Get status bar height for Android
+  const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
 
   // Use custom Hook to get weather data, but don't fetch automatically
   const { fetchWeather: fetchWeatherData, getWeatherIcon } = useWeather({
@@ -81,22 +91,32 @@ const JournalEditScreen = ({ navigation, route }) => {
   const getLocationAndWeather = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      // Use useWeather Hook to get weather data
-      const weatherResult = await fetchWeatherData(forceRefresh);
+      // Get user settings to check if weather and location should be included
+      const settings = await getSettingsWithDefaults(AsyncStorage);
+      
+      // Only fetch weather if user has enabled it in settings
+      if (settings.includeWeather) {
+        // Use useWeather Hook to get weather data
+        const weatherResult = await fetchWeatherData(forceRefresh);
 
-      if (weatherResult && !weatherResult.error) {
-        // Set weather data, ensure format consistency
-        setWeather(weatherResult.weather);
-        setTemperature(weatherResult.temperature);
-        setLocation(weatherResult.location);
-      } else if (weatherResult && weatherResult.error) {
-        setLocationError(weatherResult.error);
+        if (weatherResult && !weatherResult.error) {
+          // Set weather data, ensure format consistency
+          setWeather(weatherResult.weather);
+          setTemperature(weatherResult.temperature);
+          
+          // Only set location if user has enabled it in settings
+          if (settings.includeLocation) {
+            setLocation(weatherResult.location);
+          }
+        } else if (weatherResult && weatherResult.error) {
+          setLocationError(weatherResult.error);
+        }
       }
     } catch (error) {
-      console.error("Error getting location:", error);
+      console.error("Error getting location or weather:", error);
       setLocationError({
         type: "UNKNOWN_ERROR",
-        message: "Unable to fetch location",
+        message: "Unable to fetch location or weather",
         details: error.message,
       });
     } finally {
@@ -142,33 +162,32 @@ const JournalEditScreen = ({ navigation, route }) => {
 
       // If it's a new journal (no existing content), check if a template needs to be applied
       if (!savedJournal || savedJournal.trim() === "") {
-        const settings = await AsyncStorage.getItem("userSettings");
-        if (settings) {
-          const parsedSettings = JSON.parse(settings);
-
+        try {
+          const settings = await getSettingsWithDefaults(AsyncStorage);
+          
           // Always load default template content first
           const defaultTemplateContent = getTemplateContent("default");
           setJournalText(defaultTemplateContent);
 
           // Then check if we need to apply a different template
           if (
-            parsedSettings.selectedJournalTemplate &&
-            parsedSettings.selectedJournalTemplate !== "default"
+            settings.selectedJournalTemplate &&
+            settings.selectedJournalTemplate !== "default"
           ) {
             // Check if it's a deleted template
-            if (parsedSettings.selectedJournalTemplate === "morning") {
+            if (settings.selectedJournalTemplate === "morning") {
               setCurrentTemplate("default");
             } else {
               // Apply selected template
               const templateContent = getTemplateContent(
-                parsedSettings.selectedJournalTemplate,
+                settings.selectedJournalTemplate,
               );
               if (templateContent) {
                 setJournalText(templateContent);
-                setCurrentTemplate(parsedSettings.selectedJournalTemplate);
+                setCurrentTemplate(settings.selectedJournalTemplate);
               }
             }
-          } else if (parsedSettings.selectedJournalTemplate === "custom") {
+          } else if (settings.selectedJournalTemplate === "custom") {
             // Apply custom template
             const customTemplate = await AsyncStorage.getItem(
               "customJournalTemplate",
@@ -180,8 +199,9 @@ const JournalEditScreen = ({ navigation, route }) => {
           } else {
             setCurrentTemplate("default");
           }
-        } else {
-          // If no settings found, still apply default template
+        } catch (error) {
+          console.error("Error loading settings:", error);
+          // If error loading settings, still apply default template
           const defaultTemplateContent = getTemplateContent("default");
           setJournalText(defaultTemplateContent);
           setCurrentTemplate("default");
@@ -786,8 +806,14 @@ const JournalEditScreen = ({ navigation, route }) => {
               {templates.map((template) => (
                 <TouchableOpacity
                   key={template.id}
-                  style={styles.templateOption}
-                  onPress={() => applyTemplate(template.id)}
+                  style={[
+                    styles.templateOption,
+                    template.id === templates[templates.length - 1].id && { borderBottomWidth: 0 }
+                  ]}
+                  onPress={() => {
+                    applyTemplate(template.id);
+                    setShowTemplateMenu(false);
+                  }}
                 >
                   <View style={styles.templateOptionTextContainer}>
                     {currentTemplate === template.id && (
@@ -806,53 +832,58 @@ const JournalEditScreen = ({ navigation, route }) => {
     );
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar hidden />
+  // 加载用户设置
+  useEffect(() => {
+    const loadUserSettings = async () => {
+      try {
+        const settings = await getSettingsWithDefaults(AsyncStorage);
+        if (settings.appTheme) {
+          setAppTheme(settings.appTheme);
+        }
+      } catch (error) {
+        console.error('Error loading user settings:', error);
+      }
+    };
+    
+    loadUserSettings();
+  }, []);
 
-      {/* Top navigation bar */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => {
-            if (viewOnly) {
-              // In view mode, use goBack() instead of navigate
-              navigation.goBack();
-            } else {
-              // Normal return in edit mode
-              navigation.goBack();
-            }
-          }}
-        >
-          <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {viewOnly ? "Journal Review" : "Edit Journal"}
-        </Text>
-        {!viewOnly && (
-          <View style={{ flexDirection: "row" }}>
-            <TouchableOpacity
-              style={styles.templateButton}
-              onPress={() => setShowTemplateMenu(!showTemplateMenu)}
-            >
-              <Feather name="file-text" size={22} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity style={{ marginLeft: 16 }} onPress={saveJournal}>
-              <MaterialIcons name="check" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        )}
-        {viewOnly && (
+  return (
+    <View style={[
+      styles.container,
+      { 
+        paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
+        paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
+      }
+    ]}>
+      <RNStatusBar hidden />
+
+      {/* Use CustomHeader component */}
+      <CustomHeader 
+        title={viewOnly ? "JOURNAL REVIEW" : "EDIT JOURNAL"}
+        onBackPress={() => navigation.goBack()}
+        rightButton={
+          viewOnly 
+            ? {
+                icon: "edit",
+                onPress: () => navigation.setParams({ viewOnly: false })
+              }
+            : {
+                icon: "check",
+                onPress: saveJournal
+              }
+        }
+        extraButton={!viewOnly ? (
           <TouchableOpacity
-            onPress={() => {
-              navigation.setParams({
-                viewOnly: false,
-              });
-            }}
+            style={styles.headerTemplateButton}
+            onPress={() => setShowTemplateMenu(!showTemplateMenu)}
+            activeOpacity={0.7}
           >
-            <MaterialIcons name="edit" size={24} color="#FFFFFF" />
+            <Feather name="file-text" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-        )}
-      </View>
+        ) : null}
+        showBottomBorder={true}
+      />
 
       {/* Template menu */}
       {renderTemplateMenu()}
@@ -885,7 +916,7 @@ const JournalEditScreen = ({ navigation, route }) => {
       {viewOnly ? (
         <ScrollView
           style={styles.contentScrollView}
-          contentContainerStyle={{ paddingBottom: 20 }}
+          contentContainerStyle={{ paddingBottom: 20, paddingHorizontal: 15 }}
         >
           <Markdown
             style={markdownStyles}
@@ -915,6 +946,7 @@ const JournalEditScreen = ({ navigation, route }) => {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{
             flexGrow: 1,
+            paddingHorizontal: 15,
             paddingBottom: keyboardVisible ? keyboardHeight + 60 : 20,
           }}
         >
@@ -1072,7 +1104,7 @@ const JournalEditScreen = ({ navigation, route }) => {
           </View>
         )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -1081,25 +1113,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000",
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#222",
-  },
-  headerTitle: {
-    color: "#FFF",
-    fontSize: 18,
-    fontWeight: "600",
-  },
   editor: {
     flex: 1,
-    padding: 20,
     color: "#FFF",
     fontSize: 16,
     lineHeight: 24,
+    paddingTop: 15,
     textAlignVertical: "top",
   },
   infoBar: {
@@ -1141,10 +1160,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   dateContainer: {
-    padding: 15,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: "#222",
-    backgroundColor: "#111",
   },
   dateRow: {
     flexDirection: "row",
@@ -1170,20 +1189,17 @@ const styles = StyleSheet.create({
   },
   contentScrollView: {
     flex: 1,
-    padding: 15,
-    backgroundColor: "#000",
-  },
-  contentText: {
-    color: "#FFF",
-    fontSize: 16,
-    lineHeight: 24,
+    paddingTop: 10,
   },
   refreshButton: {
     marginLeft: 8,
     padding: 3,
   },
-  templateButton: {
-    padding: 4,
+  headerTemplateButton: {
+    height: 44,
+    width: 44,
+    justifyContent: "center",
+    alignItems: "center",
   },
   templateMenuContainer: {
     position: "absolute",
@@ -1201,9 +1217,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     zIndex: 1000,
+    width: 180,
+  },
+  templateOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    zIndex: 999,
   },
   templateOption: {
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#333",
@@ -1212,15 +1238,6 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontSize: 16,
     marginLeft: 15,
-  },
-  templateOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.2)",
-    zIndex: 999,
   },
   templateOptionTextContainer: {
     flexDirection: "row",

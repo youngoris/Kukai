@@ -5,15 +5,17 @@ import {
   View,
   SafeAreaView,
   TouchableOpacity,
-  StatusBar,
+  StatusBar as RNStatusBar,
   FlatList,
   Animated,
+  Platform,
 } from "react-native";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
-import HeaderBar from "../components/HeaderBar";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
+import CustomHeader from "../components/CustomHeader";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const CALENDAR_DOT_SIZE = 8;
 
@@ -33,6 +35,12 @@ const JournalScreen = ({ navigation }) => {
 
   // Define isLightTheme based on appTheme
   const isLightTheme = appTheme === 'light';
+
+  // Get safe area insets
+  const insets = useSafeAreaInsets();
+  
+  // Get status bar height for Android
+  const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
 
   // Load user settings
   useEffect(() => {
@@ -60,8 +68,8 @@ const JournalScreen = ({ navigation }) => {
   );
 
   useEffect(() => {
-    StatusBar.setHidden(true);
-    return () => StatusBar.setHidden(false);
+    RNStatusBar.setHidden(true);
+    return () => RNStatusBar.setHidden(false);
   }, []);
 
   useEffect(() => {
@@ -269,16 +277,23 @@ const JournalScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, isLightTheme && styles.lightContainer]}>
+    <View style={[
+      styles.container, 
+      isLightTheme && styles.lightContainer,
+      { 
+        paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
+        paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
+      }
+    ]}>
+      <CustomHeader 
+        title="JOURNAL"
+        onBackPress={() => navigation.navigate("Home")}
+        showBottomBorder={false}
+      />
+      
       <FlatList
         ListHeaderComponent={
           <>
-            <HeaderBar 
-              title="JOURNAL"
-              onBackPress={() => navigation.navigate("Home")}
-              appTheme={appTheme}
-            />
-
             <View style={styles.statsContainer}>
               <View style={styles.statCard}>
                 <Text style={styles.statTitle}>CURRENT STREAK</Text>
@@ -288,22 +303,10 @@ const JournalScreen = ({ navigation }) => {
               </View>
               <View style={styles.statCard}>
                 <Text style={styles.statTitle}>RECORDS THIS YEAR</Text>
-                <View style={styles.monthDotsContainer}>
-                  {entriesByMonth.map((status, index) => (
-                    <View
-                      key={index}
-                      style={[
-                        styles.monthDot,
-                        status === 1 ? styles.monthDotPartial : null,
-                        status === 2 ? styles.monthDotActive : null,
-                      ]}
-                    >
-                      {status === 1 && (
-                        <View style={styles.monthDotHalfFilled} />
-                      )}
-                    </View>
-                  ))}
-                </View>
+                <Text style={styles.statValue}>
+                  {entriesByMonth.reduce((a, b) => a + b, 0)}{" "}
+                  <Text style={styles.statUnit}>entries</Text>
+                </Text>
               </View>
             </View>
 
@@ -390,36 +393,22 @@ const JournalScreen = ({ navigation }) => {
         }
         contentContainerStyle={styles.flatListContent}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
-// Styles remain unchanged
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
-  lightContainer: { backgroundColor: "#fff" },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 15,
-    paddingTop: 10,
-    paddingBottom: 30,
+  container: {
+    flex: 1,
     backgroundColor: "#000",
   },
-  backButton: { color: "#FFFFFF", fontSize: 26, fontWeight: "bold" },
-  headerText: {
-    color: "#FFFFFF",
-    fontSize: 24,
-    fontWeight: "bold",
-    textAlign: "center",
+  lightContainer: {
+    backgroundColor: "#fff",
   },
-  headerSpacer: { width: 24 },
-  headerButtonText: { color: "#FFFFFF", fontSize: 26, fontWeight: "bold" },
   statsContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 30,
+    marginVertical: 20,
   },
   statCard: {
     backgroundColor: "#111",
@@ -456,7 +445,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    marginBottom: 30,
+    marginBottom:20,
     paddingHorizontal: 15,
   },
   calendarLabel: { color: "#aaa", fontSize: 14, marginBottom: 12 },

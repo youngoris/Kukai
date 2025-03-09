@@ -44,12 +44,12 @@ export const HEADER_TEXT = {
 // Header button dimensions
 export const HEADER_BUTTON = {
   SIZE: 44,
-  HITSLOP: { top: 15, bottom: 15, left: 15, right: 15 },
+  HITSLOP: { top: 20, bottom: 20, left: 20, right: 20 },
 };
 
 // Header padding
 export const HEADER_PADDING = {
-  HORIZONTAL: 16,
+  HORIZONTAL: 20,
 };
 
 // Usage guide:

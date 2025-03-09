@@ -5,7 +5,7 @@ import {
   View,
   SafeAreaView,
   TouchableOpacity,
-  StatusBar,
+  StatusBar as RNStatusBar,
   FlatList,
   TextInput,
   Alert,
@@ -25,8 +25,9 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import FrogIcon from "../../assets/frog.svg";
 import CustomDateTimePicker from "../components/CustomDateTimePicker";
-import HeaderBar from "../components/HeaderBar";
+import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const PRIORITY_COLORS = {
   high: "#666666", // Dark gray
@@ -68,6 +69,12 @@ const SummaryScreen = ({ navigation }) => {
   // Define isLightTheme based on appTheme
   const isLightTheme = appTheme === 'light';
 
+  // Get safe area insets
+  const insets = useSafeAreaInsets();
+  
+  // Get status bar height for Android
+  const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
+
   // Load user settings
   useEffect(() => {
     const loadUserSettings = async () => {
@@ -85,10 +92,8 @@ const SummaryScreen = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
-    StatusBar.setHidden(true);
-    return () => {
-      StatusBar.setHidden(false);
-    };
+    RNStatusBar.setHidden(true);
+    return () => RNStatusBar.setHidden(false);
   }, []);
 
   useEffect(() => {
@@ -609,13 +614,20 @@ const SummaryScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, isLightTheme && styles.lightContainer]}>
-      <StatusBar hidden={true} />
+    <View style={[
+      styles.container, 
+      isLightTheme && styles.lightContainer,
+      { 
+        paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
+        paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
+      }
+    ]}>
+      <RNStatusBar hidden={true} />
       
-      <HeaderBar 
+      <CustomHeader 
         title="SUMMARY"
         onBackPress={() => navigation.navigate("Home")}
-        appTheme={appTheme}
+        showBottomBorder={false}
       />
 
       <Animated.ScrollView
@@ -1001,7 +1013,7 @@ const SummaryScreen = ({ navigation }) => {
           )}
         </View>
       </Animated.ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 

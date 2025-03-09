@@ -135,6 +135,7 @@ export default function App() {
     if (Platform.OS === 'android') {
       StatusBar.setTranslucent(true);
       StatusBar.setBackgroundColor('transparent');
+      StatusBar.setBarStyle('light-content');
     }
   }, []);
 
@@ -144,6 +145,7 @@ export default function App() {
       <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
         <SafeAreaProvider>
           <NavigationContainer ref={navigationRef}>
+            <StatusBar hidden={true} />
             <AppNavigator />
           </NavigationContainer>
         </SafeAreaProvider>

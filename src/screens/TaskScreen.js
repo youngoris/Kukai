@@ -6,7 +6,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
   TouchableWithoutFeedback,
-  StatusBar,
+  StatusBar as RNStatusBar,
   FlatList,
   TextInput,
   Keyboard,
@@ -22,8 +22,9 @@ import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
 import FrogIcon from "../../assets/frog.svg";
 import CustomDateTimePicker from "../components/CustomDateTimePicker";
 import notificationService from "../services/NotificationService";
-import HeaderBar from "../components/HeaderBar";
+import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const TaskScreen = ({ navigation }) => {
   const [tasks, setTasks] = useState([]);
@@ -56,6 +57,12 @@ const TaskScreen = ({ navigation }) => {
   // Define isLightTheme based on appTheme
   const isLightTheme = appTheme === 'light';
 
+  // Get safe area insets
+  const insets = useSafeAreaInsets();
+  
+  // Get status bar height for Android
+  const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
+
   // Load user settings
   useEffect(() => {
     const loadUserSettings = async () => {
@@ -74,9 +81,9 @@ const TaskScreen = ({ navigation }) => {
 
   // Hide status bar
   useEffect(() => {
-    StatusBar.setHidden(true);
+    RNStatusBar.setHidden(true);
     return () => {
-      StatusBar.setHidden(false);
+      RNStatusBar.setHidden(false);
     };
   }, []);
 
@@ -734,15 +741,22 @@ const TaskScreen = ({ navigation }) => {
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <SafeAreaView style={[styles.container, isLightTheme && styles.lightContainer]}>
-        <HeaderBar 
+      <View style={[
+        styles.container, 
+        isLightTheme && styles.lightContainer,
+        { 
+          paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
+        }
+      ]}>
+        <CustomHeader 
           title="TASK"
           onBackPress={() => navigation.navigate("Home")}
           rightButton={{
             icon: "add",
             onPress: openModal
           }}
-          appTheme={appTheme}
+          showBottomBorder={false}
         />
 
         <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
@@ -1064,7 +1078,7 @@ const TaskScreen = ({ navigation }) => {
             </View>
           </TouchableWithoutFeedback>
         </Modal>
-      </SafeAreaView>
+      </View>
     </KeyboardAvoidingView>
   );
 };

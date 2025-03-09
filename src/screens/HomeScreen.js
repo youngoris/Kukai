@@ -334,14 +334,14 @@ const HomeScreen = ({ navigation }) => {
       styles.container, 
       { 
         // Add padding for notch and other safe areas
-        paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 10 : insets.top,
+        paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
         paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
         paddingLeft: insets.left > 0 ? insets.left : 20,
         paddingRight: insets.right > 0 ? insets.right : 20,
       }
     ]}>
       {/* Top date */}
-      <View style={[styles.headerContainer, { marginTop: Platform.OS === 'android' ? 10 : 0 }]}>
+      <View style={[styles.headerContainer, { marginTop: Platform.OS === 'android' ? 20 : 0 }]}>
         <Text style={styles.dateText}>{formatDate()}</Text>
 
         {/* Weather display with enhanced error handling */}
@@ -442,19 +442,20 @@ const HomeScreen = ({ navigation }) => {
         bottom: insets.bottom > 0 ? insets.bottom + 10 : 30,
         left: insets.left,
         right: insets.right,
+        zIndex: 20,
       }]}>
         <TouchableOpacity
           style={styles.settingsButton}
           onPress={() => navigation.navigate("Settings")}
+          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
         >
           <MaterialIcons name="settings" size={18} color="#888" />
           <Text style={styles.settingsText}>SETTINGS</Text>
         </TouchableOpacity>
       </View>
 
-      {Platform.OS === 'ios' ? (
-        <StatusBar style="light" />
-      ) : null}
+      {/* Use StatusBar component to hide system status bar */}
+      <StatusBar style="light" hidden={true} />
     </View>
   );
 };

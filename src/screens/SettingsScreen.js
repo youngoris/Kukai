@@ -12,6 +12,7 @@ import {
   TextInput,
   Share,
   TouchableWithoutFeedback,
+  Platform,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -23,7 +24,7 @@ import CloudBackupSection from "../components/CloudBackupSection";
 import JournalTemplateManager from "../components/JournalTemplateManager";
 import notificationService from "../services/NotificationService";
 import { AVAILABLE_TEMPLATES } from "../constants/JournalTemplates";
-import HeaderBar from "../components/HeaderBar";
+import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 
 const SettingsScreen = ({ navigation }) => {
@@ -1081,17 +1082,24 @@ const SettingsScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView
-      style={[styles.container, appTheme === "light" && styles.lightContainer]}
+      style={[
+        styles.container, 
+        appTheme === "light" && styles.lightContainer,
+        { paddingTop: 0 }
+      ]}
     >
-      <HeaderBar 
+      <CustomHeader 
         title="SETTINGS"
         onBackPress={() => navigation.goBack()}
-        appTheme={appTheme}
+        showBottomBorder={false}
       />
 
       <ScrollView
         style={styles.settingsContainer}
-        contentContainerStyle={styles.settingsContentContainer}
+        contentContainerStyle={[
+          styles.settingsContentContainer,
+          { paddingBottom: Platform.OS === 'ios' ? 50 : 20 }
+        ]}
       >
         {/* Meditation Settings */}
         <View style={styles.settingSection}>

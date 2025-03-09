@@ -12,14 +12,16 @@ import {
   Platform,
   BackHandler,
   Alert,
+  StatusBar as RNStatusBar,
 } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Progress from "react-native-progress";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import notificationService from "../services/NotificationService";
-import HeaderBar from "../components/HeaderBar";
+import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -62,6 +64,12 @@ export default function FocusScreen({ navigation }) {
   const timer = useRef(null);
   const sessionStartTime = useRef(null);
   const appState = useRef(AppState.currentState);
+
+  // Get safe area insets
+  const insets = useSafeAreaInsets();
+  
+  // Get status bar height for Android
+  const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
 
   // Load user settings
   useEffect(() => {
@@ -605,13 +613,20 @@ export default function FocusScreen({ navigation }) {
 
   // Render interface
   return (
-    <SafeAreaView style={[styles.container, isLightTheme && styles.lightContainer]}>
+    <View style={[
+      styles.container, 
+      isLightTheme && styles.lightContainer,
+      { 
+        paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
+        paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
+      }
+    ]}>
       {/* Header - 在专注或休息时隐藏返回按钮 */}
-      <HeaderBar 
+      <CustomHeader 
         title="FOCUS"
         onBackPress={handleBackPress}
-        appTheme={appTheme}
         hideBackButton={isActive} // 当计时器激活时隐藏返回按钮
+        showBottomBorder={false}
       />
 
       {/* Main content area */}
@@ -723,7 +738,7 @@ export default function FocusScreen({ navigation }) {
       <View style={styles.footer}>
         <Text style={styles.statsText}>Pomodoros: {pomodoroCount}</Text>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
