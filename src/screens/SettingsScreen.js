@@ -237,9 +237,35 @@ const SettingsScreen = ({ navigation }) => {
     keepScreenAwake,
   ]);
 
+  // Add useEffect to sync darkMode with appTheme
+  useEffect(() => {
+    // Update darkMode based on appTheme
+    if (appTheme === 'dark') {
+      setDarkMode(true);
+    } else if (appTheme === 'light') {
+      setDarkMode(false);
+    }
+    // For 'auto' theme, we could check system preference, but for simplicity
+    // we'll just default to dark mode in this example
+    else if (appTheme === 'auto') {
+      // Here you could add system theme detection logic
+      // For now, we'll just use dark mode as default
+      setDarkMode(true);
+    }
+  }, [appTheme]);
+
   // Auto-save settings function
   const autoSaveSettings = async () => {
     try {
+      // Ensure darkMode is consistent with appTheme before saving
+      let currentDarkMode = darkMode;
+      if (appTheme === 'dark') {
+        currentDarkMode = true;
+      } else if (appTheme === 'light') {
+        currentDarkMode = false;
+      }
+      // For 'auto' theme, we keep the current darkMode value
+      
       const settings = {
         // Meditation settings
         meditationDuration,
@@ -270,7 +296,7 @@ const SettingsScreen = ({ navigation }) => {
         meditationReminderTime: meditationReminderTime.toISOString(),
 
         // General settings
-        darkMode,
+        darkMode: currentDarkMode, // Use the synchronized value
         appTheme,
         fontSizeScale,
         notificationsEnabled,
@@ -430,6 +456,15 @@ const SettingsScreen = ({ navigation }) => {
 
   const saveSettings = async () => {
     try {
+      // Ensure darkMode is consistent with appTheme before saving
+      let currentDarkMode = darkMode;
+      if (appTheme === 'dark') {
+        currentDarkMode = true;
+      } else if (appTheme === 'light') {
+        currentDarkMode = false;
+      }
+      // For 'auto' theme, we keep the current darkMode value
+      
       const settings = {
         // Meditation settings
         meditationDuration,
@@ -460,7 +495,7 @@ const SettingsScreen = ({ navigation }) => {
         meditationReminderTime: meditationReminderTime.toISOString(),
 
         // General settings
-        darkMode,
+        darkMode: currentDarkMode, // Use the synchronized value
         appTheme,
         fontSizeScale,
         notificationsEnabled,
@@ -1280,13 +1315,6 @@ const SettingsScreen = ({ navigation }) => {
           >
             GENERAL SETTINGS
           </Text>
-
-          {renderSettingSwitch(
-            darkMode,
-            setDarkMode,
-            "Dark Mode",
-            "Use dark theme throughout the app"
-          )}
 
           {renderSettingSwitch(
             keepScreenAwake,
