@@ -385,18 +385,14 @@ const HomeScreen = ({ navigation }) => {
       </View>
 
       {/* Quote display */}
-      <Animated.View style={[styles.quoteContainer, { opacity: fadeAnim }]}>
-        <Text style={styles.quoteText}>"{quote}"</Text>
-      </Animated.View>
+      <View style={{height: 100}}>
+        <Animated.View style={[styles.quoteContainer, { opacity: fadeAnim }]}>
+          <Text style={styles.quoteText}>"{quote}"</Text>
+        </Animated.View>
+      </View>
 
       {/* Main menu - Absolute positioning in screen center */}
-      <View style={[styles.menuContainer, {
-        // Adjust for notch and other safe areas
-        top: Platform.OS === 'android' ? STATUSBAR_HEIGHT : 0,
-        bottom: insets.bottom,
-        left: insets.left,
-        right: insets.right,
-      }]}>
+      <View style={[styles.menuContainer]}>
         <TouchableOpacity
           style={styles.menuItem}
           onPress={() => handleFunctionAccess("meditation")}
@@ -467,6 +463,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
+    position: "relative",
   },
   headerContainer: {
     flexDirection: "row",
@@ -498,9 +495,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "400",
   },
+  weatherErrorText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "300",
+  },
   quoteContainer: {
     alignItems: "center",
-    marginBottom: 40,
     width: "70%",
     alignSelf: "center",
   },
@@ -513,14 +514,16 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   menuContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
+    zIndex: 10,
   },
   menuItem: {
     paddingVertical: 15,
