@@ -22,6 +22,7 @@ import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
 import FrogIcon from "../../assets/frog.svg";
 import CustomDateTimePicker from "../components/CustomDateTimePicker";
 import notificationService from "../services/NotificationService";
+import HeaderBar from "../components/HeaderBar";
 
 const TaskScreen = ({ navigation }) => {
   const [tasks, setTasks] = useState([]);
@@ -43,12 +44,35 @@ const TaskScreen = ({ navigation }) => {
     return defaultTime;
   }); // Task time
   const [showTimePicker, setShowTimePicker] = useState(false); // Whether to show time picker
+  const [appTheme, setAppTheme] = useState('dark');
 
   const inputRef = useRef(null);
   const editInputRef = useRef(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const modalScaleAnim = useRef(new Animated.Value(0.95)).current;
   const addButtonAnim = useRef(new Animated.Value(1)).current;
+
+  // Define isLightTheme based on appTheme
+  const isLightTheme = appTheme === 'light';
+
+  // Load user settings including theme
+  useEffect(() => {
+    const loadUserSettings = async () => {
+      try {
+        const userSettings = await AsyncStorage.getItem('userSettings');
+        if (userSettings) {
+          const settings = JSON.parse(userSettings);
+          if (settings.appTheme) {
+            setAppTheme(settings.appTheme);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading user settings:', error);
+      }
+    };
+    
+    loadUserSettings();
+  }, []);
 
   // Hide status bar
   useEffect(() => {
@@ -712,25 +736,22 @@ const TaskScreen = ({ navigation }) => {
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => navigation.navigate("Home")}
-          >
-            <Text style={styles.headerButtonText}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerText}>TASK</Text>
-          <TouchableOpacity style={styles.headerButton} onPress={openModal}>
-            <Text style={styles.headerButtonText}>+</Text>
-          </TouchableOpacity>
-        </View>
+      <SafeAreaView style={[styles.container, isLightTheme && styles.lightContainer]}>
+        <HeaderBar 
+          title="TASK"
+          onBackPress={() => navigation.navigate("Home")}
+          rightButton={{
+            icon: "add",
+            onPress: openModal
+          }}
+          appTheme={appTheme}
+        />
 
         <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
           {tasks.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No tasks yet</Text>
-              <Text style={styles.emptySubtext}>
+            <View style={[styles.emptyContainer, isLightTheme && styles.lightEmptyContainer]}>
+              <Text style={[styles.emptyText, isLightTheme && styles.lightText]}>No tasks yet</Text>
+              <Text style={[styles.emptySubtext, isLightTheme && styles.lightSubtext]}>
                 Add your first task to get started
               </Text>
             </View>
@@ -739,7 +760,7 @@ const TaskScreen = ({ navigation }) => {
               data={tasks}
               renderItem={renderTaskItem}
               keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={[styles.listContent, isLightTheme && styles.lightListContent]}
             />
           )}
         </Animated.View>
@@ -1331,6 +1352,22 @@ const styles = StyleSheet.create({
   },
   completedTaskTagText: {
     color: "#888888",
+  },
+  lightContainer: {
+    backgroundColor: "#FFFFFF",
+  },
+  lightEmptyContainer: {
+    backgroundColor: "#FFFFFF",
+  },
+  lightText: {
+    color: "#000000",
+  },
+  lightSubtext: {
+    color: "#666666",
+  },
+  lightListContent: {
+    paddingBottom: 80,
+    paddingHorizontal: 20,
   },
 });
 

@@ -12,6 +12,7 @@ import {
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
+import HeaderBar from "../components/HeaderBar";
 
 const CALENDAR_DOT_SIZE = 8;
 
@@ -24,9 +25,32 @@ const JournalScreen = ({ navigation }) => {
   const [savedJournalMeta, setSavedJournalMeta] = useState(null);
   const [savedToday, setSavedToday] = useState(false);
   const [allJournals, setAllJournals] = useState([]);
+  const [appTheme, setAppTheme] = useState('dark');
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
+
+  // Define isLightTheme based on appTheme
+  const isLightTheme = appTheme === 'light';
+
+  // Load user settings including theme
+  useEffect(() => {
+    const loadUserSettings = async () => {
+      try {
+        const userSettings = await AsyncStorage.getItem('userSettings');
+        if (userSettings) {
+          const settings = JSON.parse(userSettings);
+          if (settings.appTheme) {
+            setAppTheme(settings.appTheme);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading user settings:', error);
+      }
+    };
+    
+    loadUserSettings();
+  }, []);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -247,20 +271,15 @@ const JournalScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, isLightTheme && styles.lightContainer]}>
       <FlatList
         ListHeaderComponent={
           <>
-            <View style={styles.header}>
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => navigation.navigate("Home")}
-              >
-                <Text style={styles.headerButtonText}>←</Text>
-              </TouchableOpacity>
-              <Text style={styles.headerText}>JOURNAL</Text>
-              <View style={styles.headerSpacer} />
-            </View>
+            <HeaderBar 
+              title="JOURNAL"
+              onBackPress={() => navigation.navigate("Home")}
+              appTheme={appTheme}
+            />
 
             <View style={styles.statsContainer}>
               <View style={styles.statCard}>
@@ -380,6 +399,7 @@ const JournalScreen = ({ navigation }) => {
 // Styles remain unchanged
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
+  lightContainer: { backgroundColor: "#fff" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",

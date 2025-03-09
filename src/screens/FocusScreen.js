@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   StyleSheet,
   Text,
@@ -10,12 +10,15 @@ import {
   Modal,
   Pressable,
   Platform,
+  BackHandler,
+  Alert,
 } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Progress from "react-native-progress";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import notificationService from "../services/NotificationService";
+import HeaderBar from "../components/HeaderBar";
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -41,6 +44,7 @@ export default function FocusScreen({ navigation }) {
   const [showChoice, setShowChoice] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [hasStartedBefore, setHasStartedBefore] = useState(false);
+  const [appTheme, setAppTheme] = useState('dark');
 
   // Focus settings
   const [focusDuration, setFocusDuration] = useState(25);
@@ -50,10 +54,32 @@ export default function FocusScreen({ navigation }) {
   const [focusNotifications, setFocusNotifications] = useState(true);
   const [autoStartNextFocus, setAutoStartNextFocus] = useState(false);
 
+  // Define isLightTheme based on appTheme
+  const isLightTheme = appTheme === 'light';
+
   // Reference variables
   const timer = useRef(null);
   const sessionStartTime = useRef(null);
   const appState = useRef(AppState.currentState);
+
+  // Load user settings including theme
+  useEffect(() => {
+    const loadUserSettings = async () => {
+      try {
+        const userSettings = await AsyncStorage.getItem('userSettings');
+        if (userSettings) {
+          const settings = JSON.parse(userSettings);
+          if (settings.appTheme) {
+            setAppTheme(settings.appTheme);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading user settings:', error);
+      }
+    };
+    
+    loadUserSettings();
+  }, []);
 
   // Load focus settings
   useFocusEffect(
@@ -225,34 +251,52 @@ export default function FocusScreen({ navigation }) {
 
   // Handle focus time completion
   const handleFocusComplete = async () => {
+    console.log("Work session completed");
+    
+    // Stop timer
+    clearInterval(timer.current);
+    timer.current = null;
+    
+    // Vibrate to notify user
+    Vibration.vibrate([0, 500, 200, 500]);
+    
+    // Show notification
+    if (focusNotifications) {
+      triggerNotification();
+    }
+
     setIsActive(false);
     setShowChoice(true);
-    setPomodoroCount((prev) => prev + 1);
-    Vibration.vibrate(500);
 
-    // Save pomodoro data to AsyncStorage
+    // Increment pomodoro count
+    const newCount = pomodoroCount + 1;
+    setPomodoroCount(newCount);
+
+    // Save to AsyncStorage
     try {
+      // Get today's date string as key
       const today = new Date().toISOString().split("T")[0];
+      const savedData = await AsyncStorage.getItem("dailyStats");
+      let dailyStats = savedData ? JSON.parse(savedData) : {};
 
-      const pomodorosJson = await AsyncStorage.getItem("pomodoros");
-      let pomodoros = [];
-
-      if (pomodorosJson) {
-        pomodoros = JSON.parse(pomodorosJson);
+      // Initialize today's data if not exists
+      if (!dailyStats[today]) {
+        dailyStats[today] = {
+          pomodoroCount: 0,
+          focusMinutes: 0,
+          meditationMinutes: 0,
+        };
       }
 
-      // Add newly completed pomodoro record
-      pomodoros.push({
-        id: Date.now().toString(),
-        date: today,
-        duration: focusDuration,
-        timestamp: new Date().toISOString(),
-      });
+      // Update pomodoro count and focus minutes
+      dailyStats[today].pomodoroCount = newCount;
+      dailyStats[today].focusMinutes =
+        (dailyStats[today].focusMinutes || 0) + focusDuration;
 
-      // Save updated pomodoro data
-      await AsyncStorage.setItem("pomodoros", JSON.stringify(pomodoros));
+      // Save updated data
+      await AsyncStorage.setItem("dailyStats", JSON.stringify(dailyStats));
     } catch (error) {
-      console.error(error);
+      console.error("Error saving focus session:", error);
     }
   };
 
@@ -317,12 +361,12 @@ export default function FocusScreen({ navigation }) {
       isLongBreak = true;
     }
 
-    const title = isBreak ? "Break Time Ended" : "Focus Time Ended";
+    const title = isBreak ? "Break Time Ended" : "Session Complete!";
     const body = isBreak
-      ? "Break is over! Ready to start another focus session?"
+      ? "Break is over! Ready to start another work session?"
       : isLongBreak
-        ? `Great job! You've completed ${longBreakInterval} focus sessions. Time for a longer break!`
-        : "Focus complete! Take a break or continue?";
+        ? `Great job! You've completed ${longBreakInterval} work sessions. Time for a longer break!`
+        : "Work session complete! Take a break or continue?";
 
     // Use notification service to send immediate notification
     await notificationService.sendImmediateNotification(title, body, {
@@ -346,8 +390,11 @@ export default function FocusScreen({ navigation }) {
           key={index}
           style={[
             styles.progressDot,
+            isLightTheme && styles.lightProgressDot,
             isCompleted || isCurrent
-              ? styles.progressDotFilled
+              ? isLightTheme 
+                ? styles.lightProgressDotFilled 
+                : styles.progressDotFilled
               : styles.progressDotEmpty,
           ]}
         />
@@ -357,26 +404,209 @@ export default function FocusScreen({ navigation }) {
     return <View style={styles.progressDotsContainer}>{dots}</View>;
   };
 
+  // Save current session state to AsyncStorage
+  const saveSessionState = async () => {
+    try {
+      if (!isActive && !hasStartedBefore) return; // Don't save if session never started
+      
+      const sessionState = {
+        timeRemaining,
+        isActive,
+        isBreak,
+        pomodoroCount,
+        progress,
+        hasStartedBefore,
+        sessionStartTime: sessionStartTime.current ? sessionStartTime.current.toISOString() : null,
+        timestamp: new Date().toISOString()
+      };
+      
+      await AsyncStorage.setItem('focusSessionState', JSON.stringify(sessionState));
+      console.log('Focus session state saved:', sessionState);
+    } catch (error) {
+      console.error('Error saving focus session state:', error);
+    }
+  };
+
+  // Restore session state from AsyncStorage
+  const restoreSessionState = async () => {
+    try {
+      const savedState = await AsyncStorage.getItem('focusSessionState');
+      if (!savedState) {
+        // No saved state found, initialize with default values
+        const defaultDuration = focusDuration * 60;
+        setTimeRemaining(defaultDuration);
+        setProgress(0);
+        return;
+      }
+      
+      const sessionState = JSON.parse(savedState);
+      console.log('Restoring focus session state:', sessionState);
+      
+      // Check if saved state is expired (more than 1 hour old)
+      const savedTime = new Date(sessionState.timestamp);
+      const currentTime = new Date();
+      const hoursPassed = (currentTime - savedTime) / (1000 * 60 * 60);
+      
+      if (hoursPassed > 1) {
+        console.log('Saved session state is too old, not restoring');
+        await AsyncStorage.removeItem('focusSessionState');
+        
+        // Initialize with default values
+        const defaultDuration = focusDuration * 60;
+        setTimeRemaining(defaultDuration);
+        setProgress(0);
+        return;
+      }
+      
+      // Restore state
+      setTimeRemaining(sessionState.timeRemaining);
+      setIsBreak(sessionState.isBreak);
+      setPomodoroCount(sessionState.pomodoroCount);
+      setProgress(sessionState.progress);
+      setHasStartedBefore(sessionState.hasStartedBefore);
+      
+      // Restore session start time
+      if (sessionState.sessionStartTime) {
+        sessionStartTime.current = new Date(sessionState.sessionStartTime);
+      }
+      
+      // If previously active, don't auto-activate now
+      // User needs to manually press "RESUME" button to continue
+      setIsActive(false);
+    } catch (error) {
+      console.error('Error restoring focus session state:', error);
+      
+      // Initialize with default values in case of error
+      const defaultDuration = focusDuration * 60;
+      setTimeRemaining(defaultDuration);
+      setProgress(0);
+    }
+  };
+
+  // Check if app has been restarted
+  const checkAppRestart = async () => {
+    try {
+      // Get the last app launch timestamp
+      const lastLaunchTime = await AsyncStorage.getItem('appLastLaunchTime');
+      const currentTime = new Date().toISOString();
+      
+      // Save current launch time
+      await AsyncStorage.setItem('appLastLaunchTime', currentTime);
+      
+      // If no last launch time exists, this is first launch
+      if (!lastLaunchTime) {
+        return true;
+      }
+      
+      // Check if the app has been closed (not just backgrounded)
+      // This is a simplified check - in a real app, you might want to use
+      // a more sophisticated approach to detect actual app restarts
+      const lastLaunch = new Date(lastLaunchTime);
+      const now = new Date();
+      const minutesSinceLastLaunch = (now - lastLaunch) / (1000 * 60);
+      
+      // If more than 5 minutes have passed, consider it a restart
+      return minutesSinceLastLaunch > 5;
+    } catch (error) {
+      console.error('Error checking app restart:', error);
+      return false;
+    }
+  };
+
+  // Restore session state when component mounts
+  useEffect(() => {
+    const initializeSession = async () => {
+      const isAppRestart = await checkAppRestart();
+      
+      if (isAppRestart) {
+        // If app has restarted, initialize with default values
+        console.log('App has been restarted, initializing with default values');
+        const defaultDuration = focusDuration * 60;
+        setTimeRemaining(defaultDuration);
+        setProgress(0);
+        setIsActive(false);
+        setHasStartedBefore(false);
+        setIsBreak(false);
+        
+        // Clear any saved session state
+        await AsyncStorage.removeItem('focusSessionState');
+      } else {
+        // Otherwise, try to restore the previous session
+        await restoreSessionState();
+      }
+    };
+    
+    initializeSession();
+  }, []);
+
+  // Save session state when component unmounts or navigation leaves
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        saveSessionState();
+      };
+    }, [timeRemaining, isActive, isBreak, pomodoroCount, progress, hasStartedBefore])
+  );
+
+  // Handle navigation back button press
+  const handleBackPress = () => {
+    // If focus or break is active, show confirmation dialog
+    if (isActive) {
+      Alert.alert(
+        "Focus Mode Active",
+        "Are you sure you want to exit? Your current session will be lost.",
+        [
+          { text: "Stay Focused", style: "cancel" },
+          { 
+            text: "Exit", 
+            onPress: async () => {
+              // Stop timer
+              if (timer.current) {
+                clearInterval(timer.current);
+                timer.current = null;
+              }
+              setIsActive(false);
+              
+              // Save session state before navigating
+              await saveSessionState();
+              navigation.navigate("Home");
+            },
+            style: "destructive" 
+          }
+        ]
+      );
+      return true; // For Android hardware back button handling
+    } else {
+      // If no active session, save state and return directly
+      saveSessionState();
+      navigation.navigate("Home");
+      return false; // For Android hardware back button handling
+    }
+  };
+
+  // Handle Android hardware back button
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+    return () => backHandler.remove();
+  }, [isActive, navigation]);
+
   // Render interface
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.navigate("Home")}
-        >
-          <Text style={styles.headerButtonText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerText}>FOCUS</Text>
-      </View>
+    <SafeAreaView style={[styles.container, isLightTheme && styles.lightContainer]}>
+      {/* Header - 在专注或休息时隐藏返回按钮 */}
+      <HeaderBar 
+        title="FOCUS"
+        onBackPress={handleBackPress}
+        appTheme={appTheme}
+        hideBackButton={isActive} // 当计时器激活时隐藏返回按钮
+      />
 
       {/* Main content area */}
-      <View style={styles.contentContainer}>
+      <View style={[styles.contentContainer, isLightTheme && styles.lightContentContainer]}>
         {showChoice ? (
-          <View style={styles.choiceContainer}>
-            <Text style={styles.choiceText}>Focus Complete!</Text>
-            <Text style={styles.choiceSubtext}>
+          <View style={[styles.choiceContainer, isLightTheme && styles.lightChoiceContainer]}>
+            <Text style={[styles.choiceText, isLightTheme && styles.lightText]}>Work Session Complete!</Text>
+            <Text style={[styles.choiceSubtext, isLightTheme && styles.lightSubtext]}>
               You've completed {pomodoroCount} pomodoros
             </Text>
 
@@ -394,26 +624,28 @@ export default function FocusScreen({ navigation }) {
               onPress={startNextFocus}
             >
               <Text style={styles.actionButtonText}>
-                Next {focusDuration} min Focus
+                Next {focusDuration} min Session
               </Text>
             </TouchableOpacity>
           </View>
         ) : (
           <>
-            <Text style={styles.subHeaderText}>
-              {isBreak ? "BREAK" : "FOCUS"}{" "}
+            <Text style={[styles.subHeaderText, isLightTheme && styles.lightText]}>
+              {isBreak ? "BREAK" : "SESSION"}{" "}
               {Math.floor(pomodoroCount / longBreakInterval) + 1}.
               {(pomodoroCount % longBreakInterval) + 1}
             </Text>
-            <Text style={styles.subText}>
+            <Text style={[styles.subText, isLightTheme && styles.lightSubtext]}>
               {isActive
                 ? isBreak
                   ? "Taking a break..."
-                  : "Stay focused..."
+                  : "Working..."
                 : isBreak
                   ? "Break time"
                   : "Ready to focus?"}
             </Text>
+            
+            {/* 主计时器区域 */}
             <View style={styles.timerContainer}>
               <View style={styles.progressContainer}>
                 <Progress.Circle
@@ -423,19 +655,21 @@ export default function FocusScreen({ navigation }) {
                   unfilledColor="rgba(255, 255, 255, 0.2)"
                   progress={progress}
                 />
-                <Text style={styles.timerText}>
+                <Text style={[styles.timerText, isLightTheme && styles.lightText]}>
                   {formatTime(timeRemaining)}
                 </Text>
               </View>
-
-              {/* Add cycle progress indicator */}
+            </View>
+            
+            {/* 控制区域 - 分离出来以优化布局 */}
+            <View style={styles.controlsContainer}>
               {renderProgressDots()}
 
               <TouchableOpacity
-                style={styles.timerButton}
+                style={[styles.timerButton, isLightTheme && styles.lightTimerButton]}
                 onPress={toggleTimer}
               >
-                <Text style={styles.timerButtonText}>
+                <Text style={[styles.timerButtonText, isLightTheme && styles.lightTimerButtonText]}>
                   {isActive ? "PAUSE" : hasStartedBefore ? "RESUME" : "START"}
                 </Text>
               </TouchableOpacity>
@@ -506,7 +740,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
-    justifyContent: "space-around",
+    justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 20,
   },
@@ -515,19 +749,26 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: "bold",
     marginBottom: 20,
+    textAlign: "center",
   },
   subText: {
     color: "#666666",
     fontSize: 18,
-    marginBottom: 20,
+    marginBottom: 30,
     textAlign: "center",
   },
-  timerContainer: { alignItems: "center" },
+  timerContainer: { 
+    alignItems: "center",
+    justifyContent: "center",
+    flex: 0.7,
+  },
   progressContainer: {
     position: "relative",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 100,
+    marginBottom: 40,
+    width: 240,
+    height: 240,
   },
   timerText: {
     position: "absolute",
@@ -538,8 +779,9 @@ const styles = StyleSheet.create({
       Platform.OS === "ios"
         ? "Courier New" // iOS上更美观的等宽字体
         : "monospace",
+    textAlign: "center",
   },
-  timerButton: { backgroundColor: "#FFFFFF", padding: 20, borderRadius: 40 },
+  timerButton: { backgroundColor: "#FFFFFF", padding: 20, borderRadius: 40, marginTop: 20 },
   timerButtonText: { color: "#000000", fontSize: 20, fontWeight: "bold" },
   choiceContainer: { alignItems: "center" },
   choiceText: {
@@ -616,7 +858,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginTop: 15,
-    marginBottom: 20,
   },
   progressDot: {
     width: 12,
@@ -631,5 +872,40 @@ const styles = StyleSheet.create({
   },
   progressDotFilled: {
     backgroundColor: "#FFFFFF",
+  },
+  lightContainer: {
+    backgroundColor: "#FFFFFF",
+  },
+  lightContentContainer: {
+    backgroundColor: "#FFFFFF",
+  },
+  lightChoiceContainer: {
+    backgroundColor: "#FFFFFF",
+  },
+  lightText: {
+    color: "#000000",
+  },
+  lightSubtext: {
+    color: "#666666",
+  },
+  lightProgressDot: {
+    borderColor: "#000000",
+  },
+  lightProgressDotFilled: {
+    backgroundColor: "#000000",
+  },
+  lightTimerButton: {
+    backgroundColor: "#000000",
+  },
+  lightTimerButtonText: {
+    color: "#FFFFFF",
+  },
+  controlsContainer: {
+    width: "100%",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 20,
+    gap: 30, // 增加垂直间距
   },
 });

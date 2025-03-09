@@ -28,6 +28,7 @@ import {
 } from "../constants/DesignSystem";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { goBackToHome } from "../navigation/AppNavigator";
+import HeaderBar from "../components/HeaderBar";
 
 // Ignore specific warnings
 LogBox.ignoreLogs(["Animated: `useNativeDriver`"]);
@@ -138,6 +139,10 @@ const MeditationScreen = ({ navigation }) => {
   const [remainingTime, setRemainingTime] = useState(0);
   const [totalTime, setTotalTime] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [appTheme, setAppTheme] = useState('dark');
+
+  // Define isLightTheme based on appTheme
+  const isLightTheme = appTheme === 'light';
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -208,6 +213,25 @@ const MeditationScreen = ({ navigation }) => {
       return () => {};
     }, [navigation]),
   );
+
+  // Load user settings including theme
+  useEffect(() => {
+    const loadUserSettings = async () => {
+      try {
+        const userSettings = await AsyncStorage.getItem('userSettings');
+        if (userSettings) {
+          const settings = JSON.parse(userSettings);
+          if (settings.appTheme) {
+            setAppTheme(settings.appTheme);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading user settings:', error);
+      }
+    };
+    
+    loadUserSettings();
+  }, []);
 
   // Handle back button
   useFocusEffect(
@@ -865,17 +889,12 @@ const MeditationScreen = ({ navigation }) => {
   // Render Web compatibility message if on web platform
   if (isWeb) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => goBackToHome(navigation)}
-          >
-            <Text style={styles.backButtonText}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>MEDITATION</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+      <SafeAreaView style={[styles.container, isLightTheme && styles.lightContainer]}>
+        <HeaderBar 
+          title="MEDITATION"
+          onBackPress={() => goBackToHome(navigation)}
+          appTheme={appTheme}
+        />
         
         <View style={[styles.contentContainer, {justifyContent: 'center', alignItems: 'center'}]}>
           <MaterialIcons name="web" size={64} color={COLORS.PRIMARY} />
@@ -901,15 +920,13 @@ const MeditationScreen = ({ navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, isLightTheme && styles.lightContainer]}>
       {!isMeditating && !isCountingDown && (
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => goBackToHome(navigation)}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerText}>MEDITATION</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <HeaderBar 
+          title="MEDITATION"
+          onBackPress={() => goBackToHome(navigation)}
+          appTheme={appTheme}
+        />
       )}
 
       {!selectedDuration && (
@@ -1141,6 +1158,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     padding: 0,
     justifyContent: "center",
+  },
+  lightContainer: {
+    backgroundColor: COLORS.backgroundLight,
   },
   header: {
     flexDirection: "row",

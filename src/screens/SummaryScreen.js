@@ -25,6 +25,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import FrogIcon from "../../assets/frog.svg";
 import CustomDateTimePicker from "../components/CustomDateTimePicker";
+import HeaderBar from "../components/HeaderBar";
 
 const PRIORITY_COLORS = {
   high: "#666666", // Dark gray
@@ -55,12 +56,35 @@ const SummaryScreen = ({ navigation }) => {
     return defaultTime;
   });
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [appTheme, setAppTheme] = useState('dark');
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const inputRef = useRef(null);
   const scrollViewRef = useRef(null);
   const addTaskContainerRef = useRef(null);
+
+  // Define isLightTheme based on appTheme
+  const isLightTheme = appTheme === 'light';
+
+  // Load user settings including theme
+  useEffect(() => {
+    const loadUserSettings = async () => {
+      try {
+        const userSettings = await AsyncStorage.getItem('userSettings');
+        if (userSettings) {
+          const settings = JSON.parse(userSettings);
+          if (settings.appTheme) {
+            setAppTheme(settings.appTheme);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading user settings:', error);
+      }
+    };
+    
+    loadUserSettings();
+  }, []);
 
   useEffect(() => {
     StatusBar.setHidden(true);
@@ -587,410 +611,401 @@ const SummaryScreen = ({ navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-    >
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => navigation.navigate("Home")}
-          >
-            <Text style={styles.headerButtonText}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>SUMMARY</Text>
-          <View style={styles.headerButton} />
+    <SafeAreaView style={[styles.container, isLightTheme && styles.lightContainer]}>
+      <StatusBar hidden={true} />
+      
+      <HeaderBar 
+        title="SUMMARY"
+        onBackPress={() => navigation.navigate("Home")}
+        appTheme={appTheme}
+      />
+
+      <Animated.ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        style={[
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          },
+        ]}
+        keyboardDismissMode="interactive"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.headerContainer}>
+          <Text style={[styles.headerSubtitle, isLightTheme && styles.lightText]}>Today</Text>
+          <Text style={[styles.dateText, isLightTheme && styles.lightText]}>
+            {new Date().toLocaleDateString()}
+          </Text>
         </View>
 
-        <Animated.ScrollView
-          ref={scrollViewRef}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          style={[
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-          keyboardDismissMode="interactive"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.headerContainer}>
-            <Text style={styles.headerSubtitle}>Today</Text>
-            <Text style={styles.dateText}>
-              {new Date().toLocaleDateString()}
-            </Text>
-          </View>
+        {/* Daily Statistics */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statsCard}>
+            <View style={styles.statItem}>
+              <Text style={styles.statTitle}>Completion Rate</Text>
+              <View style={styles.progressContainer}>
+                <View
+                  style={[
+                    styles.progressBar,
+                    { width: `${completionRate}%` },
+                  ]}
+                />
+                <Text style={styles.progressText}>{completionRate}%</Text>
+              </View>
+            </View>
 
-          {/* Daily Statistics */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statsCard}>
-              <View style={styles.statItem}>
-                <Text style={styles.statTitle}>Completion Rate</Text>
-                <View style={styles.progressContainer}>
-                  <View
-                    style={[
-                      styles.progressBar,
-                      { width: `${completionRate}%` },
-                    ]}
+            <View style={styles.statDivider} />
+
+            {/* Use horizontal layout container */}
+            <View style={styles.statRowContainer}>
+              {/* Meditation Time */}
+              <View style={styles.statItemHalf}>
+                <Text style={styles.statTitle}>Meditation</Text>
+                <View style={styles.focusTimeContainer}>
+                  <MaterialIcons
+                    name="self-improvement"
+                    size={22}
+                    color="#CCCCCC"
                   />
-                  <Text style={styles.progressText}>{completionRate}%</Text>
+                  <Text style={styles.focusTimeText}>
+                    {totalMeditationMinutes} min
+                  </Text>
                 </View>
               </View>
 
-              <View style={styles.statDivider} />
+              {/* Vertical divider */}
+              <View style={styles.verticalDivider} />
 
-              {/* Use horizontal layout container */}
-              <View style={styles.statRowContainer}>
-                {/* Meditation Time */}
-                <View style={styles.statItemHalf}>
-                  <Text style={styles.statTitle}>Meditation</Text>
-                  <View style={styles.focusTimeContainer}>
-                    <MaterialIcons
-                      name="self-improvement"
-                      size={22}
-                      color="#CCCCCC"
-                    />
-                    <Text style={styles.focusTimeText}>
-                      {totalMeditationMinutes} min
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Vertical divider */}
-                <View style={styles.verticalDivider} />
-
-                {/* Pomodoro Sessions */}
-                <View style={styles.statItemHalf}>
-                  <Text style={styles.statTitle}>Pomodoros</Text>
-                  <View style={styles.focusTimeContainer}>
-                    <MaterialIcons name="timer" size={22} color="#CCCCCC" />
-                    <Text style={styles.focusTimeText}>
-                      {pomodoroCount} sessions
-                    </Text>
-                  </View>
+              {/* Pomodoro Sessions */}
+              <View style={styles.statItemHalf}>
+                <Text style={styles.statTitle}>Pomodoros</Text>
+                <View style={styles.focusTimeContainer}>
+                  <MaterialIcons name="timer" size={22} color="#CCCCCC" />
+                  <Text style={styles.focusTimeText}>
+                    {pomodoroCount} sessions
+                  </Text>
                 </View>
               </View>
             </View>
           </View>
+        </View>
 
-          {/* Completed Tasks */}
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Completed Tasks</Text>
-            {completedTasks.length > 0 ? (
-              <FlatList
-                data={completedTasks}
-                renderItem={({ item }) => (
-                  <View style={styles.taskItem}>
-                    <View
-                      style={[
-                        styles.taskPriorityIndicator,
-                        { backgroundColor: PRIORITY_COLORS[item.priority] },
-                      ]}
-                    />
-                    <View style={styles.taskContent}>
-                      <Text style={styles.taskText}>{item.text}</Text>
-                    </View>
-                    <MaterialIcons
-                      name="check-circle"
-                      size={20}
-                      color="#CCCCCC"
-                    />
+        {/* Completed Tasks */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Completed Tasks</Text>
+          {completedTasks.length > 0 ? (
+            <FlatList
+              data={completedTasks}
+              renderItem={({ item }) => (
+                <View style={styles.taskItem}>
+                  <View
+                    style={[
+                      styles.taskPriorityIndicator,
+                      { backgroundColor: PRIORITY_COLORS[item.priority] },
+                    ]}
+                  />
+                  <View style={styles.taskContent}>
+                    <Text style={styles.taskText}>{item.text}</Text>
                   </View>
-                )}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-              />
-            ) : (
-              <Text style={styles.emptyText}>No tasks completed today</Text>
-            )}
-          </View>
+                  <MaterialIcons
+                    name="check-circle"
+                    size={20}
+                    color="#CCCCCC"
+                  />
+                </View>
+              )}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+            />
+          ) : (
+            <Text style={styles.emptyText}>No tasks completed today</Text>
+          )}
+        </View>
 
-          {/* Pending Tasks */}
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Pending Tasks</Text>
-            {pendingTasks.length > 0 ? (
-              <FlatList
-                data={pendingTasks}
-                renderItem={({ item }) => (
-                  <View style={styles.taskItem}>
-                    <View
-                      style={[
-                        styles.taskPriorityIndicator,
-                        { backgroundColor: PRIORITY_COLORS[item.priority] },
-                      ]}
-                    />
-                    <View style={styles.taskContent}>
-                      <Text style={styles.taskText}>{item.text}</Text>
-                    </View>
+        {/* Pending Tasks */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Pending Tasks</Text>
+          {pendingTasks.length > 0 ? (
+            <FlatList
+              data={pendingTasks}
+              renderItem={({ item }) => (
+                <View style={styles.taskItem}>
+                  <View
+                    style={[
+                      styles.taskPriorityIndicator,
+                      { backgroundColor: PRIORITY_COLORS[item.priority] },
+                    ]}
+                  />
+                  <View style={styles.taskContent}>
+                    <Text style={styles.taskText}>{item.text}</Text>
                   </View>
-                )}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-              />
-            ) : (
-              <Text style={styles.emptyText}>All tasks completed!</Text>
-            )}
-          </View>
+                </View>
+              )}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+            />
+          ) : (
+            <Text style={styles.emptyText}>All tasks completed!</Text>
+          )}
+        </View>
 
-          {/* Tomorrow's Plan */}
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Tomorrow's Plan</Text>
-            {!isAddingTask ? (
-              <TouchableOpacity
-                style={styles.addTaskButton}
-                onPress={() => {
-                  setIsAddingTask(true);
-                  setTimeout(() => {
-                    inputRef.current?.focus();
-                    scrollToInput();
-                  }, 100);
-                }}
+        {/* Tomorrow's Plan */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Tomorrow's Plan</Text>
+          {!isAddingTask ? (
+            <TouchableOpacity
+              style={styles.addTaskButton}
+              onPress={() => {
+                setIsAddingTask(true);
+                setTimeout(() => {
+                  inputRef.current?.focus();
+                  scrollToInput();
+                }, 100);
+              }}
+            >
+              <AntDesign name="plus" size={20} color="#CCCCCC" />
+              <Text style={styles.addTaskText}>Add Tomorrow Task</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.addTaskWrapperContainer}>
+              <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "position" : null}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+                style={{ width: "100%" }}
+                enabled
               >
-                <AntDesign name="plus" size={20} color="#CCCCCC" />
-                <Text style={styles.addTaskText}>Add Tomorrow Task</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.addTaskWrapperContainer}>
-                <KeyboardAvoidingView
-                  behavior={Platform.OS === "ios" ? "position" : null}
-                  keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-                  style={{ width: "100%" }}
-                  enabled
+                <ScrollView
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 10 }}
                 >
-                  <ScrollView
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ paddingBottom: 10 }}
+                  <View
+                    ref={addTaskContainerRef}
+                    style={styles.addTaskContainer}
                   >
-                    <View
-                      ref={addTaskContainerRef}
-                      style={styles.addTaskContainer}
-                    >
-                      <TextInput
-                        ref={inputRef}
-                        style={styles.taskInput}
-                        placeholder="Enter task..."
-                        placeholderTextColor="#666"
-                        value={newTomorrowTask}
-                        onChangeText={setNewTomorrowTask}
-                        onSubmitEditing={addTomorrowTask}
-                        keyboardAppearance="dark"
-                      />
-                      <View style={styles.tagButtonsRow}>
-                        {renderTagButtons()}
-                        <View style={styles.spacer} />
-                        <TouchableOpacity
-                          style={[styles.inputButton, styles.cancelButton]}
-                          onPress={() => {
-                            setIsAddingTask(false);
-                            setNewTomorrowTask("");
-                            setIsFrogTask(false);
-                            setIsImportant(false);
-                            setIsUrgent(false);
-                            setIsTimeTagged(false);
-                            setShowTimePicker(false);
-                            setHasReminder(false);
-                            setShowReminderOptions(false);
-                            Keyboard.dismiss();
-                          }}
-                        >
-                          <AntDesign name="close" size={24} color="#FFFFFF" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.inputButton, styles.saveButton]}
-                          onPress={addTomorrowTask}
-                        >
-                          <AntDesign name="check" size={24} color="#000000" />
-                        </TouchableOpacity>
-                      </View>
-
-                      {showTimePicker && (
-                        <View
-                          style={[
-                            styles.timePickerContainer,
-                            { marginBottom: 20 },
-                          ]}
-                        >
-                          <CustomDateTimePicker
-                            value={taskTime}
-                            mode="time"
-                            is24Hour={true}
-                            display="spinner"
-                            onChange={onTimeChange}
-                            textColor="#FFFFFF"
-                            themeVariant="dark"
-                            style={styles.timePicker}
-                            minuteInterval={15}
-                          />
-                        </View>
-                      )}
-
-                      {showReminderOptions && (
-                        <View
-                          style={[
-                            styles.reminderOptionsContainer,
-                            { marginBottom: 20 },
-                          ]}
-                        >
-                          <Text style={styles.reminderOptionsTitle}>
-                            Select Reminder Time
-                          </Text>
-                          <View style={styles.reminderButtonsContainer}>
-                            <TouchableOpacity
-                              style={[
-                                styles.reminderButton,
-                                reminderTime === 15 &&
-                                  styles.reminderButtonActive,
-                              ]}
-                              onPress={() => selectReminderTime(15)}
-                            >
-                              <Text
-                                style={[
-                                  styles.reminderButtonText,
-                                  reminderTime === 15 &&
-                                    styles.reminderButtonTextActive,
-                                ]}
-                              >
-                                15 min
-                              </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={[
-                                styles.reminderButton,
-                                reminderTime === 30 &&
-                                  styles.reminderButtonActive,
-                              ]}
-                              onPress={() => selectReminderTime(30)}
-                            >
-                              <Text
-                                style={[
-                                  styles.reminderButtonText,
-                                  reminderTime === 30 &&
-                                    styles.reminderButtonTextActive,
-                                ]}
-                              >
-                                30 min
-                              </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={[
-                                styles.reminderButton,
-                                reminderTime === 60 &&
-                                  styles.reminderButtonActive,
-                              ]}
-                              onPress={() => selectReminderTime(60)}
-                            >
-                              <Text
-                                style={[
-                                  styles.reminderButtonText,
-                                  reminderTime === 60 &&
-                                    styles.reminderButtonTextActive,
-                                ]}
-                              >
-                                1 hour
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      )}
-                    </View>
-                  </ScrollView>
-                </KeyboardAvoidingView>
-              </View>
-            )}
-
-            {/* Tomorrow task list */}
-            {tomorrowTasks.length > 0 ? (
-              <>
-                <FlatList
-                  data={tomorrowTasks}
-                  renderItem={({ item }) => (
-                    <View style={styles.tomorrowTaskItem}>
-                      <View style={styles.tomorrowTaskContent}>
-                        <Text style={styles.tomorrowTaskText}>{item.text}</Text>
-                        <View style={styles.taskTagsContainer}>
-                          {item.isFrog && (
-                            <View style={[styles.taskTag, styles.frogTag]}>
-                              <FrogIcon width={14} height={14} fill="#FFFFFF" />
-                            </View>
-                          )}
-                          {item.isImportant && (
-                            <View style={[styles.taskTag, styles.importantTag]}>
-                              <MaterialIcons
-                                name="star"
-                                size={14}
-                                color="#FFFFFF"
-                              />
-                            </View>
-                          )}
-                          {item.isUrgent && (
-                            <View style={[styles.taskTag, styles.urgentTag]}>
-                              <Feather
-                                name="alert-circle"
-                                size={14}
-                                color="#FFFFFF"
-                              />
-                            </View>
-                          )}
-                          {item.isTimeTagged && item.taskTime && (
-                            <View style={[styles.taskTag, styles.timeTag]}>
-                              <Ionicons
-                                name="time-outline"
-                                size={14}
-                                color="#FFFFFF"
-                              />
-                              <Text style={styles.taskTagText}>
-                                {new Date(item.taskTime).toLocaleTimeString(
-                                  [],
-                                  { hour: "2-digit", minute: "2-digit" },
-                                )}
-                              </Text>
-                            </View>
-                          )}
-                          {item.hasReminder && (
-                            <View style={[styles.taskTag, styles.reminderTag]}>
-                              <MaterialIcons
-                                name="notifications"
-                                size={14}
-                                color="#FFFFFF"
-                              />
-                              <Text style={styles.taskTagText}>
-                                {item.reminderTime} min
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      </View>
+                    <TextInput
+                      ref={inputRef}
+                      style={styles.taskInput}
+                      placeholder="Enter task..."
+                      placeholderTextColor="#666"
+                      value={newTomorrowTask}
+                      onChangeText={setNewTomorrowTask}
+                      onSubmitEditing={addTomorrowTask}
+                      keyboardAppearance="dark"
+                    />
+                    <View style={styles.tagButtonsRow}>
+                      {renderTagButtons()}
+                      <View style={styles.spacer} />
                       <TouchableOpacity
-                        onPress={() => deleteTomorrowTask(item.id)}
+                        style={[styles.inputButton, styles.cancelButton]}
+                        onPress={() => {
+                          setIsAddingTask(false);
+                          setNewTomorrowTask("");
+                          setIsFrogTask(false);
+                          setIsImportant(false);
+                          setIsUrgent(false);
+                          setIsTimeTagged(false);
+                          setShowTimePicker(false);
+                          setHasReminder(false);
+                          setShowReminderOptions(false);
+                          Keyboard.dismiss();
+                        }}
                       >
-                        <AntDesign name="close" size={18} color="#666666" />
+                        <AntDesign name="close" size={24} color="#FFFFFF" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.inputButton, styles.saveButton]}
+                        onPress={addTomorrowTask}
+                      >
+                        <AntDesign name="check" size={24} color="#000000" />
                       </TouchableOpacity>
                     </View>
-                  )}
-                  keyExtractor={(item) => item.id}
-                  scrollEnabled={false}
-                />
-                <TouchableOpacity
-                  style={styles.transferButton}
-                  onPress={transferTomorrowTasks}
-                >
-                  <AntDesign name="swap" size={18} color="#000000" />
-                  <Text style={styles.transferButtonText}>
-                    Move to Task List
-                  </Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <Text style={styles.emptyText}>No tasks for tomorrow</Text>
-            )}
-          </View>
-        </Animated.ScrollView>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+
+                    {showTimePicker && (
+                      <View
+                        style={[
+                          styles.timePickerContainer,
+                          { marginBottom: 20 },
+                        ]}
+                      >
+                        <CustomDateTimePicker
+                          value={taskTime}
+                          mode="time"
+                          is24Hour={true}
+                          display="spinner"
+                          onChange={onTimeChange}
+                          textColor="#FFFFFF"
+                          themeVariant="dark"
+                          style={styles.timePicker}
+                          minuteInterval={15}
+                        />
+                      </View>
+                    )}
+
+                    {showReminderOptions && (
+                      <View
+                        style={[
+                          styles.reminderOptionsContainer,
+                          { marginBottom: 20 },
+                        ]}
+                      >
+                        <Text style={styles.reminderOptionsTitle}>
+                          Select Reminder Time
+                        </Text>
+                        <View style={styles.reminderButtonsContainer}>
+                          <TouchableOpacity
+                            style={[
+                              styles.reminderButton,
+                              reminderTime === 15 &&
+                                styles.reminderButtonActive,
+                            ]}
+                            onPress={() => selectReminderTime(15)}
+                          >
+                            <Text
+                              style={[
+                                styles.reminderButtonText,
+                                reminderTime === 15 &&
+                                  styles.reminderButtonTextActive,
+                              ]}
+                            >
+                              15 min
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.reminderButton,
+                              reminderTime === 30 &&
+                                styles.reminderButtonActive,
+                            ]}
+                            onPress={() => selectReminderTime(30)}
+                          >
+                            <Text
+                              style={[
+                                styles.reminderButtonText,
+                                reminderTime === 30 &&
+                                  styles.reminderButtonTextActive,
+                              ]}
+                            >
+                              30 min
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.reminderButton,
+                              reminderTime === 60 &&
+                                styles.reminderButtonActive,
+                            ]}
+                            onPress={() => selectReminderTime(60)}
+                          >
+                            <Text
+                              style={[
+                                styles.reminderButtonText,
+                                reminderTime === 60 &&
+                                  styles.reminderButtonTextActive,
+                              ]}
+                            >
+                              1 hour
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </ScrollView>
+              </KeyboardAvoidingView>
+            </View>
+          )}
+
+          {/* Tomorrow task list */}
+          {tomorrowTasks.length > 0 ? (
+            <>
+              <FlatList
+                data={tomorrowTasks}
+                renderItem={({ item }) => (
+                  <View style={styles.tomorrowTaskItem}>
+                    <View style={styles.tomorrowTaskContent}>
+                      <Text style={styles.tomorrowTaskText}>{item.text}</Text>
+                      <View style={styles.taskTagsContainer}>
+                        {item.isFrog && (
+                          <View style={[styles.taskTag, styles.frogTag]}>
+                            <FrogIcon width={14} height={14} fill="#FFFFFF" />
+                          </View>
+                        )}
+                        {item.isImportant && (
+                          <View style={[styles.taskTag, styles.importantTag]}>
+                            <MaterialIcons
+                              name="star"
+                              size={14}
+                              color="#FFFFFF"
+                            />
+                          </View>
+                        )}
+                        {item.isUrgent && (
+                          <View style={[styles.taskTag, styles.urgentTag]}>
+                            <Feather
+                              name="alert-circle"
+                              size={14}
+                              color="#FFFFFF"
+                            />
+                          </View>
+                        )}
+                        {item.isTimeTagged && item.taskTime && (
+                          <View style={[styles.taskTag, styles.timeTag]}>
+                            <Ionicons
+                              name="time-outline"
+                              size={14}
+                              color="#FFFFFF"
+                            />
+                            <Text style={styles.taskTagText}>
+                              {new Date(item.taskTime).toLocaleTimeString(
+                                [],
+                                { hour: "2-digit", minute: "2-digit" },
+                              )}
+                            </Text>
+                          </View>
+                        )}
+                        {item.hasReminder && (
+                          <View style={[styles.taskTag, styles.reminderTag]}>
+                            <MaterialIcons
+                              name="notifications"
+                              size={14}
+                              color="#FFFFFF"
+                            />
+                            <Text style={styles.taskTagText}>
+                              {item.reminderTime} min
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => deleteTomorrowTask(item.id)}
+                    >
+                      <AntDesign name="close" size={18} color="#666666" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+              />
+              <TouchableOpacity
+                style={styles.transferButton}
+                onPress={transferTomorrowTasks}
+              >
+                <AntDesign name="swap" size={18} color="#000000" />
+                <Text style={styles.transferButtonText}>
+                  Move to Task List
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text style={styles.emptyText}>No tasks for tomorrow</Text>
+          )}
+        </View>
+      </Animated.ScrollView>
+    </SafeAreaView>
   );
 };
 

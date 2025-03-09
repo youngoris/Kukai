@@ -11,6 +11,7 @@ import {
   Modal,
   TextInput,
   Share,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -22,6 +23,7 @@ import CloudBackupSection from "../components/CloudBackupSection";
 import JournalTemplateManager from "../components/JournalTemplateManager";
 import notificationService from "../services/NotificationService";
 import { AVAILABLE_TEMPLATES } from "../constants/JournalTemplates";
+import HeaderBar from "../components/HeaderBar";
 
 const SettingsScreen = ({ navigation }) => {
   // Meditation Settings
@@ -1082,24 +1084,11 @@ const SettingsScreen = ({ navigation }) => {
     <SafeAreaView
       style={[styles.container, appTheme === "light" && styles.lightContainer]}
     >
-      <View style={[styles.header, appTheme === "light" && styles.lightHeader]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <MaterialIcons
-            name="arrow-back"
-            size={24}
-            color={appTheme === "light" ? "#000000" : "#FFFFFF"}
-          />
-        </TouchableOpacity>
-        <Text
-          style={[styles.headerTitle, appTheme === "light" && styles.lightText]}
-        >
-          SETTINGS
-        </Text>
-        <View style={styles.headerRight} />
-      </View>
+      <HeaderBar 
+        title="SETTINGS"
+        onBackPress={() => navigation.goBack()}
+        appTheme={appTheme}
+      />
 
       <ScrollView
         style={styles.settingsContainer}
@@ -1462,88 +1451,75 @@ const SettingsScreen = ({ navigation }) => {
         animationType="fade"
         onRequestClose={() => setOptionModalVisible(false)}
       >
-        <View
-          style={[
-            styles.modalOverlay,
-            appTheme === "light" && styles.lightModalOverlay,
-          ]}
-        >
+        <TouchableWithoutFeedback onPress={() => setOptionModalVisible(false)}>
           <View
             style={[
-              styles.modalContent,
-              appTheme === "light" && styles.lightModalContent,
+              styles.modalOverlay,
+              appTheme === "light" && styles.lightModalOverlay,
             ]}
           >
-            <Text
-              style={[
-                styles.modalTitle,
-                appTheme === "light" && styles.lightModalTitle,
-              ]}
-            >
-              {currentModalTitle}
-            </Text>
-            <ScrollView style={{ maxHeight: 300 }}>
-              {currentOptions.map((option) => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.modalOption,
-                    appTheme === "light" && styles.lightModalOption,
-                    currentValue === option.value && styles.modalOptionSelected,
-                    currentValue === option.value &&
-                      appTheme === "light" &&
-                      styles.lightModalOptionSelected,
-                  ]}
-                  onPress={() => {
-                    if (currentSetter) {
-                      currentSetter(option.value);
-                      setSettingsChanged(true);
-                    }
-                    setOptionModalVisible(false);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.modalOptionText,
-                      appTheme === "light" && styles.lightModalOptionText,
-                      currentValue === option.value &&
-                        styles.modalOptionTextSelected,
-                      currentValue === option.value &&
-                        appTheme === "light" &&
-                        styles.lightModalOptionTextSelected,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                  {currentValue === option.value && (
-                    <MaterialIcons
-                      name="check"
-                      size={24}
-                      color={appTheme === "light" ? "#000" : "#FFF"}
-                    />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <TouchableOpacity
-              style={[
-                styles.modalButton,
-                styles.cancelButton,
-                appTheme === "light" && styles.lightCancelButton,
-              ]}
-              onPress={() => setOptionModalVisible(false)}
-            >
-              <Text
+            <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+              <View
                 style={[
-                  styles.modalButtonText,
-                  appTheme === "light" && styles.lightModalButtonText,
+                  styles.modalContent,
+                  appTheme === "light" && styles.lightModalContent,
                 ]}
               >
-                Cancel
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.modalTitle,
+                    appTheme === "light" && styles.lightModalTitle,
+                  ]}
+                >
+                  {currentModalTitle}
+                </Text>
+                <ScrollView style={{ maxHeight: 300 }}>
+                  {currentOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.modalOption,
+                        appTheme === "light" && styles.lightModalOption,
+                        currentValue === option.value && styles.modalOptionSelected,
+                        currentValue === option.value &&
+                          appTheme === "light" &&
+                          styles.lightModalOptionSelected,
+                      ]}
+                      onPress={() => {
+                        if (currentSetter) {
+                          currentSetter(option.value);
+                          setSettingsChanged(true);
+                        }
+                        setOptionModalVisible(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.modalOptionText,
+                          appTheme === "light" && styles.lightModalOptionText,
+                          currentValue === option.value &&
+                            styles.modalOptionTextSelected,
+                          currentValue === option.value &&
+                            appTheme === "light" &&
+                            styles.lightModalOptionTextSelected,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                      {currentValue === option.value && (
+                        <MaterialIcons
+                          name="check"
+                          size={24}
+                          color={appTheme === "light" ? "#000" : "#FFF"}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* Time Picker */}
