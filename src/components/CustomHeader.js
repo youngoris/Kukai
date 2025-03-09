@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: "#FFFFFF",
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: "bold",
     letterSpacing: 1,
   },
