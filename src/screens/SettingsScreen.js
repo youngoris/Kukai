@@ -31,6 +31,7 @@ const SettingsScreen = ({ navigation }) => {
   // Meditation Settings
   const [meditationDuration, setMeditationDuration] = useState(10);
   const [selectedSoundTheme, setSelectedSoundTheme] = useState("rain");
+  const [keepScreenAwake, setKeepScreenAwake] = useState(true);
 
   // Focus Settings
   const [focusDuration, setFocusDuration] = useState(25);
@@ -233,6 +234,7 @@ const SettingsScreen = ({ navigation }) => {
     quietHoursEnd,
     meditationReminder,
     meditationReminderTime,
+    keepScreenAwake,
   ]);
 
   // Auto-save settings function
@@ -242,6 +244,9 @@ const SettingsScreen = ({ navigation }) => {
         // Meditation settings
         meditationDuration,
         selectedSoundTheme,
+        meditationReminder,
+        meditationReminderTime: meditationReminderTime.toISOString(),
+        keepScreenAwake,
 
         // Focus settings
         focusDuration,
@@ -348,6 +353,8 @@ const SettingsScreen = ({ navigation }) => {
       // Meditation settings
       setMeditationDuration(parsedSettings.meditationDuration || 10);
       setSelectedSoundTheme(parsedSettings.selectedSoundTheme || "rain");
+      setMeditationReminder(parsedSettings.meditationReminder || false);
+      setKeepScreenAwake(parsedSettings.keepScreenAwake !== undefined ? parsedSettings.keepScreenAwake : true);
 
       // Focus settings
       setFocusDuration(parsedSettings.focusDuration || 25);
@@ -427,6 +434,9 @@ const SettingsScreen = ({ navigation }) => {
         // Meditation settings
         meditationDuration,
         selectedSoundTheme,
+        meditationReminder,
+        meditationReminderTime: meditationReminderTime.toISOString(),
+        keepScreenAwake,
 
         // Focus settings
         focusDuration,
@@ -1270,6 +1280,20 @@ const SettingsScreen = ({ navigation }) => {
           >
             GENERAL SETTINGS
           </Text>
+
+          {renderSettingSwitch(
+            darkMode,
+            setDarkMode,
+            "Dark Mode",
+            "Use dark theme throughout the app"
+          )}
+
+          {renderSettingSwitch(
+            keepScreenAwake,
+            setKeepScreenAwake,
+            "Keep Screen Awake",
+            "Prevents screen from turning off during meditation and focus sessions"
+          )}
 
           {renderDropdownOption(
             appTheme,

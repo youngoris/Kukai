@@ -46,6 +46,10 @@
         "projectId": "8ee33501-ec7b-4c56-a239-e273a87a6f87"
       }
     },
-    "owner": "andreho"
+    "owner": "andreho",
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/8ee33501-ec7b-4c56-a239-e273a87a6f87"
+    }
   }
 }

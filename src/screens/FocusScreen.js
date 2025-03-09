@@ -22,6 +22,7 @@ import notificationService from "../services/NotificationService";
 import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -48,6 +49,7 @@ export default function FocusScreen({ navigation }) {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [hasStartedBefore, setHasStartedBefore] = useState(false);
   const [appTheme, setAppTheme] = useState('dark');
+  const [keepScreenAwake, setKeepScreenAwake] = useState(true);
 
   // Focus settings
   const [focusDuration, setFocusDuration] = useState(25);
@@ -71,7 +73,7 @@ export default function FocusScreen({ navigation }) {
   // Get status bar height for Android
   const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
 
-  // Load user settings
+  // Load user settings including theme
   useEffect(() => {
     const loadUserSettings = async () => {
       try {
@@ -80,20 +82,10 @@ export default function FocusScreen({ navigation }) {
           setAppTheme(settings.appTheme);
         }
         
-        // Load focus settings
-        if (settings.focusDuration) {
-          setFocusDuration(settings.focusDuration);
+        // Load keep screen awake setting
+        if (settings.keepScreenAwake !== undefined) {
+          setKeepScreenAwake(settings.keepScreenAwake);
         }
-        if (settings.breakDuration) {
-          setBreakDuration(settings.breakDuration);
-        }
-        if (settings.longBreakDuration) {
-          setLongBreakDuration(settings.longBreakDuration);
-        }
-        if (settings.longBreakInterval) {
-          setLongBreakInterval(settings.longBreakInterval);
-        }
-        setAutoStartNextFocus(settings.autoStartNextFocus || false);
       } catch (error) {
         console.error('Error loading user settings:', error);
       }
@@ -104,54 +96,38 @@ export default function FocusScreen({ navigation }) {
 
   // Load focus settings
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       const loadFocusSettings = async () => {
         try {
-          const settingsData = await AsyncStorage.getItem("userSettings");
-          if (settingsData) {
-            const parsedSettings = JSON.parse(settingsData);
-            console.log("Loaded focus settings:", parsedSettings);
-
-            // Update focus settings
-            if (parsedSettings.focusDuration) {
-              setFocusDuration(parsedSettings.focusDuration);
-            }
-
-            if (parsedSettings.breakDuration) {
-              setBreakDuration(parsedSettings.breakDuration);
-            }
-
-            if (parsedSettings.longBreakDuration) {
-              setLongBreakDuration(parsedSettings.longBreakDuration);
-            }
-
-            if (parsedSettings.longBreakInterval) {
-              setLongBreakInterval(parsedSettings.longBreakInterval);
-            }
-
-            if (parsedSettings.focusNotifications !== undefined) {
-              setFocusNotifications(parsedSettings.focusNotifications);
-            }
-
-            if (parsedSettings.autoStartNextFocus !== undefined) {
-              setAutoStartNextFocus(parsedSettings.autoStartNextFocus);
-            }
-
-            // Initialize timeRemaining with focus duration
-            setTimeRemaining(parsedSettings.focusDuration * 60 || 25 * 60);
-          } else {
-            // Default values if no settings found
-            setTimeRemaining(25 * 60);
-          }
+          const settings = await getSettingsWithDefaults(AsyncStorage);
+          
+          // Update focus settings
+          setFocusDuration(settings.focusDuration || 25);
+          setBreakDuration(settings.breakDuration || 5);
+          setLongBreakDuration(settings.longBreakDuration || 15);
+          setLongBreakInterval(settings.longBreakInterval || 4);
+          setFocusNotifications(
+            settings.focusNotifications !== undefined
+              ? settings.focusNotifications
+              : true
+          );
+          setAutoStartNextFocus(settings.autoStartNextFocus || false);
+          
+          // Initialize timeRemaining with focus duration
+          setTimeRemaining(settings.focusDuration * 60 || 25 * 60);
         } catch (error) {
           console.error("Error loading focus settings:", error);
           setTimeRemaining(25 * 60);
         }
       };
-
+      
       loadFocusSettings();
-      return () => {};
-    }, []),
+      
+      return () => {
+        // Save session state when screen loses focus
+        saveSessionState();
+      };
+    }, [])
   );
 
   // Initialize notification permissions and app state listener
@@ -248,6 +224,8 @@ export default function FocusScreen({ navigation }) {
     setTimeRemaining(currentSessionTime);
     sessionStartTime.current = new Date();
     setHasStartedBefore(true);
+    
+    // Screen will be kept awake by the useEffect hook if setting is enabled
   };
 
   // Resume focus session
@@ -270,54 +248,44 @@ export default function FocusScreen({ navigation }) {
     setShowConfirmation(false);
   };
 
-  // Handle focus time completion
+  // Handle focus session completion
   const handleFocusComplete = async () => {
-    console.log("Work session completed");
-    
-    // Stop timer
+    // Clear timer
     clearInterval(timer.current);
-    timer.current = null;
     
-    // Vibrate to notify user
+    // Update state
+    setIsActive(false);
+    setPomodoroCount((prev) => prev + 1);
+    
+    // Vibrate device
     Vibration.vibrate([0, 500, 200, 500]);
     
-    // Show notification
-    if (focusNotifications) {
-      triggerNotification();
+    // Show choice or auto-start break
+    if (autoStartNextFocus) {
+      startBreak();
+    } else {
+      setShowChoice(true);
     }
-
-    setIsActive(false);
-    setShowChoice(true);
-
-    // Increment pomodoro count
-    const newCount = pomodoroCount + 1;
-    setPomodoroCount(newCount);
-
-    // Save to AsyncStorage
+    
+    // Save session data
     try {
-      // Get today's date string as key
-      const today = new Date().toISOString().split("T")[0];
-      const savedData = await AsyncStorage.getItem("dailyStats");
-      let dailyStats = savedData ? JSON.parse(savedData) : {};
-
-      // Initialize today's data if not exists
-      if (!dailyStats[today]) {
-        dailyStats[today] = {
-          pomodoroCount: 0,
-          focusMinutes: 0,
-          meditationMinutes: 0,
-        };
-      }
-
-      // Update pomodoro count and focus minutes
-      dailyStats[today].pomodoroCount = newCount;
-      dailyStats[today].focusMinutes =
-        (dailyStats[today].focusMinutes || 0) + focusDuration;
-
-      // Save updated data
-      await AsyncStorage.setItem("dailyStats", JSON.stringify(dailyStats));
+      // Get existing history
+      const historyString = await AsyncStorage.getItem("focusHistory");
+      let history = historyString ? JSON.parse(historyString) : [];
+      
+      // Add new session
+      const newSession = {
+        date: new Date().toISOString(),
+        duration: focusDuration,
+        isBreak: false,
+      };
+      
+      history.push(newSession);
+      
+      // Save updated history
+      await AsyncStorage.setItem("focusHistory", JSON.stringify(history));
     } catch (error) {
-      console.error("Error saving focus session:", error);
+      console.error("Error saving focus history:", error);
     }
   };
 
@@ -442,7 +410,6 @@ export default function FocusScreen({ navigation }) {
       };
       
       await AsyncStorage.setItem('focusSessionState', JSON.stringify(sessionState));
-      console.log('Focus session state saved:', sessionState);
     } catch (error) {
       console.error('Error saving focus session state:', error);
     }
@@ -461,7 +428,6 @@ export default function FocusScreen({ navigation }) {
       }
       
       const sessionState = JSON.parse(savedState);
-      console.log('Restoring focus session state:', sessionState);
       
       // Check if saved state is expired (more than 1 hour old)
       const savedTime = new Date(sessionState.timestamp);
@@ -469,7 +435,6 @@ export default function FocusScreen({ navigation }) {
       const hoursPassed = (currentTime - savedTime) / (1000 * 60 * 60);
       
       if (hoursPassed > 1) {
-        console.log('Saved session state is too old, not restoring');
         await AsyncStorage.removeItem('focusSessionState');
         
         // Initialize with default values
@@ -541,7 +506,6 @@ export default function FocusScreen({ navigation }) {
       
       if (isAppRestart) {
         // If app has restarted, initialize with default values
-        console.log('App has been restarted, initializing with default values');
         const defaultDuration = focusDuration * 60;
         setTimeRemaining(defaultDuration);
         setProgress(0);
@@ -610,6 +574,34 @@ export default function FocusScreen({ navigation }) {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
     return () => backHandler.remove();
   }, [isActive, navigation]);
+
+  // Manage screen wake lock based on focus state and user preference
+  useEffect(() => {
+    const manageScreenWakeLock = async () => {
+      try {
+        if (isActive && keepScreenAwake) {
+          // Activate keep awake when focus session is active and setting is enabled
+          await activateKeepAwakeAsync('FocusScreen');
+        } else {
+          // Deactivate keep awake when focus session ends or setting is disabled
+          deactivateKeepAwake('FocusScreen');
+        }
+      } catch (error) {
+        console.error('Error managing screen wake lock:', error);
+      }
+    };
+    
+    manageScreenWakeLock();
+    
+    // Clean up on component unmount
+    return () => {
+      try {
+        deactivateKeepAwake('FocusScreen');
+      } catch (error) {
+        console.error('Error deactivating screen wake lock:', error);
+      }
+    };
+  }, [isActive, keepScreenAwake]);
 
   // Render interface
   return (

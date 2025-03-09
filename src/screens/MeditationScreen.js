@@ -14,6 +14,7 @@ import {
   Alert,
   BackHandler,
   StatusBar as RNStatusBar,
+  AppState,
 } from "react-native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
@@ -32,6 +33,7 @@ import { goBackToHome } from "../navigation/NavigationUtils";
 import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
 // Ignore specific warnings
 LogBox.ignoreLogs(["Animated: `useNativeDriver`"]);
@@ -44,9 +46,11 @@ const isWeb = Platform.OS === 'web';
 // - Lower values (300-500ms): Quicker transitions but might be noticeable
 // - Medium values (800-1200ms): Good balance between smoothness and responsiveness
 // - Higher values (1500-3000ms): Very smooth transitions but uses more resources
+// FADE_IN_DURATION: Controls how long it takes for audio to fade in when starting (in milliseconds)
 const AUDIO_CONFIG = {
   CROSSFADE_DURATION: 2500, // Milliseconds for crossfade between audio loops
-  DEFAULT_VOLUME: 0.5, // Default background sound volume
+  FADE_IN_DURATION: 1500,   // Milliseconds for initial fade-in when starting
+  DEFAULT_VOLUME: 0.5,      // Default background sound volume
 };
 
 const { width } = Dimensions.get("window");
@@ -63,7 +67,7 @@ const configureAudioSession = async () => {
   try {
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
-      staysActiveInBackground: true,
+      staysActiveInBackground: true, 
       // Use numeric constants instead of Audio enum values to avoid compatibility issues
       // 1 = INTERRUPTION_MODE_IOS_DO_NOT_MIX / INTERRUPTION_MODE_ANDROID_DO_NOT_MIX
       interruptionModeIOS: 1,
@@ -175,6 +179,8 @@ const MeditationScreen = ({ navigation }) => {
   const [isAudioReleasing, setIsAudioReleasing] = useState(false); // Add state flag
   const audioLoopCountRef = useRef(0);
   const statusLogTimeRef = useRef(0);
+  const [keepScreenAwake, setKeepScreenAwake] = useState(true); // Default to true until settings are loaded
+  const appState = useRef(AppState.currentState);
 
   // Get safe area insets
   const insets = useSafeAreaInsets();
@@ -207,6 +213,15 @@ const MeditationScreen = ({ navigation }) => {
               settings.selectedSoundTheme,
             );
             setSelectedSoundTheme(settings.selectedSoundTheme);
+          }
+          
+          // Update keep screen awake setting
+          if (settings.keepScreenAwake !== undefined) {
+            console.log(
+              "Setting keep screen awake to:",
+              settings.keepScreenAwake,
+            );
+            setKeepScreenAwake(settings.keepScreenAwake);
           }
         } catch (error) {
           console.error("Error loading meditation settings:", error);
@@ -294,6 +309,42 @@ const MeditationScreen = ({ navigation }) => {
     };
   }, []);
 
+  // Monitor app state changes to handle background/foreground transitions
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", nextAppState => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === "active" &&
+        isMeditating
+      ) {
+        console.log("App has come to the foreground during meditation");
+        // Ensure audio is still playing when app comes to foreground
+        if (selectedSoundTheme !== "silence" && primarySoundRef.current) {
+          primarySoundRef.current.getStatusAsync().then(status => {
+            if (!status.isPlaying) {
+              console.log("Resuming audio playback after app foregrounded");
+              primarySoundRef.current.playAsync();
+            }
+          });
+        }
+      } else if (
+        appState.current === "active" &&
+        nextAppState.match(/inactive|background/) &&
+        isMeditating
+      ) {
+        console.log("App has gone to the background during meditation");
+        // Ensure audio session is configured for background playback
+        configureAudioSession();
+      }
+      
+      appState.current = nextAppState;
+    });
+    
+    return () => {
+      subscription.remove();
+    };
+  }, [isMeditating, selectedSoundTheme]);
+
   // Function to release all audio resources
   const releaseAllAudioResources = async () => {
     // Skip on web platform
@@ -322,27 +373,33 @@ const MeditationScreen = ({ navigation }) => {
 
       // Unload primary sound
       if (primarySoundRef.current) {
-        await primarySoundRef.current.unloadAsync();
-        primarySoundRef.current = null;
+        try {
+          await primarySoundRef.current.unloadAsync();
+          primarySoundRef.current = null;
+        } catch (error) {
+          console.log("Error unloading primary sound:", error);
+        }
       }
 
       // Unload secondary sound
       if (secondarySoundRef.current) {
-        await secondarySoundRef.current.unloadAsync();
-        secondarySoundRef.current = null;
+        try {
+          await secondarySoundRef.current.unloadAsync();
+          secondarySoundRef.current = null;
+        } catch (error) {
+          console.log("Error unloading secondary sound:", error);
+        }
       }
 
-      // Unload completion sound
-      if (sound) {
-        await sound.unloadAsync();
-        setSound(null);
-      }
+      // Don't release completion sound here, let it continue playing after meditation is complete
+      // Only release completion sound resources when component unmounts (in useEffect cleanup function)
 
-      // Reset any other audio-related state
-      audioPositionRef.current = 0;
+      // Reset audio state
       audioDurationRef.current = 0;
-
-      console.log("[Audio Cleanup] All audio resources released");
+      audioPositionRef.current = 0;
+      audioLoopCountRef.current = 0;
+      
+      console.log("[Audio Cleanup] Background audio resources released");
       setIsAudioReleasing(false);
     } catch (error) {
       console.error("Error releasing audio resources:", error);
@@ -360,15 +417,18 @@ const MeditationScreen = ({ navigation }) => {
           return;
         }
         
-        const { sound } = await Audio.Sound.createAsync(
+        // Load notification sound using online URL method which is more reliable
+        const { sound: completionSound } = await Audio.Sound.createAsync(
           {
             uri: "https://assets.mixkit.co/active_storage/sfx/2867/2867-preview.mp3",
           },
-          { volume: 0.7 },
+          { volume: 0.7 }
         );
-        setSound(sound);
+        
+        setSound(completionSound);
+        console.log("Meditation completion sound loaded successfully");
       } catch (error) {
-        console.log("Unable to preload sound effect", error);
+        console.log("Unable to preload sound effect:", error);
       }
     };
 
@@ -416,12 +476,14 @@ const MeditationScreen = ({ navigation }) => {
         // Reset loop counter
         audioLoopCountRef.current = 0;
 
-        // Load primary sound instance
+        // Load primary sound instance with lower initial volume for fade-in
+        const initialVolume = 0.1; // Start with lower volume for fade-in effect
+        
         const { sound: primarySound, status: primaryStatus } =
           await Audio.Sound.createAsync(
             theme.source,
             {
-              volume: AUDIO_CONFIG.DEFAULT_VOLUME,
+              volume: initialVolume, // Start with lower volume
               progressUpdateIntervalMillis: 100,
             },
             onPlaybackStatusUpdate,
@@ -432,12 +494,12 @@ const MeditationScreen = ({ navigation }) => {
         const { sound: secondarySound } = await Audio.Sound.createAsync(
           theme.source,
           { volume: 0, progressUpdateIntervalMillis: 100 },
-          // 确保次要音频实例也能接收回调，这样在交换后依然能保持监听
+          // Ensure secondary sound instance also receives callbacks
           onPlaybackStatusUpdate,
         );
         secondarySoundRef.current = secondarySound;
 
-        // 明确设置播放状态回调，确保监听正常工作
+        // Explicitly set playback status callback to ensure monitoring works
         await primarySound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
 
         // Store duration for timing calculations
@@ -448,6 +510,20 @@ const MeditationScreen = ({ navigation }) => {
         console.log(
           `Started playing ${theme.label} background sound (${primaryStatus.durationMillis}ms duration)`,
         );
+        
+        // Implement fade-in effect
+        const fadeSteps = 8;
+        const fadeStepDuration = AUDIO_CONFIG.FADE_IN_DURATION / fadeSteps;
+        
+        for (let i = 1; i <= fadeSteps; i++) {
+          setTimeout(async () => {
+            if (primarySoundRef.current && isMeditating) {
+              // Gradually increase volume from initialVolume to DEFAULT_VOLUME
+              const volume = initialVolume + (AUDIO_CONFIG.DEFAULT_VOLUME - initialVolume) * (i / fadeSteps);
+              await primarySoundRef.current.setVolumeAsync(volume);
+            }
+          }, i * fadeStepDuration);
+        }
       } catch (error) {
         console.error("Error initializing seamless audio:", error);
       }
@@ -501,7 +577,7 @@ const MeditationScreen = ({ navigation }) => {
           secondarySoundRef.current
         ) {
           try {
-            // 增加循环计数
+            // Count the number of crossfades
             audioLoopCountRef.current += 1;
             console.log(
               `Starting crossfade for seamless loop #${audioLoopCountRef.current}`,
@@ -519,7 +595,7 @@ const MeditationScreen = ({ navigation }) => {
 
             for (let i = 1; i <= fadeSteps; i++) {
               crossfadeTimerRef.current = setTimeout(async () => {
-                // 确保冥想仍在进行，否则不继续交叉淡入淡出
+                // Make sure meditation is still ongoing
                 if (!isMeditating) {
                   if (crossfadeTimerRef.current) {
                     clearTimeout(crossfadeTimerRef.current);
@@ -545,7 +621,7 @@ const MeditationScreen = ({ navigation }) => {
                     primarySoundRef.current = secondarySoundRef.current;
                     secondarySoundRef.current = temp;
 
-                    // 重要修复：确保新的主音频实例继续接收播放状态更新
+                    // Make sure the new primary sound instance continues to receive playback status updates
                     await primarySoundRef.current.setOnPlaybackStatusUpdate(
                       onPlaybackStatusUpdate,
                     );
@@ -557,7 +633,7 @@ const MeditationScreen = ({ navigation }) => {
                     // Reset crossfade timer
                     crossfadeTimerRef.current = null;
 
-                    // 重置状态日志时间，确保下一个周期立即打印状态
+                    // Reset status log time to ensure immediate logging of next cycle
                     statusLogTimeRef.current = 0;
 
                     console.log(
@@ -569,7 +645,7 @@ const MeditationScreen = ({ navigation }) => {
             }
           } catch (error) {
             console.error("Error during crossfade:", error);
-            // 发生错误时重置交叉淡入淡出定时器
+            // Reset crossfade timer
             if (crossfadeTimerRef.current) {
               clearTimeout(crossfadeTimerRef.current);
               crossfadeTimerRef.current = null;
@@ -661,26 +737,31 @@ const MeditationScreen = ({ navigation }) => {
     }
   }, [remainingTime, isMeditating, totalTime, progressAnim, fluidProgressAnim]);
 
-  // Countdown timer
+  // Start countdown timer
   useEffect(() => {
-    if (isCountingDown && countdown > 0) {
+    if (isCountingDown) {
       countdownTimer.current = setInterval(() => {
-        setCountdown((prevCount) => prevCount - 1);
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(countdownTimer.current);
+            setIsCountingDown(false);
+            setIsMeditating(true);
+            meditationStartTime.current = new Date();
+            
+            // Audio will be initialized by the useEffect that watches isMeditating
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
-    } else if (isCountingDown && countdown === 0) {
-      // Countdown finished, start meditation
-      setIsCountingDown(false);
-      setIsMeditating(true);
-      meditationStartTime.current = Date.now();
     }
 
     return () => {
       if (countdownTimer.current) {
         clearInterval(countdownTimer.current);
-        countdownTimer.current = null;
       }
     };
-  }, [isCountingDown, countdown]);
+  }, [isCountingDown]);
 
   // Meditation timer
   useEffect(() => {
@@ -694,11 +775,25 @@ const MeditationScreen = ({ navigation }) => {
         });
       }, 1000);
     } else if (isMeditating && remainingTime === 0) {
+      // Clear timer
+      if (meditationTimer.current) {
+        clearInterval(meditationTimer.current);
+        meditationTimer.current = null;
+      }
+      
       // Meditation complete
-      Vibration.vibrate(500); // Vibration notification
-
-      // Handle meditation completion
-      handleMeditationComplete(selectedDuration);
+      console.log("Meditation time ended, triggering completion handler");
+      
+      // Ensure handleMeditationComplete is called only once
+      if (isMeditating) {
+        // Vibration notification
+        if (!isWeb) {
+          Vibration.vibrate(500);
+        }
+        
+        // Handle meditation completion
+        handleMeditationComplete(selectedDuration);
+      }
     }
 
     return () => {
@@ -707,11 +802,46 @@ const MeditationScreen = ({ navigation }) => {
         meditationTimer.current = null;
       }
     };
-  }, [isMeditating, remainingTime, totalTime, selectedDuration]);
+  }, [isMeditating, remainingTime, totalTime, selectedDuration, handleMeditationComplete, isWeb]);
+
+  // Manage screen wake lock based on meditation state and user preference
+  useEffect(() => {
+    const manageScreenWakeLock = async () => {
+      try {
+        if (isMeditating && keepScreenAwake) {
+          // Activate keep awake when meditation is active and setting is enabled
+          await activateKeepAwakeAsync('MeditationScreen');
+          console.log('Screen keep awake activated for meditation');
+        } else {
+          // Deactivate keep awake when meditation ends or setting is disabled
+          deactivateKeepAwake('MeditationScreen');
+          console.log('Screen keep awake deactivated for meditation');
+        }
+      } catch (error) {
+        console.error('Error managing screen wake lock:', error);
+      }
+    };
+    
+    manageScreenWakeLock();
+    
+    // Clean up on component unmount
+    return () => {
+      try {
+        deactivateKeepAwake('MeditationScreen');
+        console.log('Screen keep awake deactivated on cleanup');
+      } catch (error) {
+        console.error('Error deactivating screen wake lock:', error);
+      }
+    };
+  }, [isMeditating, keepScreenAwake]);
 
   // Function to start meditation with selected duration
   const startMeditation = () => {
     console.log("Starting meditation with duration:", customDuration);
+    
+    // Ensure audio session is configured before starting
+    configureAudioSession();
+    
     setSelectedDuration(customDuration);
     setRemainingTime(customDuration * 60);
     setTotalTime(customDuration * 60);
@@ -741,12 +871,20 @@ const MeditationScreen = ({ navigation }) => {
       }
       
       if (sound) {
-        await sound.replayAsync();
+        console.log("Playing meditation completion sound");
+        
+        // Ensure playback starts from the beginning
+        await sound.setPositionAsync(0);
+        
+        // Play the sound
+        await sound.playAsync();
+      } else {
+        console.log("Meditation completion sound not loaded");
       }
     } catch (error) {
       console.log("Error playing sound:", error);
     }
-  }, [sound, isWeb]);
+  }, [sound]);
 
   // Save meditation session to storage
   const saveMeditationSession = useCallback(
@@ -804,8 +942,20 @@ const MeditationScreen = ({ navigation }) => {
         meditationTimer.current = null;
       }
 
-      // Release audio resources
-      releaseAllAudioResources();
+      // If manually ending meditation (not completion), release all audio resources
+      if (!isMeditationComplete) {
+        // Release audio resources
+        releaseAllAudioResources();
+      } else {
+        // If meditation is complete, only stop background music, don't release completion sound resources
+        if (primarySoundRef.current) {
+          try {
+            primarySoundRef.current.stopAsync();
+          } catch (error) {
+            console.error("Error stopping primary sound:", error);
+          }
+        }
+      }
 
       // Log audio loops for debugging
       console.log(
@@ -828,33 +978,66 @@ const MeditationScreen = ({ navigation }) => {
       }
 
       // Execute callback if provided
-      if (callback) {
+      if (callback && typeof callback === "function") {
         callback();
-      } else {
-        goBackToHome(navigation);
       }
     },
-    [breatheAnim, pulseAnim, releaseAllAudioResources],
+    [breatheAnim, pulseAnim, releaseAllAudioResources, isMeditationComplete]
   );
 
-  // Handle meditation complete
+  // Handle meditation completion
   const handleMeditationComplete = useCallback(
-    (durationInMinutes) => {
-      console.log("Meditation completed, duration:", durationInMinutes);
-
-      // Save meditation session data
-      saveMeditationSession(durationInMinutes);
-
-      // Stop meditation timers and background sounds, but keep duration for the completion screen
-      endMeditation(null, false);
-
+    async (duration) => {
+      console.log(`Meditation completed: ${duration} minutes`);
+      
+      // Stop background music first, then play completion sound
+      // Stop any playing background sounds but don't release resources yet
+      if (primarySoundRef.current) {
+        try {
+          const status = await primarySoundRef.current.getStatusAsync();
+          if (status.isLoaded && status.isPlaying) {
+            await primarySoundRef.current.stopAsync();
+          }
+        } catch (error) {
+          console.error("Error stopping sound:", error);
+        }
+      }
+      
       // Play completion sound
-      playCompletionSound();
-
-      // Set meditation complete state instead of showing alert
+      await playCompletionSound();
+      
+      // Vibrate device (if not on web)
+      if (!isWeb) {
+        Vibration.vibrate([0, 500, 200, 500]);
+      }
+      
+      // Update UI state
+      setIsMeditating(false);
       setIsMeditationComplete(true);
+      
+      // Save meditation to history
+      try {
+        // Get existing history
+        const historyString = await AsyncStorage.getItem("meditationHistory");
+        let history = historyString ? JSON.parse(historyString) : [];
+        
+        // Add new session
+        const newSession = {
+          date: new Date().toISOString(),
+          duration: duration,
+          soundTheme: selectedSoundTheme,
+        };
+        
+        history.push(newSession);
+        
+        // Save updated history
+        await AsyncStorage.setItem("meditationHistory", JSON.stringify(history));
+        console.log("Meditation session saved to history");
+      } catch (error) {
+        console.error("Error saving meditation history:", error);
+      }
     },
-    [endMeditation, saveMeditationSession, playCompletionSound],
+    [playCompletionSound, isWeb, selectedSoundTheme]
   );
 
   // Navigation handler - with confirmation if needed
@@ -1244,7 +1427,7 @@ const styles = StyleSheet.create({
     fontWeight: "200",
     fontFamily:
       Platform.OS === "ios"
-        ? "Courier New" // iOS上更美观的等宽字体
+        ? "Courier New" 
         : "monospace",
   },
   countdownSubtext: {
@@ -1267,7 +1450,7 @@ const styles = StyleSheet.create({
     fontWeight: "200",
     fontFamily:
       Platform.OS === "ios"
-        ? "Courier New" // iOS上更美观的等宽字体
+        ? "Courier New" 
         : "monospace",
   },
   durationText: {

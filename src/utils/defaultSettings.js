@@ -7,6 +7,7 @@ const defaultSettings = {
   selectedSoundTheme: "rain",
   meditationReminder: false,
   meditationReminderTime: new Date(new Date().setHours(8, 30, 0, 0)).toISOString(),
+  keepScreenAwake: true,
 
   // Focus settings
   focusDuration: 25,
