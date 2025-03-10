@@ -14,9 +14,6 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
-  Dimensions,
-  LayoutAnimation,
-  UIManager,
 } from "react-native";
 import {
   AntDesign,
@@ -57,13 +54,12 @@ const SummaryScreen = ({ navigation }) => {
   const [showReminderOptions, setShowReminderOptions] = useState(false);
   const [taskTime, setTaskTime] = useState(() => {
     const defaultTime = new Date();
-    defaultTime.setMinutes(30, 0, 0); // Set default minutes to 30
+    defaultTime.setMinutes(30, 0, 0); // 设置默认分钟为30分
     return defaultTime;
   });
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [appTheme, setAppTheme] = useState("dark");
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -121,85 +117,37 @@ const SummaryScreen = ({ navigation }) => {
     ]).start();
   }, []);
 
-  // 启用 LayoutAnimation 在 Android 上
+  // Add keyboard event listeners
   useEffect(() => {
-    if (Platform.OS === 'android') {
-      if (UIManager.setLayoutAnimationEnabledExperimental) {
-        UIManager.setLayoutAnimationEnabledExperimental(true);
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      (event) => {
+        setKeyboardVisible(true);
+        // 获取键盘高度
+        const keyboardHeight = event.endCoordinates.height;
+        scrollToInput(keyboardHeight);
       }
-    }
-  }, []);
-
-  // 使用简化且更可靠的键盘事件处理
-  useEffect(() => {
-    const keyboardWillShowListener = Platform.OS === 'ios' 
-      ? Keyboard.addListener('keyboardWillShow', e => {
-          setKeyboardVisible(true);
-          setKeyboardHeight(e.endCoordinates.height);
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setTimeout(() => scrollToAddTask(), 100);
-        })
-      : Keyboard.addListener('keyboardDidShow', e => {
-          setKeyboardVisible(true);
-          setKeyboardHeight(e.endCoordinates.height);
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setTimeout(() => scrollToAddTask(), 100);
-        });
-
-    const keyboardWillHideListener = Platform.OS === 'ios'
-      ? Keyboard.addListener('keyboardWillHide', () => {
-          setKeyboardVisible(false);
-          setKeyboardHeight(0);
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        })
-      : Keyboard.addListener('keyboardDidHide', () => {
-          setKeyboardVisible(false);
-          setKeyboardHeight(0);
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        });
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setKeyboardVisible(false);
+        // 键盘隐藏时，可以选择滚动到特定位置或不做处理
+      }
+    );
 
     return () => {
-      keyboardWillShowListener.remove();
-      keyboardWillHideListener.remove();
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
     };
   }, []);
 
-  // 专注于滚动到添加任务区域 - 优化版本
-  const scrollToAddTask = () => {
-    // 只有当滚动视图、容器引用和添加任务状态都有效时才执行
-    if (scrollViewRef.current && addTaskContainerRef.current && isAddingTask) {
-      // 为确保组件已正确渲染和测量，使用短延迟
-      setTimeout(() => {
-        if (addTaskContainerRef.current) {
-          addTaskContainerRef.current.measure((x, y, width, height, pageX, pageY) => {
-            // 计算任务输入区域相对于可见区域的位置
-            const screenHeight = Dimensions.get('window').height;
-            const keyboardSpaceHeight = keyboardHeight + (Platform.OS === 'ios' ? 40 : 20);
-            const visibleAreaHeight = screenHeight - keyboardSpaceHeight;
-            
-            // 只有当输入区域被键盘遮挡时才滚动
-            const inputBottom = pageY + height;
-            if (inputBottom > visibleAreaHeight) {
-              const scrollToY = Math.max(0, pageY - 120); // 给顶部留120px的空间
-              
-              scrollViewRef.current.scrollTo({
-                y: scrollToY,
-                animated: true
-              });
-            }
-            // 否则保持当前位置不变
-          });
-        }
-      }, 50);
-    }
-  };
-
-  // 使组件在布局后自动测量
+  // Additional effect to scroll when specific UI elements change visibility
   useEffect(() => {
-    if (isAddingTask && keyboardVisible) {
-      scrollToAddTask();
+    if (showTimePicker || showReminderOptions) {
+      setTimeout(() => scrollToInput(), 100);
     }
-  }, [isAddingTask, keyboardVisible]);
+  }, [showTimePicker, showReminderOptions]);
 
   const checkDailyReset = async () => {
     try {
@@ -517,75 +465,66 @@ const SummaryScreen = ({ navigation }) => {
 
   // Handle time tag press
   const handleTimeTagPress = () => {
-    // Update time to current hour and 30 minutes
+    // 更新时间为当前小时和30分钟
     const currentTime = new Date();
     currentTime.setMinutes(30, 0, 0);
     setTaskTime(currentTime);
-
+    
     if (showTimePicker) {
-      // If time picker is already displayed, click to close picker and remove tag
+      // 如果时间选择器已经显示，点击后关闭选择器并取消标签
       setShowTimePicker(false);
       setIsTimeTagged(false);
-      // Also close reminder functionality
+      // 同时关闭提醒功能
       setHasReminder(false);
       setShowReminderOptions(false);
     } else if (isTimeTagged) {
-      // If there's already a time tag but picker is not displayed, click to remove tag
+      // 如果已经有时间标签但选择器未显示，点击后取消标签
       setIsTimeTagged(false);
       setShowTimePicker(false);
-      // Also close reminder functionality
+      // 同时关闭提醒功能
       setHasReminder(false);
       setShowReminderOptions(false);
     } else {
-      // If there's no time tag, click to display picker and activate tag
-      // 先设置状态，再应用动画
+      // 如果没有时间标签，点击后显示选择器并激活标签
       setShowTimePicker(true);
       setIsTimeTagged(true);
-      
-      // 使用LayoutAnimation使转换更平滑，但不滚动位置，保持当前所见即所得
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      
-      // 删除这一行，不要自动滚动，保持当前可见区域
-      // setTimeout(() => scrollToAddTask(), 100);
+      // 滚动到可见区域
+      setTimeout(() => scrollToInput(), 100);
     }
   };
 
   // Handle reminder tag press
   const handleReminderPress = () => {
-    // If time is not set, first prompt to set time
+    // 如果没有设置时间，先提示设置时间
     if (!isTimeTagged && !showTimePicker) {
       Alert.alert(
         "Reminder Setup",
         "You need to set a task time first to add a reminder",
         [
           { text: "Set Time", onPress: () => handleTimeTagPress() },
-          { text: "Cancel", style: "cancel" },
+          { text: "Cancel", style: "cancel" }
         ]
       );
       return;
     }
-
-    // 使用LayoutAnimation使转换更平滑
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-
+    
     if (showReminderOptions) {
-      // If options are displayed, hide options (but do not change reminder status)
+      // 如果选项已显示，则隐藏选项（但不更改提醒状态）
       setShowReminderOptions(false);
     } else if (hasReminder) {
-      // If reminder is already set, cancel reminder
+      // 如果已有提醒，则取消提醒
       setHasReminder(false);
       setShowReminderOptions(false);
     } else {
-      // If there's no reminder, display options and activate reminder status
+      // 如果没有提醒，则显示选项并激活提醒状态
       setShowReminderOptions(true);
-      // Set default reminder time and activate
+      // 设置默认提醒时间并激活
       setReminderTime(15);
       setHasReminder(true);
-      // Close time picker when reminder options are displayed to avoid interface crowding
+      // 显示提醒选项时关闭时间选择器，避免界面过于拥挤
       setShowTimePicker(false);
-      
-      // 不需要滚动，保持当前视图位置不变
-      // setTimeout(() => scrollToAddTask(), 100);
+      // 滚动到可见区域
+      setTimeout(() => scrollToInput(), 100);
     }
   };
 
@@ -594,8 +533,6 @@ const SummaryScreen = ({ navigation }) => {
     setReminderTime(minutes);
     setHasReminder(true);
     setShowReminderOptions(false);
-    // 选择后更新布局但不滚动
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   };
 
   // Render tag buttons
@@ -658,11 +595,33 @@ const SummaryScreen = ({ navigation }) => {
     </View>
   );
 
-  // 简化滚动逻辑
-  const scrollToInput = () => {
-    if (scrollViewRef.current) {
-      scrollViewRef.current.scrollToEnd({ animated: true });
-    }
+  // Add automatic scroll to input area function
+  const scrollToInput = (keyboardHeight = 300) => {
+    // 给键盘弹出时间，再滚动
+    setTimeout(() => {
+      if (scrollViewRef.current && addTaskContainerRef.current) {
+        // 测量添加任务容器在滚动视图中的位置
+        addTaskContainerRef.current.measureLayout(
+          scrollViewRef.current,
+          (x, y, width, height) => {
+            // 计算适当的滚动位置，确保元素与键盘顶部保持10px的距离
+            const scrollPosition = y - 10; // 保持10px的距离
+            scrollViewRef.current.scrollTo({
+              y: scrollPosition,
+              animated: true
+            });
+          },
+          (error) => {
+            console.error('测量布局时出错:', error);
+            // 如果测量失败，回退到默认的scrollToEnd方法
+            scrollViewRef.current.scrollToEnd({ animated: true });
+          }
+        );
+      } else {
+        // 如果引用不可用，回退到默认的scrollToEnd方法
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }
+    }, 300);
   };
 
   return (
@@ -691,27 +650,16 @@ const SummaryScreen = ({ navigation }) => {
 
       <Animated.ScrollView
         ref={scrollViewRef}
-        contentContainerStyle={[
-          styles.scrollContent, 
-          {
-            paddingBottom: keyboardVisible 
-              ? keyboardHeight + (Platform.OS === 'ios' ? 140 : 80) 
-              : 100
-          }
-        ]}
-        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 300 }]}
+        keyboardShouldPersistTaps="always"
         style={[
           {
             opacity: fadeAnim,
             transform: [{ translateY: slideAnim }],
           },
         ]}
-        keyboardDismissMode="on-drag"
+        keyboardDismissMode="none"
         showsVerticalScrollIndicator={false}
-        maintainVisibleContentPosition={{
-          minIndexForVisible: 0,
-          autoscrollToTopThreshold: 100
-        }}
       >
         <View style={styles.headerContainer}>
           <Text style={[styles.headerSubtitle, isLightTheme && styles.lightText]}>Today</Text>
@@ -837,9 +785,9 @@ const SummaryScreen = ({ navigation }) => {
               style={styles.addTaskButton}
               onPress={() => {
                 setIsAddingTask(true);
-                // 延迟聚焦以让布局动画先执行
                 setTimeout(() => {
                   inputRef.current?.focus();
+                  scrollToInput();
                 }, 100);
               }}
             >
@@ -847,128 +795,137 @@ const SummaryScreen = ({ navigation }) => {
               <Text style={styles.addTaskText}>Add Tomorrow Task</Text>
             </TouchableOpacity>
           ) : (
-            <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "position" : null}
-              keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
-              style={{ width: "100%" }}
-              contentContainerStyle={{ flex: 1 }}
-              enabled={Platform.OS === "ios"}
-            >
-              <View ref={addTaskContainerRef} style={styles.addTaskContainer}>
-                <TextInput
-                  ref={inputRef}
-                  style={styles.taskInput}
-                  placeholder="Enter task..."
-                  placeholderTextColor="#666"
-                  value={newTomorrowTask}
-                  onChangeText={setNewTomorrowTask}
-                  onSubmitEditing={addTomorrowTask}
-                  keyboardAppearance="dark"
-                />
-                <View style={styles.tagButtonsRow}>
-                  {renderTagButtons()}
-                  <View style={styles.spacer} />
-                  <TouchableOpacity
-                    style={[styles.inputButton, styles.cancelButton]}
-                    onPress={() => {
-                      setIsAddingTask(false);
-                      setNewTomorrowTask("");
-                      Keyboard.dismiss();
-                    }}
+            <View style={styles.addTaskWrapperContainer}>
+              <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "position" : null}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+                style={{width: '100%'}}
+                enabled
+              >
+                <ScrollView
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 10 }}
+                >
+                  <View 
+                    ref={addTaskContainerRef}
+                    style={styles.addTaskContainer}
                   >
-                    <AntDesign name="close" size={24} color="#FFFFFF" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.inputButton, styles.saveButton]}
-                    onPress={addTomorrowTask}
-                  >
-                    <AntDesign name="check" size={24} color="#000000" />
-                  </TouchableOpacity>
-                </View>
-                {showTimePicker && (
-                  <View
-                    style={[styles.timePickerContainer, { marginBottom: 20 }]}
-                  >
-                    <CustomDateTimePicker
-                      value={taskTime}
-                      mode="time"
-                      is24Hour={true}
-                      display="spinner"
-                      onChange={onTimeChange}
-                      textColor="#FFFFFF"
-                      themeVariant="dark"
-                      style={styles.timePicker}
-                      minuteInterval={15}
+                    <TextInput
+                      ref={inputRef}
+                      style={styles.taskInput}
+                      placeholder="Enter task..."
+                      placeholderTextColor="#666"
+                      value={newTomorrowTask}
+                      onChangeText={setNewTomorrowTask}
+                      onSubmitEditing={addTomorrowTask}
+                      keyboardAppearance="dark"
                     />
-                  </View>
-                )}
-                {showReminderOptions && (
-                  <View
-                    style={[
-                      styles.reminderOptionsContainer,
-                      { marginBottom: 20 },
-                    ]}
-                  >
-                    <Text style={styles.reminderOptionsTitle}>
-                      Select Reminder Time
-                    </Text>
-                    <View style={styles.reminderButtonsContainer}>
+                    <View style={styles.tagButtonsRow}>
+                      {renderTagButtons()}
+                      <View style={styles.spacer} />
                       <TouchableOpacity
-                        style={[
-                          styles.reminderButton,
-                          reminderTime === 15 && styles.reminderButtonActive,
-                        ]}
-                        onPress={() => selectReminderTime(15)}
+                        style={[styles.inputButton, styles.cancelButton]}
+                        onPress={() => {
+                          setIsAddingTask(false);
+                          setNewTomorrowTask("");
+                          Keyboard.dismiss();
+                        }}
                       >
-                        <Text
-                          style={[
-                            styles.reminderButtonText,
-                            reminderTime === 15 &&
-                              styles.reminderButtonTextActive,
-                          ]}
-                        >
-                          15 min
-                        </Text>
+                        <AntDesign name="close" size={24} color="#FFFFFF" />
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[
-                          styles.reminderButton,
-                          reminderTime === 30 && styles.reminderButtonActive,
-                        ]}
-                        onPress={() => selectReminderTime(30)}
+                        style={[styles.inputButton, styles.saveButton]}
+                        onPress={addTomorrowTask}
                       >
-                        <Text
-                          style={[
-                            styles.reminderButtonText,
-                            reminderTime === 30 &&
-                              styles.reminderButtonTextActive,
-                          ]}
-                        >
-                          30 min
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.reminderButton,
-                          reminderTime === 60 && styles.reminderButtonActive,
-                        ]}
-                        onPress={() => selectReminderTime(60)}
-                      >
-                        <Text
-                          style={[
-                            styles.reminderButtonText,
-                            reminderTime === 60 &&
-                              styles.reminderButtonTextActive,
-                          ]}
-                        >
-                          1 hour
-                        </Text>
+                        <AntDesign name="check" size={24} color="#000000" />
                       </TouchableOpacity>
                     </View>
+                    {showTimePicker && (
+                      <View style={[styles.timePickerContainer, { marginBottom: 20 }]}>
+                        <CustomDateTimePicker
+                          value={taskTime}
+                          mode="time"
+                          is24Hour={true}
+                          display="spinner"
+                          onChange={onTimeChange}
+                          textColor="#FFFFFF"
+                          themeVariant="dark"
+                          style={styles.timePicker}
+                          minuteInterval={15}
+                        />
+                      </View>
+                    )}
+                    {showReminderOptions && (
+                      <View
+                        style={[
+                          styles.reminderOptionsContainer,
+                          { marginBottom: 20 },
+                        ]}
+                        onLayout={() => scrollToInput()}
+                      >
+                        <Text style={styles.reminderOptionsTitle}>
+                          Select Reminder Time
+                        </Text>
+                        <View style={styles.reminderButtonsContainer}>
+                          <TouchableOpacity
+                            style={[
+                              styles.reminderButton,
+                              reminderTime === 15 && styles.reminderButtonActive,
+                            ]}
+                            onPress={() => selectReminderTime(15)}
+                          >
+                            <Text
+                              style={[
+                                styles.reminderButtonText,
+                                reminderTime === 15 &&
+                                  styles.reminderButtonTextActive,
+                              ]}
+                            >
+                              15 min
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.reminderButton,
+                              reminderTime === 30 && styles.reminderButtonActive,
+                            ]}
+                            onPress={() => selectReminderTime(30)}
+                          >
+                            <Text
+                              style={[
+                                styles.reminderButtonText,
+                                reminderTime === 30 &&
+                                  styles.reminderButtonTextActive,
+                              ]}
+                            >
+                              30 min
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.reminderButton,
+                              reminderTime === 60 && styles.reminderButtonActive,
+                            ]}
+                            onPress={() => selectReminderTime(60)}
+                          >
+                            <Text
+                              style={[
+                                styles.reminderButtonText,
+                                reminderTime === 60 &&
+                                  styles.reminderButtonTextActive,
+                              ]}
+                            >
+                              1 hour
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
-            </KeyboardAvoidingView>
+                </ScrollView>
+              </KeyboardAvoidingView>
+            </View>
           )}
 
           {/* Tomorrow task list */}
@@ -1374,7 +1331,7 @@ const styles = StyleSheet.create({
   },
   timePicker: {
     width: Platform.OS === "ios" ? "100%" : 150,
-    height: Platform.OS === "ios" ? 140 : 120,
+    height: Platform.OS === "ios" ? 180 : 150,
   },
   timeTag: {
     backgroundColor: "#555555",
@@ -1416,6 +1373,9 @@ const styles = StyleSheet.create({
   },
   reminderButtonTextActive: {
     color: "#000000",
+  },
+  addTaskWrapperContainer: {
+    marginBottom: 20,
   },
 });
 
