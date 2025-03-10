@@ -94,30 +94,53 @@ export default function FocusScreen({ navigation }) {
     loadUserSettings();
   }, []);
 
-  // Load focus settings
+  // Load focus settings when screen gets focus
+  const [hasInitialized, setHasInitialized] = useState(false);
+  
   useFocusEffect(
     useCallback(() => {
       const loadFocusSettings = async () => {
+        // Skip initial load since it's already handled by initializeSession
+        if (!hasInitialized) {
+          setHasInitialized(true);
+          return;
+        }
+        
         try {
-          const settings = await getSettingsWithDefaults(AsyncStorage);
+          console.log('Screen regained focus, checking for setting changes');
           
-          // Update focus settings
-          setFocusDuration(settings.focusDuration || 25);
-          setBreakDuration(settings.breakDuration || 5);
-          setLongBreakDuration(settings.longBreakDuration || 15);
-          setLongBreakInterval(settings.longBreakInterval || 4);
-          setFocusNotifications(
-            settings.focusNotifications !== undefined
-              ? settings.focusNotifications
-              : true
-          );
-          setAutoStartNextFocus(settings.autoStartNextFocus || false);
+          // Load the latest user settings
+          const userSettings = await getSettingsWithDefaults(AsyncStorage);
           
-          // Initialize timeRemaining with focus duration
-          setTimeRemaining(settings.focusDuration * 60 || 25 * 60);
+          // Check if we have an active session
+          if (hasStartedBefore) {
+            console.log('Active session detected, preserving session progress');
+            // If session already started, only update notifications settings
+            setFocusNotifications(
+              userSettings.focusNotifications !== undefined
+                ? userSettings.focusNotifications
+                : true
+            );
+            setAutoStartNextFocus(userSettings.autoStartNextFocus || false);
+          } else {
+            console.log('No active session, updating all focus settings');
+            // No active session, so update all settings
+            setFocusDuration(userSettings.focusDuration || 25);
+            setBreakDuration(userSettings.breakDuration || 5);
+            setLongBreakDuration(userSettings.longBreakDuration || 15);
+            setLongBreakInterval(userSettings.longBreakInterval || 4);
+            setFocusNotifications(
+              userSettings.focusNotifications !== undefined
+                ? userSettings.focusNotifications
+                : true
+            );
+            setAutoStartNextFocus(userSettings.autoStartNextFocus || false);
+            
+            // Update timer display
+            setTimeRemaining(userSettings.focusDuration * 60 || 25 * 60);
+          }
         } catch (error) {
           console.error("Error loading focus settings:", error);
-          setTimeRemaining(25 * 60);
         }
       };
       
@@ -127,7 +150,7 @@ export default function FocusScreen({ navigation }) {
         // Save session state when screen loses focus
         saveSessionState();
       };
-    }, [])
+    }, [hasStartedBefore, hasInitialized])
   );
 
   // Initialize notification permissions and app state listener
@@ -393,12 +416,22 @@ export default function FocusScreen({ navigation }) {
     return <View style={styles.progressDotsContainer}>{dots}</View>;
   };
 
-  // Save current session state to AsyncStorage
+  // Save the current session state
   const saveSessionState = async () => {
     try {
-      if (!isActive && !hasStartedBefore) return; // Don't save if session never started
+      // Don't save if session never started
+      if (!hasStartedBefore && !isActive) {
+        console.log('Session never started, nothing to save');
+        return;
+      }
+      
+      console.log('Saving focus session state...');
+      
+      // Get current user settings to include with session state
+      const userSettings = await getSettingsWithDefaults(AsyncStorage);
       
       const sessionState = {
+        // Session progress
         timeRemaining,
         isActive,
         isBreak,
@@ -406,10 +439,26 @@ export default function FocusScreen({ navigation }) {
         progress,
         hasStartedBefore,
         sessionStartTime: sessionStartTime.current ? sessionStartTime.current.toISOString() : null,
+        
+        // Save current session settings (what session was actually using)
+        currentFocusDuration: focusDuration,
+        currentBreakDuration: breakDuration,
+        currentLongBreakDuration: longBreakDuration,
+        currentLongBreakInterval: longBreakInterval,
+        
+        // Also save latest user settings (for comparison when restoring)
+        userFocusDuration: userSettings.focusDuration,
+        userBreakDuration: userSettings.breakDuration,
+        userLongBreakDuration: userSettings.longBreakDuration,
+        userLongBreakInterval: userSettings.longBreakInterval,
+        
+        // Metadata
         timestamp: new Date().toISOString()
       };
       
+      // Save to AsyncStorage
       await AsyncStorage.setItem('focusSessionState', JSON.stringify(sessionState));
+      console.log('Focus session state saved successfully');
     } catch (error) {
       console.error('Error saving focus session state:', error);
     }
@@ -418,38 +467,60 @@ export default function FocusScreen({ navigation }) {
   // Restore session state from AsyncStorage
   const restoreSessionState = async () => {
     try {
-      const savedState = await AsyncStorage.getItem('focusSessionState');
-      if (!savedState) {
-        // No saved state found, initialize with default values
-        const defaultDuration = focusDuration * 60;
-        setTimeRemaining(defaultDuration);
-        setProgress(0);
+      console.log('Attempting to restore focus session state');
+      
+      // First load latest user settings
+      const userSettings = await getSettingsWithDefaults(AsyncStorage);
+      
+      // Always update focus settings from user settings
+      setFocusDuration(userSettings.focusDuration || 25);
+      setBreakDuration(userSettings.breakDuration || 5);
+      setLongBreakDuration(userSettings.longBreakDuration || 15);
+      setLongBreakInterval(userSettings.longBreakInterval || 4);
+      
+      // Get saved session state
+      const sessionStateJSON = await AsyncStorage.getItem('focusSessionState');
+      if (!sessionStateJSON) {
+        console.log('No saved session state found, initializing with user settings');
+        setTimeRemaining(userSettings.focusDuration * 60 || 25 * 60);
         return;
       }
       
-      const sessionState = JSON.parse(savedState);
+      console.log('Found saved session state, checking if settings were changed');
+      const sessionState = JSON.parse(sessionStateJSON);
       
-      // Check if saved state is expired (more than 1 hour old)
-      const savedTime = new Date(sessionState.timestamp);
-      const currentTime = new Date();
-      const hoursPassed = (currentTime - savedTime) / (1000 * 60 * 60);
+      // Check if user changed focus settings since last session
+      const settingsChanged = 
+        userSettings.focusDuration !== sessionState.userFocusDuration ||
+        userSettings.breakDuration !== sessionState.userBreakDuration ||
+        userSettings.longBreakDuration !== sessionState.userLongBreakDuration ||
+        userSettings.longBreakInterval !== sessionState.userLongBreakInterval;
       
-      if (hoursPassed > 1) {
-        await AsyncStorage.removeItem('focusSessionState');
+      if (settingsChanged) {
+        console.log('User settings changed, resetting session state');
         
-        // Initialize with default values
-        const defaultDuration = focusDuration * 60;
-        setTimeRemaining(defaultDuration);
+        // Reset session with new settings
+        setTimeRemaining(userSettings.focusDuration * 60 || 25 * 60);
+        setIsBreak(false);
+        setPomodoroCount(0);
         setProgress(0);
+        setHasStartedBefore(false);
+        sessionStartTime.current = null;
+        setIsActive(false);
+        
+        // Remove saved session state since it's now invalid
+        await AsyncStorage.removeItem('focusSessionState');
         return;
       }
       
-      // Restore state
-      setTimeRemaining(sessionState.timeRemaining);
-      setIsBreak(sessionState.isBreak);
-      setPomodoroCount(sessionState.pomodoroCount);
-      setProgress(sessionState.progress);
-      setHasStartedBefore(sessionState.hasStartedBefore);
+      console.log('Restoring session progress (settings unchanged)');
+      
+      // Restore session progress state
+      setTimeRemaining(sessionState.timeRemaining || (userSettings.focusDuration * 60));
+      setIsBreak(sessionState.isBreak || false);
+      setPomodoroCount(sessionState.pomodoroCount || 0);
+      setProgress(sessionState.progress || 0);
+      setHasStartedBefore(sessionState.hasStartedBefore || false);
       
       // Restore session start time
       if (sessionState.sessionStartTime) {
@@ -459,12 +530,14 @@ export default function FocusScreen({ navigation }) {
       // If previously active, don't auto-activate now
       // User needs to manually press "RESUME" button to continue
       setIsActive(false);
+      
+      console.log('Focus session state restored successfully');
     } catch (error) {
       console.error('Error restoring focus session state:', error);
       
       // Initialize with default values in case of error
-      const defaultDuration = focusDuration * 60;
-      setTimeRemaining(defaultDuration);
+      const settings = await getSettingsWithDefaults(AsyncStorage);
+      setTimeRemaining(settings.focusDuration * 60 || 25 * 60);
       setProgress(0);
     }
   };
@@ -502,22 +575,43 @@ export default function FocusScreen({ navigation }) {
   // Restore session state when component mounts
   useEffect(() => {
     const initializeSession = async () => {
-      const isAppRestart = await checkAppRestart();
-      
-      if (isAppRestart) {
-        // If app has restarted, initialize with default values
-        const defaultDuration = focusDuration * 60;
-        setTimeRemaining(defaultDuration);
-        setProgress(0);
-        setIsActive(false);
-        setHasStartedBefore(false);
-        setIsBreak(false);
+      try {
+        // Always load latest user settings
+        const userSettings = await getSettingsWithDefaults(AsyncStorage);
         
-        // Clear any saved session state
-        await AsyncStorage.removeItem('focusSessionState');
-      } else {
-        // Otherwise, try to restore the previous session
-        await restoreSessionState();
+        // Update focus settings from user settings
+        setFocusDuration(userSettings.focusDuration || 25);
+        setBreakDuration(userSettings.breakDuration || 5);
+        setLongBreakDuration(userSettings.longBreakDuration || 15);
+        setLongBreakInterval(userSettings.longBreakInterval || 4);
+        
+        // Check if app has been restarted
+        const isAppRestart = await checkAppRestart();
+        
+        if (isAppRestart) {
+          console.log('App restarted, resetting session progress');
+          
+          // Reset session progress while preserving settings
+          setTimeRemaining(userSettings.focusDuration * 60 || 25 * 60);
+          setProgress(0);
+          setIsActive(false);
+          setHasStartedBefore(false);
+          setIsBreak(false);
+          setPomodoroCount(0);
+          sessionStartTime.current = null;
+          
+          // Clear any saved session state
+          await AsyncStorage.removeItem('focusSessionState');
+        } else {
+          console.log('App resumed, attempting to restore session');
+          // App was just backgrounded/foregrounded, restore previous session
+          await restoreSessionState();
+        }
+      } catch (error) {
+        console.error('Error in initializeSession:', error);
+        // Set safe default values
+        setTimeRemaining(25 * 60);
+        setProgress(0);
       }
     };
     

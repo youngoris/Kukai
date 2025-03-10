@@ -39,21 +39,6 @@ export default function App() {
   // Create navigation reference
   const navigationRef = useRef(null);
 
-  // Reset focus session state when app starts
-  useEffect(() => {
-    const resetFocusSessionState = async () => {
-      try {
-        // Remove the saved focus session state to reset timer on app restart
-        await AsyncStorage.removeItem('focusSessionState');
-        console.log('Focus session state reset on app restart');
-      } catch (error) {
-        console.error('Error resetting focus session state:', error);
-      }
-    };
-
-    resetFocusSessionState();
-  }, []);
-
   // Hide splash screen when fonts are loaded
   useEffect(() => {
     const hideSplash = async () => {
