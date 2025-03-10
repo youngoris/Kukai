@@ -492,20 +492,19 @@ const TaskScreen = ({ navigation }) => {
       return;
     }
 
-    if (showReminderOptions) {
-      // If reminder options are already displayed, click to close options
+    // Toggle reminder status
+    if (hasReminder) {
+      // If reminder is already active, deactivate it
+      setHasReminder(false);
       setShowReminderOptions(false);
-      // Only set hasReminder to true when user actually selects a reminder time
-      if (!reminderTime) {
-        setHasReminder(false);
-      }
     } else {
-      // Show reminder options
+      // If reminder is not active, activate it with default time (15 min)
+      setHasReminder(true);
+      setReminderTime(15); // Set default reminder time
+      
+      // Show reminder options and hide time picker
       setShowReminderOptions(true);
-      // Don't automatically set hasReminder, wait for user to select specific time
-      // setHasReminder(true);
-      // Show reminder options to close time picker, to avoid interface too crowded
-      setShowTimePicker(false);
+      setShowTimePicker(false); // 确保关闭时间选择器
     }
   };
 
@@ -514,6 +513,7 @@ const TaskScreen = ({ navigation }) => {
     console.log(`User selected reminder time: ${minutes} minutes before task`);
     setReminderTime(minutes);
     setHasReminder(true); // User explicitly selected reminder time, set hasReminder to true
+    // Close reminder options after selection
     setShowReminderOptions(false);
   };
 
