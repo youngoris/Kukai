@@ -271,14 +271,46 @@ export default function FocusScreen({ navigation }) {
     setShowConfirmation(false);
   };
 
-  // Handle focus session completion
+  // Load today's pomodoro count from history
+  const loadTodayPomodoroCount = async () => {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const historyString = await AsyncStorage.getItem("focusHistory");
+      
+      if (historyString) {
+        const history = JSON.parse(historyString);
+        // Filter today's sessions (non-break sessions)
+        const todaySessions = history.filter(
+          (session) => 
+            session.date.split('T')[0] === today && 
+            !session.isBreak
+        );
+        
+        // Update pomodoro count with today's sessions count
+        setPomodoroCount(todaySessions.length);
+      } else {
+        setPomodoroCount(0);
+      }
+    } catch (error) {
+      console.error("Error loading today's pomodoro count:", error);
+      setPomodoroCount(0);
+    }
+  };
+
+  // Refresh pomodoro count whenever the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadTodayPomodoroCount();
+    }, [])
+  );
+
+  // Call loadTodayPomodoroCount after a new session is saved
   const handleFocusComplete = async () => {
     // Clear timer
     clearInterval(timer.current);
     
     // Update state
     setIsActive(false);
-    setPomodoroCount((prev) => prev + 1);
     
     // Vibrate device
     Vibration.vibrate([0, 500, 200, 500]);
@@ -307,6 +339,9 @@ export default function FocusScreen({ navigation }) {
       
       // Save updated history
       await AsyncStorage.setItem("focusHistory", JSON.stringify(history));
+      
+      // Reload today's pomodoro count
+      loadTodayPomodoroCount();
     } catch (error) {
       console.error("Error saving focus history:", error);
     }
@@ -483,6 +518,8 @@ export default function FocusScreen({ navigation }) {
       if (!sessionStateJSON) {
         console.log('No saved session state found, initializing with user settings');
         setTimeRemaining(userSettings.focusDuration * 60 || 25 * 60);
+        // Load today's pomodoro count
+        await loadTodayPomodoroCount();
         return;
       }
       
@@ -510,6 +547,10 @@ export default function FocusScreen({ navigation }) {
         
         // Remove saved session state since it's now invalid
         await AsyncStorage.removeItem('focusSessionState');
+        
+        // Load today's pomodoro count
+        await loadTodayPomodoroCount();
+        
         return;
       }
       
@@ -532,6 +573,9 @@ export default function FocusScreen({ navigation }) {
       setIsActive(false);
       
       console.log('Focus session state restored successfully');
+      
+      // Load today's pomodoro count
+      await loadTodayPomodoroCount();
     } catch (error) {
       console.error('Error restoring focus session state:', error);
       
@@ -539,6 +583,9 @@ export default function FocusScreen({ navigation }) {
       const settings = await getSettingsWithDefaults(AsyncStorage);
       setTimeRemaining(settings.focusDuration * 60 || 25 * 60);
       setProgress(0);
+      
+      // Load today's pomodoro count
+      await loadTodayPomodoroCount();
     }
   };
 
@@ -696,6 +743,43 @@ export default function FocusScreen({ navigation }) {
       }
     };
   }, [isActive, keepScreenAwake]);
+
+  // Check if it's a new day and reset the pomodoro count if needed
+  const checkForNewDay = async () => {
+    try {
+      // Get last recorded date
+      const lastDateJson = await AsyncStorage.getItem("lastFocusDate");
+      const today = new Date().toISOString().split("T")[0];
+      
+      // If date is different or no date has been recorded
+      if (!lastDateJson || JSON.parse(lastDateJson) !== today) {
+        // It's a new day, reload the pomodoro count
+        await loadTodayPomodoroCount();
+        
+        // Update last recorded date to today
+        await AsyncStorage.setItem("lastFocusDate", JSON.stringify(today));
+      }
+    } catch (error) {
+      console.error("Error checking for new day:", error);
+    }
+  };
+
+  // Check for new day when the component mounts and becomes active
+  useEffect(() => {
+    checkForNewDay();
+    
+    // Also check when app comes to foreground
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (appState.current === "background" && nextAppState === "active") {
+        checkForNewDay();
+      }
+      appState.current = nextAppState;
+    });
+    
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   // Render interface
   return (
