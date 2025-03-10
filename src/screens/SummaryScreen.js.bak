@@ -288,17 +288,15 @@ const SummaryScreen = ({ navigation }) => {
         await AsyncStorage.setItem("tasks", JSON.stringify([]));
       }
 
-      // Load meditation data (只统计当天的冥想时间)
+      // Load meditation data (only load today's meditation time)
       const meditationSessionsJson =
-        await AsyncStorage.getItem("meditationHistory");
+        await AsyncStorage.getItem("meditation_sessions");
       let todayMeditationMinutes = 0;
       if (meditationSessionsJson) {
         const meditationSessions = JSON.parse(meditationSessionsJson);
-        // 过滤出当天的冥想会话
         const todaySessions = meditationSessions.filter(
-          (session) => session.date.split('T')[0] === today
+          (session) => session.date === today
         );
-        // 只计算当天的冥想时间
         todayMeditationMinutes = todaySessions.reduce(
           (total, session) => total + session.duration,
           0
@@ -306,7 +304,7 @@ const SummaryScreen = ({ navigation }) => {
       }
       setTotalMeditationMinutes(todayMeditationMinutes);
 
-      // Load focus time data (只统计当天的专注时间和番茄钟会话数)
+      // Load focus time data (only load today's focus time)
       const focusHistoryJson = await AsyncStorage.getItem("focusHistory");
       if (focusHistoryJson) {
         const focusHistory = JSON.parse(focusHistoryJson);
@@ -324,10 +322,24 @@ const SummaryScreen = ({ navigation }) => {
         );
         setTotalFocusMinutes(todayMinutes);
         
-        // 计算今天的番茄钟会话数量
+        // 计算今天的Pomodoro会话数量
         setPomodoroCount(todaySessions.length);
       } else {
         setTotalFocusMinutes(0);
+        setPomodoroCount(0);
+      }
+
+      // Load pomodoro count (only load today's pomodoro count)
+      const pomodorosJson = await AsyncStorage.getItem("pomodoros");
+      if (pomodorosJson) {
+        const pomodoros = JSON.parse(pomodorosJson);
+        // Filter today's pomodoro records
+        const todayPomodoros = pomodoros.filter(
+          (pomodoro) => pomodoro.date === today
+        );
+        // Set today's pomodoro count
+        setPomodoroCount(todayPomodoros.length);
+      } else {
         setPomodoroCount(0);
       }
 

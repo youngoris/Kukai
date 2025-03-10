@@ -136,6 +136,9 @@ const SettingsScreen = ({ navigation }) => {
 
   // Focus duration options
   const focusDurations = [
+    { value: 1, label: "1 min" },
+    { value: 5, label: "5 min" },
+    { value: 10, label: "10 min" },
     { value: 15, label: "15 min" },
     { value: 25, label: "25 min" },
     { value: 30, label: "30 min" },
