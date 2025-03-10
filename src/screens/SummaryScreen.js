@@ -14,6 +14,9 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
+  Dimensions,
+  LayoutAnimation,
+  UIManager,
 } from "react-native";
 import {
   AntDesign,
@@ -58,7 +61,9 @@ const SummaryScreen = ({ navigation }) => {
     return defaultTime;
   });
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [appTheme, setAppTheme] = useState('dark');
+  const [appTheme, setAppTheme] = useState("dark");
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -67,13 +72,14 @@ const SummaryScreen = ({ navigation }) => {
   const addTaskContainerRef = useRef(null);
 
   // Define isLightTheme based on appTheme
-  const isLightTheme = appTheme === 'light';
+  const isLightTheme = appTheme === "light";
 
   // Get safe area insets
   const insets = useSafeAreaInsets();
-  
+
   // Get status bar height for Android
-  const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
+  const STATUSBAR_HEIGHT =
+    Platform.OS === "android" ? RNStatusBar.currentHeight || 0 : 0;
 
   // Load user settings
   useEffect(() => {
@@ -84,10 +90,10 @@ const SummaryScreen = ({ navigation }) => {
           setAppTheme(settings.appTheme);
         }
       } catch (error) {
-        console.error('Error loading user settings:', error);
+        console.error("Error loading user settings:", error);
       }
     };
-    
+
     loadUserSettings();
   }, []);
 
@@ -115,28 +121,85 @@ const SummaryScreen = ({ navigation }) => {
     ]).start();
   }, []);
 
-  // Add keyboard event listeners
+  // 启用 LayoutAnimation 在 Android 上
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      "keyboardDidShow",
-      (event) => {
-        // Get keyboard height
-        const keyboardHeight = event.endCoordinates.height;
-        scrollToInput(keyboardHeight);
-      },
-    );
-    const keyboardDidHideListener = Keyboard.addListener(
-      "keyboardDidHide",
-      () => {
-        // When keyboard hides, can choose to scroll to a specific position or do nothing
-      },
-    );
+    if (Platform.OS === 'android') {
+      if (UIManager.setLayoutAnimationEnabledExperimental) {
+        UIManager.setLayoutAnimationEnabledExperimental(true);
+      }
+    }
+  }, []);
+
+  // 使用简化且更可靠的键盘事件处理
+  useEffect(() => {
+    const keyboardWillShowListener = Platform.OS === 'ios' 
+      ? Keyboard.addListener('keyboardWillShow', e => {
+          setKeyboardVisible(true);
+          setKeyboardHeight(e.endCoordinates.height);
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setTimeout(() => scrollToAddTask(), 100);
+        })
+      : Keyboard.addListener('keyboardDidShow', e => {
+          setKeyboardVisible(true);
+          setKeyboardHeight(e.endCoordinates.height);
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setTimeout(() => scrollToAddTask(), 100);
+        });
+
+    const keyboardWillHideListener = Platform.OS === 'ios'
+      ? Keyboard.addListener('keyboardWillHide', () => {
+          setKeyboardVisible(false);
+          setKeyboardHeight(0);
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        })
+      : Keyboard.addListener('keyboardDidHide', () => {
+          setKeyboardVisible(false);
+          setKeyboardHeight(0);
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        });
 
     return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
+      keyboardWillShowListener.remove();
+      keyboardWillHideListener.remove();
     };
   }, []);
+
+  // 专注于滚动到添加任务区域 - 优化版本
+  const scrollToAddTask = () => {
+    // 只有当滚动视图、容器引用和添加任务状态都有效时才执行
+    if (scrollViewRef.current && addTaskContainerRef.current && isAddingTask) {
+      // 为确保组件已正确渲染和测量，使用短延迟
+      setTimeout(() => {
+        if (addTaskContainerRef.current) {
+          addTaskContainerRef.current.measure((x, y, width, height, pageX, pageY) => {
+            // 计算任务输入区域相对于可见区域的位置
+            const screenHeight = Dimensions.get('window').height;
+            const keyboardSpaceHeight = keyboardHeight + (Platform.OS === 'ios' ? 40 : 20);
+            const visibleAreaHeight = screenHeight - keyboardSpaceHeight;
+            
+            // 只有当输入区域被键盘遮挡时才滚动
+            const inputBottom = pageY + height;
+            if (inputBottom > visibleAreaHeight) {
+              const scrollToY = Math.max(0, pageY - 120); // 给顶部留120px的空间
+              
+              scrollViewRef.current.scrollTo({
+                y: scrollToY,
+                animated: true
+              });
+            }
+            // 否则保持当前位置不变
+          });
+        }
+      }, 50);
+    }
+  };
+
+  // 使组件在布局后自动测量
+  useEffect(() => {
+    if (isAddingTask && keyboardVisible) {
+      scrollToAddTask();
+    }
+  }, [isAddingTask, keyboardVisible]);
 
   const checkDailyReset = async () => {
     try {
@@ -151,7 +214,7 @@ const SummaryScreen = ({ navigation }) => {
       // If date is different or no date has been recorded, perform daily reset
       if (!lastDateJson || JSON.parse(lastDateJson) !== today) {
         await resetDailyPomodoroCount(
-          lastDateJson ? JSON.parse(lastDateJson) : null,
+          lastDateJson ? JSON.parse(lastDateJson) : null
         );
 
         // Update last recorded date to today
@@ -284,11 +347,11 @@ const SummaryScreen = ({ navigation }) => {
       if (meditationSessionsJson) {
         const meditationSessions = JSON.parse(meditationSessionsJson);
         const todaySessions = meditationSessions.filter(
-          (session) => session.date === today,
+          (session) => session.date === today
         );
         todayMeditationMinutes = todaySessions.reduce(
           (total, session) => total + session.duration,
-          0,
+          0
         );
       }
       setTotalMeditationMinutes(todayMeditationMinutes);
@@ -298,11 +361,11 @@ const SummaryScreen = ({ navigation }) => {
       if (focusSessionsJson) {
         const focusSessions = JSON.parse(focusSessionsJson);
         const todaySessions = focusSessions.filter(
-          (session) => session.date === today,
+          (session) => session.date === today
         );
         const todayMinutes = todaySessions.reduce(
           (total, session) => total + Math.round(session.duration / 60),
-          0,
+          0
         );
         setTotalFocusMinutes(todayMinutes);
       } else {
@@ -315,7 +378,7 @@ const SummaryScreen = ({ navigation }) => {
         const pomodoros = JSON.parse(pomodorosJson);
         // Filter today's pomodoro records
         const todayPomodoros = pomodoros.filter(
-          (pomodoro) => pomodoro.date === today,
+          (pomodoro) => pomodoro.date === today
         );
         // Set today's pomodoro count
         setPomodoroCount(todayPomodoros.length);
@@ -361,7 +424,7 @@ const SummaryScreen = ({ navigation }) => {
         Alert.alert(
           "Reminder Setup",
           "You need to set a task time first to add a reminder",
-          [{ text: "OK", onPress: () => handleTimeTagPress() }],
+          [{ text: "OK", onPress: () => handleTimeTagPress() }]
         );
         return;
       }
@@ -432,7 +495,7 @@ const SummaryScreen = ({ navigation }) => {
       Alert.alert(
         "Success",
         "Tomorrow's tasks have been added to the task list",
-        [{ text: "View Tasks", onPress: () => navigation.navigate("Task") }],
+        [{ text: "View Tasks", onPress: () => navigation.navigate("Task") }]
       );
     } catch (error) {
       console.error("Error transferring tasks:", error);
@@ -475,10 +538,15 @@ const SummaryScreen = ({ navigation }) => {
       setShowReminderOptions(false);
     } else {
       // If there's no time tag, click to display picker and activate tag
+      // 先设置状态，再应用动画
       setShowTimePicker(true);
       setIsTimeTagged(true);
-      // Scroll to visible area
-      setTimeout(() => scrollToInput(), 100);
+      
+      // 使用LayoutAnimation使转换更平滑，但不滚动位置，保持当前所见即所得
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      
+      // 删除这一行，不要自动滚动，保持当前可见区域
+      // setTimeout(() => scrollToAddTask(), 100);
     }
   };
 
@@ -492,10 +560,13 @@ const SummaryScreen = ({ navigation }) => {
         [
           { text: "Set Time", onPress: () => handleTimeTagPress() },
           { text: "Cancel", style: "cancel" },
-        ],
+        ]
       );
       return;
     }
+
+    // 使用LayoutAnimation使转换更平滑
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
     if (showReminderOptions) {
       // If options are displayed, hide options (but do not change reminder status)
@@ -512,8 +583,9 @@ const SummaryScreen = ({ navigation }) => {
       setHasReminder(true);
       // Close time picker when reminder options are displayed to avoid interface crowding
       setShowTimePicker(false);
-      // Scroll to visible area
-      setTimeout(() => scrollToInput(), 100);
+      
+      // 不需要滚动，保持当前视图位置不变
+      // setTimeout(() => scrollToAddTask(), 100);
     }
   };
 
@@ -522,6 +594,8 @@ const SummaryScreen = ({ navigation }) => {
     setReminderTime(minutes);
     setHasReminder(true);
     setShowReminderOptions(false);
+    // 选择后更新布局但不滚动
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   };
 
   // Render tag buttons
@@ -584,47 +658,32 @@ const SummaryScreen = ({ navigation }) => {
     </View>
   );
 
-  // Add automatic scroll to input area function
-  const scrollToInput = (keyboardHeight = 300) => {
-    // Give keyboard pop time, then scroll
-    setTimeout(() => {
-      if (scrollViewRef.current && addTaskContainerRef.current) {
-        // Measure added task container in scroll view
-        addTaskContainerRef.current.measureLayout(
-          scrollViewRef.current,
-          (x, y, width, height) => {
-            // Calculate appropriate scroll position, ensuring the element maintains a 10px distance from the keyboard top
-            const scrollPosition = y - 10; // Maintain 10px distance
-            scrollViewRef.current.scrollTo({
-              y: scrollPosition,
-              animated: true,
-            });
-          },
-          (error) => {
-            console.error("Error measuring layout:", error);
-            // If reference is unavailable, fall back to the default scrollToEnd method
-            scrollViewRef.current?.scrollToEnd({ animated: true });
-          },
-        );
-      } else {
-        // If reference is unavailable, fall back to the default scrollToEnd method
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }
-    }, 300);
+  // 简化滚动逻辑
+  const scrollToInput = () => {
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollToEnd({ animated: true });
+    }
   };
 
   return (
-    <View style={[
-      styles.container, 
-      isLightTheme && styles.lightContainer,
-      { 
-        paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
-        paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
-      }
-    ]}>
+    <View
+      style={[
+        styles.container,
+        isLightTheme && styles.lightContainer,
+        {
+          paddingTop:
+            Platform.OS === "android"
+              ? STATUSBAR_HEIGHT + 40
+              : insets.top > 0
+              ? insets.top + 10
+              : 20,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
+        },
+      ]}
+    >
       <RNStatusBar hidden={true} />
-      
-      <CustomHeader 
+
+      <CustomHeader
         title="SUMMARY"
         onBackPress={() => navigation.navigate("Home")}
         showBottomBorder={false}
@@ -632,7 +691,14 @@ const SummaryScreen = ({ navigation }) => {
 
       <Animated.ScrollView
         ref={scrollViewRef}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent, 
+          {
+            paddingBottom: keyboardVisible 
+              ? keyboardHeight + (Platform.OS === 'ios' ? 140 : 80) 
+              : 100
+          }
+        ]}
         keyboardShouldPersistTaps="handled"
         style={[
           {
@@ -640,8 +706,12 @@ const SummaryScreen = ({ navigation }) => {
             transform: [{ translateY: slideAnim }],
           },
         ]}
-        keyboardDismissMode="interactive"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+          autoscrollToTopThreshold: 100
+        }}
       >
         <View style={styles.headerContainer}>
           <Text style={[styles.headerSubtitle, isLightTheme && styles.lightText]}>Today</Text>
@@ -767,9 +837,9 @@ const SummaryScreen = ({ navigation }) => {
               style={styles.addTaskButton}
               onPress={() => {
                 setIsAddingTask(true);
+                // 延迟聚焦以让布局动画先执行
                 setTimeout(() => {
                   inputRef.current?.focus();
-                  scrollToInput();
                 }, 100);
               }}
             >
@@ -777,153 +847,128 @@ const SummaryScreen = ({ navigation }) => {
               <Text style={styles.addTaskText}>Add Tomorrow Task</Text>
             </TouchableOpacity>
           ) : (
-            <View style={styles.addTaskWrapperContainer}>
-              <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "position" : null}
-                keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-                style={{ width: "100%" }}
-                enabled
-              >
-                <ScrollView
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={{ paddingBottom: 10 }}
-                >
-                  <View
-                    ref={addTaskContainerRef}
-                    style={styles.addTaskContainer}
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "position" : null}
+              keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+              style={{ width: "100%" }}
+              contentContainerStyle={{ flex: 1 }}
+              enabled={Platform.OS === "ios"}
+            >
+              <View ref={addTaskContainerRef} style={styles.addTaskContainer}>
+                <TextInput
+                  ref={inputRef}
+                  style={styles.taskInput}
+                  placeholder="Enter task..."
+                  placeholderTextColor="#666"
+                  value={newTomorrowTask}
+                  onChangeText={setNewTomorrowTask}
+                  onSubmitEditing={addTomorrowTask}
+                  keyboardAppearance="dark"
+                />
+                <View style={styles.tagButtonsRow}>
+                  {renderTagButtons()}
+                  <View style={styles.spacer} />
+                  <TouchableOpacity
+                    style={[styles.inputButton, styles.cancelButton]}
+                    onPress={() => {
+                      setIsAddingTask(false);
+                      setNewTomorrowTask("");
+                      Keyboard.dismiss();
+                    }}
                   >
-                    <TextInput
-                      ref={inputRef}
-                      style={styles.taskInput}
-                      placeholder="Enter task..."
-                      placeholderTextColor="#666"
-                      value={newTomorrowTask}
-                      onChangeText={setNewTomorrowTask}
-                      onSubmitEditing={addTomorrowTask}
-                      keyboardAppearance="dark"
+                    <AntDesign name="close" size={24} color="#FFFFFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.inputButton, styles.saveButton]}
+                    onPress={addTomorrowTask}
+                  >
+                    <AntDesign name="check" size={24} color="#000000" />
+                  </TouchableOpacity>
+                </View>
+                {showTimePicker && (
+                  <View
+                    style={[styles.timePickerContainer, { marginBottom: 20 }]}
+                  >
+                    <CustomDateTimePicker
+                      value={taskTime}
+                      mode="time"
+                      is24Hour={true}
+                      display="spinner"
+                      onChange={onTimeChange}
+                      textColor="#FFFFFF"
+                      themeVariant="dark"
+                      style={styles.timePicker}
+                      minuteInterval={15}
                     />
-                    <View style={styles.tagButtonsRow}>
-                      {renderTagButtons()}
-                      <View style={styles.spacer} />
+                  </View>
+                )}
+                {showReminderOptions && (
+                  <View
+                    style={[
+                      styles.reminderOptionsContainer,
+                      { marginBottom: 20 },
+                    ]}
+                  >
+                    <Text style={styles.reminderOptionsTitle}>
+                      Select Reminder Time
+                    </Text>
+                    <View style={styles.reminderButtonsContainer}>
                       <TouchableOpacity
-                        style={[styles.inputButton, styles.cancelButton]}
-                        onPress={() => {
-                          setIsAddingTask(false);
-                          setNewTomorrowTask("");
-                          setIsFrogTask(false);
-                          setIsImportant(false);
-                          setIsUrgent(false);
-                          setIsTimeTagged(false);
-                          setShowTimePicker(false);
-                          setHasReminder(false);
-                          setShowReminderOptions(false);
-                          Keyboard.dismiss();
-                        }}
+                        style={[
+                          styles.reminderButton,
+                          reminderTime === 15 && styles.reminderButtonActive,
+                        ]}
+                        onPress={() => selectReminderTime(15)}
                       >
-                        <AntDesign name="close" size={24} color="#FFFFFF" />
+                        <Text
+                          style={[
+                            styles.reminderButtonText,
+                            reminderTime === 15 &&
+                              styles.reminderButtonTextActive,
+                          ]}
+                        >
+                          15 min
+                        </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.inputButton, styles.saveButton]}
-                        onPress={addTomorrowTask}
+                        style={[
+                          styles.reminderButton,
+                          reminderTime === 30 && styles.reminderButtonActive,
+                        ]}
+                        onPress={() => selectReminderTime(30)}
                       >
-                        <AntDesign name="check" size={24} color="#000000" />
+                        <Text
+                          style={[
+                            styles.reminderButtonText,
+                            reminderTime === 30 &&
+                              styles.reminderButtonTextActive,
+                          ]}
+                        >
+                          30 min
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.reminderButton,
+                          reminderTime === 60 && styles.reminderButtonActive,
+                        ]}
+                        onPress={() => selectReminderTime(60)}
+                      >
+                        <Text
+                          style={[
+                            styles.reminderButtonText,
+                            reminderTime === 60 &&
+                              styles.reminderButtonTextActive,
+                          ]}
+                        >
+                          1 hour
+                        </Text>
                       </TouchableOpacity>
                     </View>
-
-                    {showTimePicker && (
-                      <View
-                        style={[
-                          styles.timePickerContainer,
-                          { marginBottom: 20 },
-                        ]}
-                      >
-                        <CustomDateTimePicker
-                          value={taskTime}
-                          mode="time"
-                          is24Hour={true}
-                          display="spinner"
-                          onChange={onTimeChange}
-                          textColor="#FFFFFF"
-                          themeVariant="dark"
-                          style={styles.timePicker}
-                          minuteInterval={15}
-                        />
-                      </View>
-                    )}
-
-                    {showReminderOptions && (
-                      <View
-                        style={[
-                          styles.reminderOptionsContainer,
-                          { marginBottom: 20 },
-                        ]}
-                      >
-                        <Text style={styles.reminderOptionsTitle}>
-                          Select Reminder Time
-                        </Text>
-                        <View style={styles.reminderButtonsContainer}>
-                          <TouchableOpacity
-                            style={[
-                              styles.reminderButton,
-                              reminderTime === 15 &&
-                                styles.reminderButtonActive,
-                            ]}
-                            onPress={() => selectReminderTime(15)}
-                          >
-                            <Text
-                              style={[
-                                styles.reminderButtonText,
-                                reminderTime === 15 &&
-                                  styles.reminderButtonTextActive,
-                              ]}
-                            >
-                              15 min
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[
-                              styles.reminderButton,
-                              reminderTime === 30 &&
-                                styles.reminderButtonActive,
-                            ]}
-                            onPress={() => selectReminderTime(30)}
-                          >
-                            <Text
-                              style={[
-                                styles.reminderButtonText,
-                                reminderTime === 30 &&
-                                  styles.reminderButtonTextActive,
-                              ]}
-                            >
-                              30 min
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[
-                              styles.reminderButton,
-                              reminderTime === 60 &&
-                                styles.reminderButtonActive,
-                            ]}
-                            onPress={() => selectReminderTime(60)}
-                          >
-                            <Text
-                              style={[
-                                styles.reminderButtonText,
-                                reminderTime === 60 &&
-                                  styles.reminderButtonTextActive,
-                              ]}
-                            >
-                              1 hour
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    )}
                   </View>
-                </ScrollView>
-              </KeyboardAvoidingView>
-            </View>
+                )}
+              </View>
+            </KeyboardAvoidingView>
           )}
 
           {/* Tomorrow task list */}
@@ -969,7 +1014,7 @@ const SummaryScreen = ({ navigation }) => {
                             <Text style={styles.taskTagText}>
                               {new Date(item.taskTime).toLocaleTimeString(
                                 [],
-                                { hour: "2-digit", minute: "2-digit" },
+                                { hour: "2-digit", minute: "2-digit" }
                               )}
                             </Text>
                           </View>
@@ -988,9 +1033,7 @@ const SummaryScreen = ({ navigation }) => {
                         )}
                       </View>
                     </View>
-                    <TouchableOpacity
-                      onPress={() => deleteTomorrowTask(item.id)}
-                    >
+                    <TouchableOpacity onPress={() => deleteTomorrowTask(item.id)}>
                       <AntDesign name="close" size={18} color="#666666" />
                     </TouchableOpacity>
                   </View>
@@ -1003,9 +1046,7 @@ const SummaryScreen = ({ navigation }) => {
                 onPress={transferTomorrowTasks}
               >
                 <AntDesign name="swap" size={18} color="#000000" />
-                <Text style={styles.transferButtonText}>
-                  Move to Task List
-                </Text>
+                <Text style={styles.transferButtonText}>Move to Task List</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -1223,79 +1264,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginBottom: 15,
   },
-  inputButtonsContainer: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-  },
-  inputButton: {
-    paddingVertical: 5,
-    paddingHorizontal: 5,
-    borderRadius: 8,
-    marginLeft: 10,
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cancelButton: {
-    backgroundColor: "#333",
-  },
-  saveButton: {
-    backgroundColor: "#FFFFFF", // Changed to white
-  },
-  inputButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  tomorrowTaskItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#111",
-    borderRadius: 8,
-    padding: 20,
-    marginBottom: 15,
-  },
-  tomorrowTaskContent: {
-    flex: 1,
-  },
-  tomorrowTaskText: {
-    color: "#fff",
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  transferButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    backgroundColor: "#FFFFFF", // Changed to white
-    marginTop: 10,
-    marginBottom: 20,
-    justifyContent: "center",
-  },
-  transferButtonText: {
-    color: "#000000",
-    fontSize: 14,
-    fontWeight: "500",
-    marginLeft: 6,
-  },
-  statRowContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 15,
-  },
-  statItemHalf: {
-    flex: 1,
-    paddingHorizontal: 10,
-  },
-  verticalDivider: {
-    width: 1,
-    backgroundColor: "#333",
-    alignSelf: "stretch",
-  },
   tagButtonsContainer: {
     flexDirection: "row",
     justifyContent: "flex-start",
@@ -1333,29 +1301,93 @@ const styles = StyleSheet.create({
   spacer: {
     flex: 1,
   },
+  inputButton: {
+    paddingVertical: 5,
+    paddingHorizontal: 5,
+    borderRadius: 8,
+    marginLeft: 10,
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cancelButton: {
+    backgroundColor: "#333",
+  },
+  saveButton: {
+    backgroundColor: "#FFFFFF",
+  },
+  tomorrowTaskItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#111",
+    borderRadius: 8,
+    padding: 20,
+    marginBottom: 15,
+  },
+  tomorrowTaskContent: {
+    flex: 1,
+  },
+  tomorrowTaskText: {
+    color: "#fff",
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  transferButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: "#FFFFFF",
+    marginTop: 10,
+    marginBottom: 20,
+    justifyContent: "center",
+  },
+  transferButtonText: {
+    color: "#000000",
+    fontSize: 14,
+    fontWeight: "500",
+    marginLeft: 6,
+  },
+  statRowContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 15,
+  },
+  statItemHalf: {
+    flex: 1,
+    paddingHorizontal: 10,
+  },
+  verticalDivider: {
+    width: 1,
+    backgroundColor: "#333",
+    alignSelf: "stretch",
+  },
   timePickerContainer: {
     marginTop: 15,
     backgroundColor: "#222",
     borderRadius: 8,
     overflow: "hidden",
-    marginBottom: 20, // Increase bottom margin to create more space between buttons and border
+    marginBottom: 20,
   },
   timePicker: {
     width: Platform.OS === "ios" ? "100%" : 150,
     height: Platform.OS === "ios" ? 140 : 120,
   },
   timeTag: {
-    backgroundColor: "#555555", // Time tag gray background
+    backgroundColor: "#555555",
   },
   reminderTag: {
-    backgroundColor: "#9C27B0", // Purple background
+    backgroundColor: "#9C27B0",
   },
   reminderOptionsContainer: {
     marginTop: 15,
     backgroundColor: "#222",
     borderRadius: 8,
     padding: 10,
-    marginBottom: 20, // Increase bottom margin to create more space between buttons and border
+    marginBottom: 20,
   },
   reminderOptionsTitle: {
     color: "#FFFFFF",
@@ -1376,14 +1408,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   reminderButtonActive: {
-    backgroundColor: "#FFFFFF", // Changed to white background
+    backgroundColor: "#FFFFFF",
   },
   reminderButtonText: {
     color: "#FFFFFF",
     fontSize: 14,
   },
   reminderButtonTextActive: {
-    color: "#000000", // Text is black when active
+    color: "#000000",
   },
 });
 
