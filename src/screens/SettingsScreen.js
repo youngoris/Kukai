@@ -145,7 +145,7 @@ const SettingsScreen = ({ navigation }) => {
     { value: 45, label: "45 min" },
     { value: 60, label: "60 min" },
   ];
-
+ NHU8
   // Break duration options
   const breakDurations = [
     { value: 3, label: "3 min" },
