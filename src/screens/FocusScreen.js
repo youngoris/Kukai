@@ -975,7 +975,7 @@ const styles = StyleSheet.create({
     fontWeight: "200",
     fontFamily:
       Platform.OS === "ios"
-        ? "Courier New" // iOS上更美观的等宽字体
+        ? "Courier New" 
         : "monospace",
     textAlign: "center",
   },
