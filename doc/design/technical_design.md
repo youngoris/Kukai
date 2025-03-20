@@ -331,3 +331,4 @@ class PerformanceMonitor {
   reportMetrics(): void;
 }
 ```
+

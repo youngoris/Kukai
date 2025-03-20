@@ -124,7 +124,7 @@ Based on the assessment criteria, we will focus on the following enhancement str
   - Investigate journaling therapeutic benefits
   - Explore app-based intervention studies
 
-- **Evidence-Based Features**
+- ==**Evidence-Based Features**==
   - Implement scientifically validated meditation techniques
   - Design task management based on research-backed productivity methods
   - Create journal prompts based on positive psychology research
