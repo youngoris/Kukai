@@ -1,10 +1,19 @@
-import { BaseDAO } from './BaseDAO';
+/**
+ * MeditationDAO - Data Access Object for meditation sessions
+ * Provides meditation-specific database operations
+ */
+import BaseDAO from './BaseDAO';
 
-export class MeditationDAO extends BaseDAO {
+class MeditationDAO extends BaseDAO {
   constructor() {
     super('meditation_sessions');
   }
 
+  /**
+   * Create a new meditation session
+   * @param {Object} session - Session data
+   * @returns {Promise<Object>} Result with insertId on success
+   */
   async createSession(session) {
     const data = {
       id: session.id,
@@ -129,4 +138,7 @@ export class MeditationDAO extends BaseDAO {
       WHERE start_time BETWEEN ? AND ?
     `, [startDate.toISOString(), endDate.toISOString()]);
   }
-} 
+}
+
+// Export singleton instance
+export default new MeditationDAO(); 

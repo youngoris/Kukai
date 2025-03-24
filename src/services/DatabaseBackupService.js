@@ -8,6 +8,7 @@ import databaseService from './DatabaseService';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { Platform } from 'react-native';
+import configService from './ConfigService';
 
 // Tables to backup
 const TABLES_TO_BACKUP = [
@@ -25,310 +26,459 @@ const BACKUP_COUNT_KEY = '@backupCount';
 
 class DatabaseBackupService {
   constructor() {
-    // Create backup directory if it doesn't exist
-    this.backupDir = `${FileSystem.documentDirectory}backups/`;
-    this.ensureBackupDirExists();
+    this.backupDir = FileSystem.documentDirectory + 'backups/';
+    this.backupConfig = {
+      enabled: false,
+      frequency: 'weekly', // daily, weekly, monthly
+      keep_count: 5, // Number of backups to keep
+      auto_backup_on_app_start: true
+    };
   }
 
-  async ensureBackupDirExists() {
-    const dirInfo = await FileSystem.getInfoAsync(this.backupDir);
-    if (!dirInfo.exists) {
-      await FileSystem.makeDirectoryAsync(this.backupDir, { intermediates: true });
-      console.log('Created backup directory');
+  /**
+   * Initialize the backup service
+   */
+  async initialize() {
+    try {
+      // Ensure backup directory exists
+      await this.ensureBackupDirectory();
+      
+      // Load backup configuration
+      await this.loadBackupConfig();
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to initialize backup service:', error);
+      return { success: false, error };
     }
   }
 
-  // Create a backup of the database
-  async createBackup(includeMetadata = true) {
+  /**
+   * Ensure backup directory exists
+   */
+  async ensureBackupDirectory() {
     try {
-      await this.ensureBackupDirExists();
+      const dirInfo = await FileSystem.getInfoAsync(this.backupDir);
       
-      // Generate backup data
-      const backupData = {
-        tables: {},
-        metadata: includeMetadata ? await this.getBackupMetadata() : null,
-        timestamp: new Date().toISOString(),
-        appVersion: '1.0.0' // Should come from app config
-      };
-      
-      // Export data from each table
-      for (const table of TABLES_TO_BACKUP) {
-        const tableData = await databaseService.query(`SELECT * FROM ${table}`);
-        backupData.tables[table] = tableData;
+      if (!dirInfo.exists) {
+        await FileSystem.makeDirectoryAsync(this.backupDir, { intermediates: true });
+        console.log('Created backup directory');
       }
       
-      // Create backup file
-      const timestamp = new Date().toISOString().replace(/:/g, '-');
-      const backupFileName = `kukai_backup_${timestamp}.json`;
-      const backupPath = `${this.backupDir}${backupFileName}`;
+      return true;
+    } catch (error) {
+      console.error('Error creating backup directory:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Load backup configuration from ConfigService
+   */
+  async loadBackupConfig() {
+    try {
+      const savedConfig = await configService.getItem('backup_config');
+      if (savedConfig) {
+        this.backupConfig = { ...this.backupConfig, ...savedConfig };
+      } else {
+        // Save default config if none exists
+        await configService.setItem('backup_config', this.backupConfig);
+      }
+    } catch (error) {
+      console.error('Error loading backup config:', error);
+    }
+  }
+
+  /**
+   * Save backup configuration
+   */
+  async saveBackupConfig(config) {
+    try {
+      this.backupConfig = { ...this.backupConfig, ...config };
+      await configService.setItem('backup_config', this.backupConfig);
       
+      // If backup is enabled, schedule next backup
+      if (this.backupConfig.enabled) {
+        await this.scheduleNextBackup();
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving backup config:', error);
+      return { success: false, error };
+    }
+  }
+
+  /**
+   * Schedule next automatic backup
+   */
+  async scheduleNextBackup() {
+    const nextBackupDate = this.calculateNextBackupDate();
+    await configService.setItem('next_automatic_backup', nextBackupDate.toISOString());
+    console.log(`Next backup scheduled for: ${nextBackupDate.toISOString()}`);
+    return nextBackupDate;
+  }
+
+  /**
+   * Calculate next backup date based on frequency
+   */
+  calculateNextBackupDate() {
+    const now = new Date();
+    let nextDate = new Date();
+    
+    switch (this.backupConfig.frequency) {
+      case 'daily':
+        nextDate.setDate(now.getDate() + 1);
+        break;
+      case 'weekly':
+        nextDate.setDate(now.getDate() + 7);
+        break;
+      case 'monthly':
+        nextDate.setMonth(now.getMonth() + 1);
+        break;
+      default:
+        nextDate.setDate(now.getDate() + 7); // Default to weekly
+    }
+    
+    return nextDate;
+  }
+
+  /**
+   * Check if automatic backup is needed and perform it if so
+   */
+  async checkAutomaticBackup() {
+    try {
+      // If automatic backup is disabled, do nothing
+      if (!this.backupConfig.enabled) {
+        return { needed: false };
+      }
+      
+      // Check if next backup date is set
+      const nextBackupDateStr = await configService.getItem('next_automatic_backup');
+      if (!nextBackupDateStr) {
+        // If not set, schedule one and return
+        await this.scheduleNextBackup();
+        return { needed: false };
+      }
+      
+      // Check if it's time for backup
+      const nextBackupDate = new Date(nextBackupDateStr);
+      const now = new Date();
+      
+      if (now >= nextBackupDate) {
+        console.log('Automatic backup needed');
+        
+        // Create automatic backup
+        const backupName = `auto_${now.toISOString().split('T')[0]}`;
+        const backupResult = await this.createBackup(backupName);
+        
+        // Schedule next backup
+        await this.scheduleNextBackup();
+        
+        // Clean up old backups
+        await this.cleanupOldBackups();
+        
+        return { 
+          needed: true, 
+          performed: true, 
+          result: backupResult 
+        };
+      }
+      
+      return { 
+        needed: false, 
+        nextBackup: nextBackupDate 
+      };
+    } catch (error) {
+      console.error('Error checking automatic backup:', error);
+      return { 
+        needed: false, 
+        error 
+      };
+    }
+  }
+
+  /**
+   * Clean up old backups, keeping only the specified number
+   */
+  async cleanupOldBackups() {
+    try {
+      // Get list of backups
+      const backupsList = await this.getBackupsList();
+      
+      if (!backupsList.success) {
+        return { success: false, error: backupsList.error };
+      }
+      
+      // Filter automatic backups
+      const autoBackups = backupsList.backups.filter(
+        backup => backup.name.startsWith('auto_')
+      );
+      
+      // If we have more than keep_count backups, delete oldest ones
+      if (autoBackups.length > this.backupConfig.keep_count) {
+        // Sort by date (newest first)
+        autoBackups.sort((a, b) => b.created - a.created);
+        
+        // Get backups to delete
+        const backupsToDelete = autoBackups.slice(this.backupConfig.keep_count);
+        
+        // Delete each backup
+        for (const backup of backupsToDelete) {
+          try {
+            await FileSystem.deleteAsync(backup.path);
+            console.log(`Deleted old backup: ${backup.name}`);
+          } catch (error) {
+            console.error(`Error deleting backup ${backup.name}:`, error);
+          }
+        }
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error cleaning up old backups:', error);
+      return { success: false, error };
+    }
+  }
+
+  /**
+   * Get list of available backups
+   */
+  async getBackupsList() {
+    try {
+      // Ensure backup directory exists
+      await this.ensureBackupDirectory();
+      
+      // Get files in backup directory
+      const fileList = await FileSystem.readDirectoryAsync(this.backupDir);
+      
+      // Filter only .json files
+      const backupFiles = fileList.filter(file => file.endsWith('.json'));
+      
+      // Get info for each backup
+      const backups = await Promise.all(
+        backupFiles.map(async (fileName) => {
+          try {
+            const fileInfo = await FileSystem.getInfoAsync(this.backupDir + fileName);
+            
+            // Parse creation date from file name if possible
+            let created;
+            if (fileName.startsWith('auto_') || fileName.startsWith('backup_')) {
+              const dateStr = fileName.split('_')[1].split('.')[0];
+              created = new Date(dateStr);
+              if (isNaN(created.getTime())) {
+                created = new Date(fileInfo.modificationTime * 1000);
+              }
+            } else {
+              created = new Date(fileInfo.modificationTime * 1000);
+            }
+            
+            return {
+              name: fileName.replace('.json', ''),
+              path: this.backupDir + fileName,
+              size: fileInfo.size,
+              created
+            };
+          } catch (error) {
+            console.error(`Error getting info for ${fileName}:`, error);
+            return null;
+          }
+        })
+      );
+      
+      // Filter out null entries and sort by date (newest first)
+      const validBackups = backups.filter(Boolean).sort((a, b) => b.created - a.created);
+      
+      return { success: true, backups: validBackups };
+    } catch (error) {
+      console.error('Error getting backups list:', error);
+      return { success: false, error };
+    }
+  }
+
+  /**
+   * Create a database backup
+   */
+  async createBackup(name = null) {
+    try {
+      // Generate backup name if not provided
+      const backupName = name || `backup_${new Date().toISOString().split('T')[0]}`;
+      const backupPath = this.backupDir + backupName + '.json';
+      
+      // Ensure backup directory exists
+      await this.ensureBackupDirectory();
+      
+      // Get database version
+      const dbVersion = await databaseService.getDbVersion();
+      
+      // Get all tables
+      const tables = await databaseService.getAllTableNames();
+      
+      // Get data from each table
+      const backupData = {
+        version: dbVersion,
+        timestamp: new Date().toISOString(),
+        tables: {}
+      };
+      
+      for (const table of tables) {
+        try {
+          const tableData = await databaseService.query(`SELECT * FROM ${table}`);
+          backupData.tables[table] = tableData;
+        } catch (error) {
+          console.error(`Error backing up table ${table}:`, error);
+          backupData.tables[table] = { error: error.message };
+        }
+      }
+      
+      // Write backup to file
       await FileSystem.writeAsStringAsync(
         backupPath,
         JSON.stringify(backupData, null, 2)
       );
       
-      // Update backup metadata
-      await this.updateBackupMetadata();
+      console.log(`Backup created: ${backupName}`);
       
-      console.log(`Backup created at ${backupPath}`);
-      return { success: true, path: backupPath, fileName: backupFileName };
+      return { 
+        success: true, 
+        path: backupPath, 
+        name: backupName,
+        timestamp: backupData.timestamp
+      };
     } catch (error) {
-      console.error('Failed to create backup:', error);
+      console.error('Error creating backup:', error);
       return { success: false, error };
     }
   }
-  
-  // Share a backup file
-  async shareBackup() {
+
+  /**
+   * Restore a database backup
+   */
+  async restoreBackup(backupNameOrPath) {
     try {
-      const result = await this.createBackup();
-      if (!result.success) {
-        throw new Error('Failed to create backup');
+      // Determine backup path
+      let backupPath = backupNameOrPath;
+      if (!backupPath.includes('/')) {
+        backupPath = this.backupDir + backupNameOrPath + 
+          (backupNameOrPath.endsWith('.json') ? '' : '.json');
       }
       
-      if (!(await Sharing.isAvailableAsync())) {
-        throw new Error('Sharing is not available on this device');
-      }
-      
-      await Sharing.shareAsync(result.path, {
-        mimeType: 'application/json',
-        dialogTitle: 'Share Kukai Backup',
-        UTI: 'public.json'
-      });
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Failed to share backup:', error);
-      return { success: false, error };
-    }
-  }
-  
-  // List all available backups
-  async listBackups() {
-    try {
-      await this.ensureBackupDirExists();
-      
-      const backupFiles = await FileSystem.readDirectoryAsync(this.backupDir);
-      const backups = [];
-      
-      for (const file of backupFiles) {
-        if (file.endsWith('.json')) {
-          const fileInfo = await FileSystem.getInfoAsync(`${this.backupDir}${file}`);
-          try {
-            const content = await FileSystem.readAsStringAsync(`${this.backupDir}${file}`);
-            const data = JSON.parse(content);
-            
-            backups.push({
-              fileName: file,
-              path: `${this.backupDir}${file}`,
-              timestamp: data.timestamp,
-              size: fileInfo.size,
-              tableCount: Object.keys(data.tables).length,
-              recordCounts: this.getRecordCounts(data)
-            });
-          } catch (e) {
-            console.error(`Error parsing backup file ${file}:`, e);
-          }
-        }
-      }
-      
-      // Sort by timestamp (newest first)
-      backups.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      
-      return { success: true, backups };
-    } catch (error) {
-      console.error('Failed to list backups:', error);
-      return { success: false, error };
-    }
-  }
-  
-  // Delete a backup file
-  async deleteBackup(backupPath) {
-    try {
+      // Check if backup exists
       const fileInfo = await FileSystem.getInfoAsync(backupPath);
       if (!fileInfo.exists) {
-        throw new Error('Backup file does not exist');
+        return { 
+          success: false, 
+          error: `Backup file does not exist: ${backupPath}` 
+        };
       }
       
-      await FileSystem.deleteAsync(backupPath);
-      console.log(`Deleted backup at ${backupPath}`);
-      return { success: true };
-    } catch (error) {
-      console.error('Failed to delete backup:', error);
-      return { success: false, error };
-    }
-  }
-  
-  // Restore from a backup file
-  async restoreFromBackup(backupPath) {
-    try {
-      const fileInfo = await FileSystem.getInfoAsync(backupPath);
-      if (!fileInfo.exists) {
-        throw new Error('Backup file does not exist');
-      }
-      
-      // Read and parse backup file
+      // Read backup file
       const backupContent = await FileSystem.readAsStringAsync(backupPath);
       const backupData = JSON.parse(backupContent);
       
-      // Validate backup data
-      if (!backupData.tables || !backupData.timestamp) {
-        throw new Error('Invalid backup file format');
+      // Create a pre-restore backup just in case
+      const preRestoreBackup = await this.createBackup('pre_restore_' + new Date().toISOString().split('T')[0]);
+      
+      // Close database connection
+      await databaseService.closeDatabase();
+      
+      // Delete the database file to avoid any issues with schema differences
+      try {
+        const dbPath = FileSystem.documentDirectory + 'SQLite/kukai.db';
+        const dbInfo = await FileSystem.getInfoAsync(dbPath);
+        if (dbInfo.exists) {
+          await FileSystem.deleteAsync(dbPath);
+        }
+      } catch (error) {
+        console.error('Error deleting database file:', error);
+        // Continue anyway as this might fail on some platforms
       }
       
-      // Reset the database before restoring
-      await databaseService.resetDatabase();
+      // Reopen database to recreate it
+      await databaseService.initialize();
       
-      // Restore each table
-      for (const [tableName, records] of Object.entries(backupData.tables)) {
-        if (records && records.length > 0) {
-          for (const record of records) {
-            await databaseService.create(tableName, record);
+      // Restore data to each table
+      for (const [tableName, tableData] of Object.entries(backupData.tables)) {
+        if (Array.isArray(tableData) && tableData.length > 0) {
+          try {
+            // Delete existing data
+            await databaseService.query(`DELETE FROM ${tableName}`);
+            
+            // Insert each row
+            for (const row of tableData) {
+              await databaseService.create(tableName, row);
+            }
+            
+            console.log(`Restored table ${tableName}: ${tableData.length} rows`);
+          } catch (error) {
+            console.error(`Error restoring table ${tableName}:`, error);
           }
-          console.log(`Restored ${records.length} records to ${tableName}`);
         }
       }
       
-      console.log('Database restored successfully');
-      return { success: true };
+      // Record restore information
+      await configService.setItem('last_restore', {
+        timestamp: new Date().toISOString(),
+        backup: backupNameOrPath,
+        version: backupData.version
+      });
+      
+      return { 
+        success: true, 
+        message: 'Backup restored successfully',
+        tablesRestored: Object.keys(backupData.tables).length,
+        version: backupData.version,
+        timestamp: backupData.timestamp
+      };
     } catch (error) {
-      console.error('Failed to restore from backup:', error);
+      console.error('Error restoring backup:', error);
+      
+      // Try to reinitialize database
+      try {
+        await databaseService.initialize();
+      } catch (reInitError) {
+        console.error('Failed to reinitialize database after restore error:', reInitError);
+      }
+      
       return { success: false, error };
     }
   }
-  
-  // Import a backup file from device storage
-  async importBackup() {
+
+  /**
+   * Delete a backup
+   */
+  async deleteBackup(backupNameOrPath) {
     try {
-      // Pick a document
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/json',
-        copyToCacheDirectory: true
-      });
-      
-      if (result.canceled) {
-        return { success: false, canceled: true };
+      // Determine backup path
+      let backupPath = backupNameOrPath;
+      if (!backupPath.includes('/')) {
+        backupPath = this.backupDir + backupNameOrPath + 
+          (backupNameOrPath.endsWith('.json') ? '' : '.json');
       }
       
-      // Copy file to backups directory
-      const fileName = result.assets[0].name;
-      const backupPath = `${this.backupDir}${fileName}`;
+      // Check if backup exists
+      const fileInfo = await FileSystem.getInfoAsync(backupPath);
+      if (!fileInfo.exists) {
+        return { 
+          success: false, 
+          error: `Backup file does not exist: ${backupPath}` 
+        };
+      }
       
-      await FileSystem.copyAsync({
-        from: result.assets[0].uri,
-        to: backupPath
-      });
+      // Delete backup file
+      await FileSystem.deleteAsync(backupPath);
       
-      console.log(`Imported backup to ${backupPath}`);
-      return { success: true, path: backupPath };
+      return { 
+        success: true, 
+        message: `Backup deleted: ${backupNameOrPath}` 
+      };
     } catch (error) {
-      console.error('Failed to import backup:', error);
-      return { success: false, error };
-    }
-  }
-  
-  // Schedule automatic backups
-  async scheduleAutomaticBackups(intervalDays = 7) {
-    // Store backup schedule settings
-    await storageService.setItem('@backupScheduleInterval', intervalDays.toString());
-    await storageService.setItem('@backupScheduleEnabled', 'true');
-    await storageService.setItem('@backupScheduleLastCheck', new Date().toISOString());
-    
-    console.log(`Automatic backups scheduled every ${intervalDays} days`);
-    return true;
-  }
-  
-  // Check if automatic backup is needed
-  async checkAutomaticBackup() {
-    const enabled = await storageService.getItem('@backupScheduleEnabled');
-    if (enabled !== 'true') {
-      return false;
-    }
-    
-    const lastCheckString = await storageService.getItem('@backupScheduleLastCheck');
-    const intervalDaysString = await storageService.getItem('@backupScheduleInterval');
-    
-    if (!lastCheckString || !intervalDaysString) {
-      return false;
-    }
-    
-    const lastCheck = new Date(lastCheckString);
-    const intervalDays = parseInt(intervalDaysString, 10);
-    const now = new Date();
-    
-    // Calculate if it's time for a backup
-    const daysSinceLastCheck = Math.floor((now - lastCheck) / (1000 * 60 * 60 * 24));
-    
-    if (daysSinceLastCheck >= intervalDays) {
-      // Create a backup
-      const result = await this.createBackup();
-      
-      // Update last check time
-      await storageService.setItem('@backupScheduleLastCheck', now.toISOString());
-      
-      return result.success;
-    }
-    
-    return false;
-  }
-  
-  // Get backup metadata
-  async getBackupMetadata() {
-    const lastBackupDate = await storageService.getItem(LAST_BACKUP_DATE_KEY);
-    const backupCount = await storageService.getItem(BACKUP_COUNT_KEY) || '0';
-    
-    return {
-      lastBackupDate: lastBackupDate || null,
-      backupCount: parseInt(backupCount, 10),
-      device: Platform.OS,
-      deviceVersion: Platform.Version
-    };
-  }
-  
-  // Update backup metadata
-  async updateBackupMetadata() {
-    const now = new Date().toISOString();
-    await storageService.setItem(LAST_BACKUP_DATE_KEY, now);
-    
-    const count = await storageService.getItem(BACKUP_COUNT_KEY) || '0';
-    await storageService.setItem(BACKUP_COUNT_KEY, (parseInt(count, 10) + 1).toString());
-  }
-  
-  // Helper to calculate record counts for each table
-  getRecordCounts(data) {
-    const counts = {};
-    for (const [table, records] of Object.entries(data.tables)) {
-      counts[table] = records.length;
-    }
-    return counts;
-  }
-  
-  // Clean up old backups, keeping only the most recent ones
-  async cleanupOldBackups(keepCount = 5) {
-    try {
-      const { success, backups } = await this.listBackups();
-      
-      if (!success || !backups || backups.length <= keepCount) {
-        return { success: true, deletedCount: 0 };
-      }
-      
-      // Keep the most recent backups and delete the rest
-      const backupsToDelete = backups.slice(keepCount);
-      let deletedCount = 0;
-      
-      for (const backup of backupsToDelete) {
-        const result = await this.deleteBackup(backup.path);
-        if (result.success) {
-          deletedCount++;
-        }
-      }
-      
-      return { success: true, deletedCount };
-    } catch (error) {
-      console.error('Failed to clean up old backups:', error);
+      console.error('Error deleting backup:', error);
       return { success: false, error };
     }
   }
 }
 
-export default new DatabaseBackupService(); 
+// Create singleton instance
+const databaseBackupService = new DatabaseBackupService();
+export default databaseBackupService; 

@@ -26,7 +26,11 @@ import notificationService from "./services/NotificationService";
 import { 
   databaseService, 
   databaseBackupService, 
-  databaseQueryOptimizer 
+  databaseQueryOptimizer,
+  TaskDAO,
+  MeditationDAO,
+  JournalDAO,
+  FocusDAO
 } from "./services";
 
 // Prevent splash screen from auto-hiding
@@ -65,11 +69,36 @@ export default function App() {
         if (dbResult.success) {
           console.log("Database initialized successfully");
           
+          // Initialize backup service
+          await databaseBackupService.initialize();
+          
           // Initialize database indexes for query optimization
           await databaseQueryOptimizer.ensureIndexes();
           
           // Check for automatic backup
-          await databaseBackupService.checkAutomaticBackup();
+          const backupResult = await databaseBackupService.checkAutomaticBackup();
+          if (backupResult.performed) {
+            console.log("Automatic backup completed:", backupResult.result.name);
+          }
+          
+          // Initialize DAOs
+          console.log("Testing DAO services...");
+          
+          // Test TaskDAO
+          const taskStats = await TaskDAO.getTaskStats();
+          console.log("Task statistics:", taskStats);
+          
+          // Test MeditationDAO
+          const meditationCount = await MeditationDAO.count();
+          console.log("Meditation sessions count:", meditationCount);
+          
+          // Test JournalDAO
+          const journalCount = await JournalDAO.count();
+          console.log("Journal entries count:", journalCount);
+          
+          // Test FocusDAO
+          const focusCount = await FocusDAO.count();
+          console.log("Focus sessions count:", focusCount);
         } else {
           console.error("Database initialization failed:", dbResult.error);
         }
