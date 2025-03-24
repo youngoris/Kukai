@@ -39,7 +39,8 @@
       "barStyle": "light-content"
     },
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      "expo-sqlite"
     ],
     "scheme": "kukai",
     "extra": {

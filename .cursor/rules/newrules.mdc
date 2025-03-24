@@ -21,8 +21,7 @@ alwaysApply: true
 
   JavaScript Usage:
   - Avoid Global Variables: Minimize the use of global variables to prevent unintended side effects.
-  - Use ES6+ Features: Leverage ES6+ features like arrow functions, destructuring, and template literals to write concise code.
-  - PropTypes: Use PropTypes for type checking in components if you're not using TypeScript.
+
 
   Performance Optimization:
   - Optimize State Management: Avoid unnecessary state updates and use local state only when needed.
