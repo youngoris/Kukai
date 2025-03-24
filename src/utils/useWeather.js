@@ -1,6 +1,10 @@
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
 import { useState, useEffect, useCallback } from "react";
 import * as Location from "expo-location";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import storageService from "../services/storage/StorageService";
 import {
   WEATHER_API,
   CACHE,
@@ -40,10 +44,10 @@ export default function useWeather(options = {}) {
 
       // If not forced refresh, try to get from cache
       if (!forceRefresh) {
-        const savedWeatherData = await AsyncStorage.getItem(
+        const savedWeatherData = await storageService.getItem(
           STORAGE_KEYS.WEATHER_DATA,
         );
-        const savedLocationCoords = await AsyncStorage.getItem(
+        const savedLocationCoords = await storageService.getItem(
           STORAGE_KEYS.LAST_LOCATION,
         );
 
@@ -161,7 +165,7 @@ export default function useWeather(options = {}) {
         }
         
         // Save location coordinates for future reference
-        await AsyncStorage.setItem(
+        await storageService.setItem(
           STORAGE_KEYS.LAST_LOCATION,
           JSON.stringify({
             latitude: locationData.coords.latitude,
@@ -242,7 +246,7 @@ export default function useWeather(options = {}) {
       setSource("api");
 
       // Save weather data to AsyncStorage
-      await AsyncStorage.setItem(
+      await storageService.setItem(
         STORAGE_KEYS.WEATHER_DATA,
         JSON.stringify({
           weather: weatherMain,

@@ -3,6 +3,11 @@
  * Component for managing and previewing journal templates
  */
 
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
+
 import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
@@ -16,7 +21,7 @@ import {
   Platform,
 } from "react-native";
 import { MaterialIcons, Feather } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import storageService from "../services/storage/StorageService";
 import Markdown from "react-native-markdown-display";
 import {
   AVAILABLE_TEMPLATES,
@@ -47,7 +52,7 @@ const JournalTemplateManager = ({ isVisible, onClose, onTemplateSelect }) => {
   // Load custom template from storage
   const loadCustomTemplate = async () => {
     try {
-      const customContent = await AsyncStorage.getItem("customJournalTemplate");
+      const customContent = await storageService.getItem("customJournalTemplate");
       if (customContent) {
         setCustomTemplate(customContent);
       } else {
@@ -74,7 +79,7 @@ const JournalTemplateManager = ({ isVisible, onClose, onTemplateSelect }) => {
   // Save custom template
   const saveCustomTemplate = async () => {
     try {
-      await AsyncStorage.setItem("customJournalTemplate", customTemplate);
+      await storageService.setItem("customJournalTemplate", customTemplate);
       Alert.alert("Success", "Custom template saved successfully");
       setIsEditingCustom(false);
     } catch (error) {

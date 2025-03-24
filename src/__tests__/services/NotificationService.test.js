@@ -1,9 +1,14 @@
 // Import mocks first
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
+
 import './NotificationService.mock';
 
 // Import dependencies
 import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import storageService from "../../services/storage/StorageService";
 import notificationService from '../../services/NotificationService';
 
 // Mock Date.now() to return a consistent timestamp for testing
@@ -56,29 +61,29 @@ describe('NotificationService', () => {
       quietHoursEnabled: false, // This should remain unchanged
     }));
 
-    // Verify AsyncStorage was called to save the config
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+    // Verify storageService was called to save the config
+    expect(storageService.setItem).toHaveBeenCalledWith(
       'notificationConfig',
       expect.any(String)
     );
   });
 
   // Test loadConfig method
-  test('loadConfig should load config from AsyncStorage', async () => {
+  test('loadConfig should load config from storage', async () => {
     // Setup
     const storedConfig = {
       taskNotifications: false,
       notificationSound: 'custom',
       quietHoursEnabled: true,
     };
-    AsyncStorage.getItem.mockResolvedValue(JSON.stringify(storedConfig));
+    storageService.getItem.mockResolvedValue(JSON.stringify(storedConfig));
 
     // Execute
     await notificationService.loadConfig();
 
     // Verify
     expect(notificationService.config).toEqual(expect.objectContaining(storedConfig));
-    expect(AsyncStorage.getItem).toHaveBeenCalledWith('notificationConfig');
+    expect(storageService.getItem).toHaveBeenCalledWith('notificationConfig');
   });
 
   // Test checkPermissions method

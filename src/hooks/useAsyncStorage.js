@@ -1,12 +1,18 @@
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
+
 import { useState, useCallback } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import storageService from "../services/storage/StorageService";
 
 /**
- * Custom hook for AsyncStorage operations with error handling
+ * Custom hook for storage operations with error handling
+ * Originally used AsyncStorage, now uses StorageService backed by SQLite
  *
  * @param {string} key - Storage key
  * @param {any} initialValue - Initial value if nothing is stored
- * @returns {Array} - [storedValue, setValue, loading, error]
+ * @returns {Array} - [storedValue, setValue, removeValue, loading, error, initialize]
  */
 const useAsyncStorage = (key, initialValue = null) => {
   const [storedValue, setStoredValue] = useState(initialValue);
@@ -17,12 +23,25 @@ const useAsyncStorage = (key, initialValue = null) => {
   const initialize = useCallback(async () => {
     try {
       setLoading(true);
-      const item = await AsyncStorage.getItem(key);
-      const value = item ? JSON.parse(item) : initialValue;
+      const item = await storageService.getItem(key);
+      // Handle both string and parsed values from StorageService
+      let value = item;
+      if (typeof item === 'string') {
+        try {
+          value = JSON.parse(item);
+        } catch {
+          // If item isn't valid JSON, use it as-is
+          value = item;
+        }
+      }
+      // If no item was found, use initialValue
+      if (item === null) {
+        value = initialValue;
+      }
       setStoredValue(value);
       setError(null);
     } catch (e) {
-      console.error(`Error reading from AsyncStorage (${key}):`, e);
+      console.error(`Error reading from storage (${key}):`, e);
       setError(e);
     } finally {
       setLoading(false);
@@ -38,11 +57,11 @@ const useAsyncStorage = (key, initialValue = null) => {
         const valueToStore =
           value instanceof Function ? value(storedValue) : value;
         setStoredValue(valueToStore);
-        await AsyncStorage.setItem(key, JSON.stringify(valueToStore));
+        await storageService.setItem(key, valueToStore);
         setError(null);
         return true;
       } catch (e) {
-        console.error(`Error writing to AsyncStorage (${key}):`, e);
+        console.error(`Error writing to storage (${key}):`, e);
         setError(e);
         return false;
       } finally {
@@ -56,12 +75,12 @@ const useAsyncStorage = (key, initialValue = null) => {
   const removeValue = useCallback(async () => {
     try {
       setLoading(true);
-      await AsyncStorage.removeItem(key);
+      await storageService.removeItem(key);
       setStoredValue(initialValue);
       setError(null);
       return true;
     } catch (e) {
-      console.error(`Error removing from AsyncStorage (${key}):`, e);
+      console.error(`Error removing from storage (${key}):`, e);
       setError(e);
       return false;
     } finally {

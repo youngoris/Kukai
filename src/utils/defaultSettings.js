@@ -1,6 +1,12 @@
 // Default application settings
 // This file contains the default settings for the app when no user settings are found
 
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
+import storageService from '../services/storage/StorageService';
+
 const defaultSettings = {
   // Meditation settings
   meditationDuration: 10,
@@ -42,9 +48,9 @@ const defaultSettings = {
 };
 
 // Helper function to get settings with defaults
-export const getSettingsWithDefaults = async (AsyncStorage) => {
+export const getSettingsWithDefaults = async () => {
   try {
-    const storedSettings = await AsyncStorage.getItem("userSettings");
+    const storedSettings = await storageService.getItem("userSettings");
     
     if (storedSettings) {
       // If settings exist, parse and return them
@@ -52,7 +58,7 @@ export const getSettingsWithDefaults = async (AsyncStorage) => {
     } else {
       // If no settings exist, save and return defaults
       console.log("No settings found, using defaults");
-      await AsyncStorage.setItem("userSettings", JSON.stringify(defaultSettings));
+      await storageService.setItem("userSettings", JSON.stringify(defaultSettings));
       return defaultSettings;
     }
   } catch (error) {

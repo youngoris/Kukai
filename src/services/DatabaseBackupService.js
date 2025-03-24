@@ -1,5 +1,9 @@
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
 import * as FileSystem from 'expo-file-system';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import storageService from "./storage/StorageService";
 import databaseService from './DatabaseService';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
@@ -226,9 +230,9 @@ class DatabaseBackupService {
   // Schedule automatic backups
   async scheduleAutomaticBackups(intervalDays = 7) {
     // Store backup schedule settings
-    await AsyncStorage.setItem('@backupScheduleInterval', intervalDays.toString());
-    await AsyncStorage.setItem('@backupScheduleEnabled', 'true');
-    await AsyncStorage.setItem('@backupScheduleLastCheck', new Date().toISOString());
+    await storageService.setItem('@backupScheduleInterval', intervalDays.toString());
+    await storageService.setItem('@backupScheduleEnabled', 'true');
+    await storageService.setItem('@backupScheduleLastCheck', new Date().toISOString());
     
     console.log(`Automatic backups scheduled every ${intervalDays} days`);
     return true;
@@ -236,13 +240,13 @@ class DatabaseBackupService {
   
   // Check if automatic backup is needed
   async checkAutomaticBackup() {
-    const enabled = await AsyncStorage.getItem('@backupScheduleEnabled');
+    const enabled = await storageService.getItem('@backupScheduleEnabled');
     if (enabled !== 'true') {
       return false;
     }
     
-    const lastCheckString = await AsyncStorage.getItem('@backupScheduleLastCheck');
-    const intervalDaysString = await AsyncStorage.getItem('@backupScheduleInterval');
+    const lastCheckString = await storageService.getItem('@backupScheduleLastCheck');
+    const intervalDaysString = await storageService.getItem('@backupScheduleInterval');
     
     if (!lastCheckString || !intervalDaysString) {
       return false;
@@ -260,7 +264,7 @@ class DatabaseBackupService {
       const result = await this.createBackup();
       
       // Update last check time
-      await AsyncStorage.setItem('@backupScheduleLastCheck', now.toISOString());
+      await storageService.setItem('@backupScheduleLastCheck', now.toISOString());
       
       return result.success;
     }
@@ -270,8 +274,8 @@ class DatabaseBackupService {
   
   // Get backup metadata
   async getBackupMetadata() {
-    const lastBackupDate = await AsyncStorage.getItem(LAST_BACKUP_DATE_KEY);
-    const backupCount = await AsyncStorage.getItem(BACKUP_COUNT_KEY) || '0';
+    const lastBackupDate = await storageService.getItem(LAST_BACKUP_DATE_KEY);
+    const backupCount = await storageService.getItem(BACKUP_COUNT_KEY) || '0';
     
     return {
       lastBackupDate: lastBackupDate || null,
@@ -284,10 +288,10 @@ class DatabaseBackupService {
   // Update backup metadata
   async updateBackupMetadata() {
     const now = new Date().toISOString();
-    await AsyncStorage.setItem(LAST_BACKUP_DATE_KEY, now);
+    await storageService.setItem(LAST_BACKUP_DATE_KEY, now);
     
-    const count = await AsyncStorage.getItem(BACKUP_COUNT_KEY) || '0';
-    await AsyncStorage.setItem(BACKUP_COUNT_KEY, (parseInt(count, 10) + 1).toString());
+    const count = await storageService.getItem(BACKUP_COUNT_KEY) || '0';
+    await storageService.setItem(BACKUP_COUNT_KEY, (parseInt(count, 10) + 1).toString());
   }
   
   // Helper to calculate record counts for each table

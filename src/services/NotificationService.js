@@ -1,5 +1,9 @@
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
 import * as Notifications from "expo-notifications";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import storageService from "./storage/StorageService";
 import { Platform } from "react-native";
 
 // Add isWeb check
@@ -52,7 +56,7 @@ class NotificationService {
     };
 
     // Save configuration to storage
-    await AsyncStorage.setItem(
+    await storageService.setItem(
       "notificationConfig",
       JSON.stringify(this.config),
     );
@@ -64,7 +68,7 @@ class NotificationService {
   // Load configuration
   async loadConfig() {
     try {
-      const configJson = await AsyncStorage.getItem("notificationConfig");
+      const configJson = await storageService.getItem("notificationConfig");
       if (configJson) {
         this.config = {
           ...DEFAULT_CONFIG,
@@ -442,7 +446,7 @@ class NotificationService {
   async scheduleJournalReminder(hours, minutes, enabled) {
     try {
       // Cancel all existing journal reminder notifications
-      const existingNotifications = await AsyncStorage.getItem(
+      const existingNotifications = await storageService.getItem(
         "journalReminderNotificationId",
       );
       if (existingNotifications) {
@@ -493,7 +497,7 @@ class NotificationService {
         },
       });
 
-      await AsyncStorage.setItem(
+      await storageService.setItem(
         "journalReminderNotificationId",
         JSON.stringify(notificationId),
       );
@@ -513,7 +517,7 @@ class NotificationService {
   async scheduleMeditationReminder(hours, minutes, enabled) {
     try {
       // Cancel all existing meditation reminder notifications
-      const existingNotifications = await AsyncStorage.getItem(
+      const existingNotifications = await storageService.getItem(
         "meditationReminderNotificationId",
       );
       if (existingNotifications) {
@@ -567,7 +571,7 @@ class NotificationService {
         },
       });
 
-      await AsyncStorage.setItem(
+      await storageService.setItem(
         "meditationReminderNotificationId",
         JSON.stringify(notificationId),
       );
@@ -604,28 +608,28 @@ class NotificationService {
   // Save notification ID to task ID mapping
   async saveNotificationMapping(taskId, notificationId) {
     try {
-      const mappingData =
-        (await AsyncStorage.getItem("notificationTaskMapping")) || "{}";
-      const mapping = JSON.parse(mappingData);
+      // Get existing mapping
+      const mappingJson = await storageService.getItem("notificationMapping");
+      const mapping = mappingJson ? JSON.parse(mappingJson) : {};
+
+      // Update mapping
       mapping[taskId] = notificationId;
-      await AsyncStorage.setItem(
-        "notificationTaskMapping",
-        JSON.stringify(mapping),
-      );
+
+      // Save mapping
+      await storageService.setItem("notificationMapping", JSON.stringify(mapping));
     } catch (error) {
-      console.error("Error saving notification mapping:", error);
+      console.error("Failed to save notification mapping:", error);
     }
   }
 
   // Get notification ID for task
   async getNotificationIdForTask(taskId) {
     try {
-      const mappingData =
-        (await AsyncStorage.getItem("notificationTaskMapping")) || "{}";
-      const mapping = JSON.parse(mappingData);
+      const mappingJson = await storageService.getItem("notificationMapping");
+      const mapping = mappingJson ? JSON.parse(mappingJson) : {};
       return mapping[taskId];
     } catch (error) {
-      console.error("Error getting notification ID for task:", error);
+      console.error("Failed to get notification ID for task:", error);
       return null;
     }
   }
@@ -633,16 +637,15 @@ class NotificationService {
   // Remove notification mapping
   async removeNotificationMapping(taskId) {
     try {
-      const mappingData =
-        (await AsyncStorage.getItem("notificationTaskMapping")) || "{}";
-      const mapping = JSON.parse(mappingData);
-      delete mapping[taskId];
-      await AsyncStorage.setItem(
-        "notificationTaskMapping",
-        JSON.stringify(mapping),
-      );
+      const mappingJson = await storageService.getItem("notificationMapping");
+      const mapping = mappingJson ? JSON.parse(mappingJson) : {};
+
+      if (mapping[taskId]) {
+        delete mapping[taskId];
+        await storageService.setItem("notificationMapping", JSON.stringify(mapping));
+      }
     } catch (error) {
-      console.error("Error removing notification mapping:", error);
+      console.error("Failed to remove notification mapping:", error);
     }
   }
 
@@ -656,7 +659,7 @@ class NotificationService {
     
     // Load configuration
     try {
-      const savedConfig = await AsyncStorage.getItem("notificationConfig");
+      const savedConfig = await storageService.getItem("notificationConfig");
       if (savedConfig) {
         this.config = { ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) };
       }
@@ -772,7 +775,7 @@ class NotificationService {
   async completeTaskFromNotification(taskId) {
     try {
       // Get all tasks
-      const tasksJson = await AsyncStorage.getItem("tasks");
+      const tasksJson = await storageService.getItem("tasks");
       if (!tasksJson) return;
 
       const tasks = JSON.parse(tasksJson);
@@ -789,7 +792,7 @@ class NotificationService {
       );
 
       // Save updated tasks
-      await AsyncStorage.setItem("tasks", JSON.stringify(updatedTasks));
+      await storageService.setItem("tasks", JSON.stringify(updatedTasks));
 
       // Cancel task notification
       await this.cancelTaskNotification(taskId);
@@ -815,7 +818,7 @@ class NotificationService {
   async snoozeTaskFromNotification(taskId) {
     try {
       // Get all tasks
-      const tasksJson = await AsyncStorage.getItem("tasks");
+      const tasksJson = await storageService.getItem("tasks");
       if (!tasksJson) return;
 
       const tasks = JSON.parse(tasksJson);

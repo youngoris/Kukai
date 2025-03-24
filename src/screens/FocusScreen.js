@@ -1,3 +1,7 @@
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   StyleSheet,
@@ -16,7 +20,7 @@ import {
 } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Progress from "react-native-progress";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import storageService from "../services/storage/StorageService";
 import { useFocusEffect } from "@react-navigation/native";
 import notificationService from "../services/NotificationService";
 import CustomHeader from "../components/CustomHeader";
@@ -77,7 +81,7 @@ export default function FocusScreen({ navigation }) {
   useEffect(() => {
     const loadUserSettings = async () => {
       try {
-        const settings = await getSettingsWithDefaults(AsyncStorage);
+        const settings = await getSettingsWithDefaults();
         if (settings.appTheme) {
           setAppTheme(settings.appTheme);
         }
@@ -110,7 +114,7 @@ export default function FocusScreen({ navigation }) {
           console.log('Screen regained focus, checking for setting changes');
           
           // Load the latest user settings
-          const userSettings = await getSettingsWithDefaults(AsyncStorage);
+          const userSettings = await getSettingsWithDefaults();
           
           // Check if we have an active session
           if (hasStartedBefore) {
@@ -275,7 +279,7 @@ export default function FocusScreen({ navigation }) {
   const loadTodayPomodoroCount = async () => {
     try {
       const today = new Date().toISOString().split("T")[0];
-      const historyString = await AsyncStorage.getItem("focusHistory");
+      const historyString = await storageService.getItem("focusHistory");
       
       if (historyString) {
         const history = JSON.parse(historyString);
@@ -325,7 +329,7 @@ export default function FocusScreen({ navigation }) {
     // Save session data
     try {
       // Get existing history
-      const historyString = await AsyncStorage.getItem("focusHistory");
+      const historyString = await storageService.getItem("focusHistory");
       let history = historyString ? JSON.parse(historyString) : [];
       
       // Add new session
@@ -338,7 +342,7 @@ export default function FocusScreen({ navigation }) {
       history.push(newSession);
       
       // Save updated history
-      await AsyncStorage.setItem("focusHistory", JSON.stringify(history));
+      await storageService.setItem("focusHistory", JSON.stringify(history));
       
       // Reload today's pomodoro count
       loadTodayPomodoroCount();
@@ -463,7 +467,7 @@ export default function FocusScreen({ navigation }) {
       console.log('Saving focus session state...');
       
       // Get current user settings to include with session state
-      const userSettings = await getSettingsWithDefaults(AsyncStorage);
+      const userSettings = await getSettingsWithDefaults();
       
       const sessionState = {
         // Session progress
@@ -492,7 +496,7 @@ export default function FocusScreen({ navigation }) {
       };
       
       // Save to AsyncStorage
-      await AsyncStorage.setItem('focusSessionState', JSON.stringify(sessionState));
+      await storageService.setItem('focusSessionState', JSON.stringify(sessionState));
       console.log('Focus session state saved successfully');
     } catch (error) {
       console.error('Error saving focus session state:', error);
@@ -505,7 +509,7 @@ export default function FocusScreen({ navigation }) {
       console.log('Attempting to restore focus session state');
       
       // First load latest user settings
-      const userSettings = await getSettingsWithDefaults(AsyncStorage);
+      const userSettings = await getSettingsWithDefaults();
       
       // Always update focus settings from user settings
       setFocusDuration(userSettings.focusDuration || 25);
@@ -514,7 +518,7 @@ export default function FocusScreen({ navigation }) {
       setLongBreakInterval(userSettings.longBreakInterval || 4);
       
       // Get saved session state
-      const sessionStateJSON = await AsyncStorage.getItem('focusSessionState');
+      const sessionStateJSON = await storageService.getItem('focusSessionState');
       if (!sessionStateJSON) {
         console.log('No saved session state found, initializing with user settings');
         setTimeRemaining(userSettings.focusDuration * 60 || 25 * 60);
@@ -546,7 +550,7 @@ export default function FocusScreen({ navigation }) {
         setIsActive(false);
         
         // Remove saved session state since it's now invalid
-        await AsyncStorage.removeItem('focusSessionState');
+        await storageService.removeItem('focusSessionState');
         
         // Load today's pomodoro count
         await loadTodayPomodoroCount();
@@ -580,7 +584,7 @@ export default function FocusScreen({ navigation }) {
       console.error('Error restoring focus session state:', error);
       
       // Initialize with default values in case of error
-      const settings = await getSettingsWithDefaults(AsyncStorage);
+      const settings = await getSettingsWithDefaults();
       setTimeRemaining(settings.focusDuration * 60 || 25 * 60);
       setProgress(0);
       
@@ -593,11 +597,11 @@ export default function FocusScreen({ navigation }) {
   const checkAppRestart = async () => {
     try {
       // Get the last app launch timestamp
-      const lastLaunchTime = await AsyncStorage.getItem('appLastLaunchTime');
+      const lastLaunchTime = await storageService.getItem('appLastLaunchTime');
       const currentTime = new Date().toISOString();
       
       // Save current launch time
-      await AsyncStorage.setItem('appLastLaunchTime', currentTime);
+      await storageService.setItem('appLastLaunchTime', currentTime);
       
       // If no last launch time exists, this is first launch
       if (!lastLaunchTime) {
@@ -624,7 +628,7 @@ export default function FocusScreen({ navigation }) {
     const initializeSession = async () => {
       try {
         // Always load latest user settings
-        const userSettings = await getSettingsWithDefaults(AsyncStorage);
+        const userSettings = await getSettingsWithDefaults();
         
         // Update focus settings from user settings
         setFocusDuration(userSettings.focusDuration || 25);
@@ -648,7 +652,7 @@ export default function FocusScreen({ navigation }) {
           sessionStartTime.current = null;
           
           // Clear any saved session state
-          await AsyncStorage.removeItem('focusSessionState');
+          await storageService.removeItem('focusSessionState');
         } else {
           console.log('App resumed, attempting to restore session');
           // App was just backgrounded/foregrounded, restore previous session
@@ -748,7 +752,7 @@ export default function FocusScreen({ navigation }) {
   const checkForNewDay = async () => {
     try {
       // Get last recorded date
-      const lastDateJson = await AsyncStorage.getItem("lastFocusDate");
+      const lastDateJson = await storageService.getItem("lastFocusDate");
       const today = new Date().toISOString().split("T")[0];
       
       // If date is different or no date has been recorded
@@ -757,7 +761,7 @@ export default function FocusScreen({ navigation }) {
         await loadTodayPomodoroCount();
         
         // Update last recorded date to today
-        await AsyncStorage.setItem("lastFocusDate", JSON.stringify(today));
+        await storageService.setItem("lastFocusDate", JSON.stringify(today));
       }
     } catch (error) {
       console.error("Error checking for new day:", error);

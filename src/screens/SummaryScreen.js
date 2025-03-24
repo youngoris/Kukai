@@ -1,3 +1,7 @@
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
 import React, { useState, useEffect, useRef } from "react";
 import {
   StyleSheet,
@@ -22,7 +26,7 @@ import {
   Feather,
   Octicons,
 } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import storageService from "../services/storage/StorageService";
 import FrogIcon from "../../assets/frog.svg";
 import CustomDateTimePicker from "../components/CustomDateTimePicker";
 import CustomHeader from "../components/CustomHeader";
@@ -77,20 +81,22 @@ const SummaryScreen = ({ navigation }) => {
   const STATUSBAR_HEIGHT =
     Platform.OS === "android" ? RNStatusBar.currentHeight || 0 : 0;
 
-  // Load user settings
-  useEffect(() => {
-    const loadUserSettings = async () => {
-      try {
-        const settings = await getSettingsWithDefaults(AsyncStorage);
-        if (settings.appTheme) {
-          setAppTheme(settings.appTheme);
-        }
-      } catch (error) {
-        console.error("Error loading user settings:", error);
+  // Load settings
+  const loadSettings = async () => {
+    try {
+      const settings = await getSettingsWithDefaults();
+      
+      // Set theme based on settings
+      if (settings.appTheme) {
+        setAppTheme(settings.appTheme);
       }
-    };
+    } catch (error) {
+      console.error("Error loading user settings:", error);
+    }
+  };
 
-    loadUserSettings();
+  useEffect(() => {
+    loadSettings();
   }, []);
 
   useEffect(() => {
@@ -157,7 +163,7 @@ const SummaryScreen = ({ navigation }) => {
       const today = new Date().toISOString().split("T")[0];
 
       // Get last recorded date
-      const lastDateJson = await AsyncStorage.getItem("lastDate");
+      const lastDateJson = await storageService.getItem("lastDate");
 
       // If date is different or no date has been recorded, perform daily reset
       if (!lastDateJson || JSON.parse(lastDateJson) !== today) {
@@ -166,7 +172,7 @@ const SummaryScreen = ({ navigation }) => {
         );
 
         // Update last recorded date to today
-        await AsyncStorage.setItem("lastDate", JSON.stringify(today));
+        await storageService.setItem("lastDate", JSON.stringify(today));
 
         // Auto transfer tomorrow's tasks to today's tasks if enabled
         await autoTransferTomorrowTasks();
@@ -180,7 +186,7 @@ const SummaryScreen = ({ navigation }) => {
   const resetDailyPomodoroCount = async (lastDate) => {
     try {
       // Reset daily pomodoro count but keep history
-      const pomodorosJson = await AsyncStorage.getItem("pomodoros");
+      const pomodorosJson = await storageService.getItem("pomodoros");
       if (pomodorosJson) {
         const pomodoros = JSON.parse(pomodorosJson);
         // Keep the history but reset today's count
@@ -195,7 +201,7 @@ const SummaryScreen = ({ navigation }) => {
   const autoTransferTomorrowTasks = async () => {
     try {
       // Get user settings to check if auto transfer is enabled
-      const userSettingsJson = await AsyncStorage.getItem("userSettings");
+      const userSettingsJson = await storageService.getItem("userSettings");
       let autoTransfer = false;
 
       if (userSettingsJson) {
@@ -205,8 +211,8 @@ const SummaryScreen = ({ navigation }) => {
 
       // If auto transfer is enabled, move tomorrow's tasks to today's tasks
       if (autoTransfer) {
-        const tomorrowTasksJson = await AsyncStorage.getItem("tomorrowTasks");
-        const tasksJson = await AsyncStorage.getItem("tasks");
+        const tomorrowTasksJson = await storageService.getItem("tomorrowTasks");
+        const tasksJson = await storageService.getItem("tasks");
 
         if (tomorrowTasksJson) {
           const tomorrowTasks = JSON.parse(tomorrowTasksJson);
@@ -230,10 +236,10 @@ const SummaryScreen = ({ navigation }) => {
             ];
 
             // Save updated tasks
-            await AsyncStorage.setItem("tasks", JSON.stringify(updatedTasks));
+            await storageService.setItem("tasks", JSON.stringify(updatedTasks));
 
             // Clear tomorrow's tasks
-            await AsyncStorage.setItem("tomorrowTasks", JSON.stringify([]));
+            await storageService.setItem("tomorrowTasks", JSON.stringify([]));
             setTomorrowTasks([]);
           }
         }
@@ -248,7 +254,7 @@ const SummaryScreen = ({ navigation }) => {
       const today = new Date().toISOString().split("T")[0];
 
       // Load task data
-      const tasksJson = await AsyncStorage.getItem("tasks");
+      const tasksJson = await storageService.getItem("tasks");
       let allTasks = [];
 
       // Process task data
@@ -285,12 +291,12 @@ const SummaryScreen = ({ navigation }) => {
         setPendingTasks([]);
         setCompletionRate(0);
         // Create initial empty task array and save
-        await AsyncStorage.setItem("tasks", JSON.stringify([]));
+        await storageService.setItem("tasks", JSON.stringify([]));
       }
 
       // Load meditation data (只统计当天的冥想时间)
       const meditationSessionsJson =
-        await AsyncStorage.getItem("meditationHistory");
+        await storageService.getItem("meditationHistory");
       let todayMeditationMinutes = 0;
       if (meditationSessionsJson) {
         const meditationSessions = JSON.parse(meditationSessionsJson);
@@ -307,7 +313,7 @@ const SummaryScreen = ({ navigation }) => {
       setTotalMeditationMinutes(todayMeditationMinutes);
 
       // Load focus time data (只统计当天的专注时间和番茄钟会话数)
-      const focusHistoryJson = await AsyncStorage.getItem("focusHistory");
+      const focusHistoryJson = await storageService.getItem("focusHistory");
       if (focusHistoryJson) {
         const focusHistory = JSON.parse(focusHistoryJson);
         // 过滤出今天的专注会话（非休息时间）
@@ -332,13 +338,13 @@ const SummaryScreen = ({ navigation }) => {
       }
 
       // Load tomorrow's tasks
-      const tomorrowTasksJson = await AsyncStorage.getItem("tomorrowTasks");
+      const tomorrowTasksJson = await storageService.getItem("tomorrowTasks");
       if (tomorrowTasksJson) {
         setTomorrowTasks(JSON.parse(tomorrowTasksJson));
       } else {
         // If no tomorrow task data, initialize as empty array
         setTomorrowTasks([]);
-        await AsyncStorage.setItem("tomorrowTasks", JSON.stringify([]));
+        await storageService.setItem("tomorrowTasks", JSON.stringify([]));
       }
     } catch (error) {
       console.error("Error loading data:", error);
@@ -390,7 +396,7 @@ const SummaryScreen = ({ navigation }) => {
       };
       const updatedTasks = [...tomorrowTasks, newTask];
       setTomorrowTasks(updatedTasks);
-      await AsyncStorage.setItem("tomorrowTasks", JSON.stringify(updatedTasks));
+      await storageService.setItem("tomorrowTasks", JSON.stringify(updatedTasks));
       setNewTomorrowTask("");
       setIsFrogTask(false);
       setIsImportant(false);
@@ -413,7 +419,7 @@ const SummaryScreen = ({ navigation }) => {
     try {
       const updatedTasks = tomorrowTasks.filter((task) => task.id !== id);
       setTomorrowTasks(updatedTasks);
-      await AsyncStorage.setItem("tomorrowTasks", JSON.stringify(updatedTasks));
+      await storageService.setItem("tomorrowTasks", JSON.stringify(updatedTasks));
     } catch (error) {
       console.error("Error deleting tomorrow task:", error);
       Alert.alert("Error", "Failed to delete tomorrow task. Please try again.");
@@ -426,7 +432,7 @@ const SummaryScreen = ({ navigation }) => {
       return;
     }
     try {
-      const tasksJson = await AsyncStorage.getItem("tasks");
+      const tasksJson = await storageService.getItem("tasks");
       let existingTasks = tasksJson ? JSON.parse(tasksJson) : [];
       const formattedTasks = tomorrowTasks.map((task) => ({
         ...task,
@@ -434,8 +440,8 @@ const SummaryScreen = ({ navigation }) => {
         // Keep original tag information, do not overwrite
       }));
       const updatedTasks = [...existingTasks, ...formattedTasks];
-      await AsyncStorage.setItem("tasks", JSON.stringify(updatedTasks));
-      await AsyncStorage.setItem("tomorrowTasks", JSON.stringify([]));
+      await storageService.setItem("tasks", JSON.stringify(updatedTasks));
+      await storageService.setItem("tomorrowTasks", JSON.stringify([]));
       setTomorrowTasks([]);
       Alert.alert(
         "Success",

@@ -1,6 +1,9 @@
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
 import React, { useEffect, useRef } from "react";
 import { StatusBar, Platform } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -25,6 +28,7 @@ import {
   databaseBackupService, 
   databaseQueryOptimizer 
 } from "./services";
+import storageService from "./services/storage/StorageService";
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -63,13 +67,13 @@ export default function App() {
           console.log("Database initialized successfully");
           
           // Check if data migration is needed
-          const migrationCompleted = await AsyncStorage.getItem('@dbMigrationCompleted');
-          if (migrationCompleted !== 'true') {
+          const migrationCompleted = await storageService.getItem('dbMigrationCompleted');
+          if (migrationCompleted !== true) {
             console.log("Starting data migration from AsyncStorage to SQLite...");
             const migrationResult = await databaseService.migrateFromAsyncStorage();
             if (migrationResult && migrationResult.success) {
               console.log("Data migration completed successfully");
-              await AsyncStorage.setItem('@dbMigrationCompleted', 'true');
+              await storageService.setItem('dbMigrationCompleted', true);
             } else {
               const errorMsg = migrationResult?.error || 'Unknown error during migration';
               console.error("Data migration failed:", errorMsg);

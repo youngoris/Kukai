@@ -1,15 +1,16 @@
 import * as SQLite from 'expo-sqlite';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import configService from './ConfigService';
 
-const DB_VERSION_KEY = '@db_version';
+const DB_VERSION_KEY = 'db_version';
 const DB_NAME = 'kukai.db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export class DatabaseMigrationService {
   constructor() {
     this.db = null;
     this.migrations = [
-      this.migration_1_0_0
+      this.migration_1_0_0,
+      this.migration_1_0_1
     ];
   }
 
@@ -109,10 +110,39 @@ export class DatabaseMigrationService {
     }
   }
 
+  // Migration 1.0.1 - Add app_config table
+  async migration_1_0_1(db) {
+    try {
+      // Create app_config table
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS app_config (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          value_type TEXT NOT NULL,
+          description TEXT,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      
+      console.log('Migration 1.0.1: Created app_config table');
+      return true;
+    } catch (error) {
+      console.error('Error in migration 1.0.1:', error);
+      throw error;
+    }
+  }
+
   async getCurrentVersion() {
     try {
-      const version = await AsyncStorage.getItem(DB_VERSION_KEY);
-      return version ? parseInt(version, 10) : 0;
+      // Get version from ConfigService
+      if (configService.initialized) {
+        const version = await configService.getItem(DB_VERSION_KEY);
+        if (version !== null) {
+          return parseInt(version, 10);
+        }
+      }
+      
+      return 0;
     } catch (error) {
       console.error('Error getting database version:', error);
       return 0;
@@ -121,7 +151,10 @@ export class DatabaseMigrationService {
 
   async setCurrentVersion(version) {
     try {
-      await AsyncStorage.setItem(DB_VERSION_KEY, version.toString());
+      // Store in ConfigService if initialized
+      if (configService.initialized) {
+        await configService.setItem(DB_VERSION_KEY, version.toString(), 'Database schema version');
+      }
     } catch (error) {
       console.error('Error setting database version:', error);
       throw error;
@@ -162,7 +195,7 @@ export class DatabaseMigrationService {
       // Open database if not already open
       const db = await this.openDatabase();
       
-      // Drop all tables using execAsync
+      // Drop all tables using execAsync including app_config
       await db.execAsync(`
         DROP TABLE IF EXISTS focus_sessions;
         DROP TABLE IF EXISTS journal_templates;
@@ -170,11 +203,12 @@ export class DatabaseMigrationService {
         DROP TABLE IF EXISTS categories;
         DROP TABLE IF EXISTS tasks;
         DROP TABLE IF EXISTS meditation_sessions;
+        DROP TABLE IF EXISTS app_config;
       `);
       
-      console.log('Database reset transaction completed successfully');
+      console.log('Database tables dropped successfully');
       
-      // Reset version
+      // Reset version in ConfigService
       await this.setCurrentVersion(0);
       
       // Run migrations again

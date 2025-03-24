@@ -1,3 +1,7 @@
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
 import React, { useState, useEffect, useRef } from "react";
 import {
   StyleSheet,
@@ -16,7 +20,7 @@ import {
   StatusBar as RNStatusBar,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import storageService from "../services/storage/StorageService";
 import * as FileSystem from "expo-file-system";
 import * as DocumentPicker from "expo-document-picker";
 import * as Notifications from "expo-notifications";
@@ -322,7 +326,7 @@ const SettingsScreen = ({ navigation }) => {
       };
 
       console.log("Auto-saving settings:", settings);
-      await AsyncStorage.setItem("userSettings", JSON.stringify(settings));
+      await storageService.setItem("userSettings", JSON.stringify(settings));
 
       // Set journal reminder notification if enabled
       if (journalReminder && notificationsEnabled) {
@@ -339,17 +343,17 @@ const SettingsScreen = ({ navigation }) => {
       }
 
       // Save notification settings
-      await AsyncStorage.setItem(
+      await storageService.setItem(
         "taskNotifications",
         JSON.stringify(taskNotifications),
       );
-      await AsyncStorage.setItem("notificationSound", notificationSound);
-      await AsyncStorage.setItem(
+      await storageService.setItem("notificationSound", notificationSound);
+      await storageService.setItem(
         "quietHoursEnabled",
         JSON.stringify(quietHoursEnabled),
       );
-      await AsyncStorage.setItem("quietHoursStart", quietHoursStart.toString());
-      await AsyncStorage.setItem("quietHoursEnd", quietHoursEnd.toString());
+      await storageService.setItem("quietHoursStart", quietHoursStart.toString());
+      await storageService.setItem("quietHoursEnd", quietHoursEnd.toString());
 
       // Update notification service configuration
       await notificationService.updateConfig({
@@ -384,7 +388,7 @@ const SettingsScreen = ({ navigation }) => {
   const loadSettings = async () => {
     try {
       // Use getSettingsWithDefaults to get settings with defaults
-      const parsedSettings = await getSettingsWithDefaults(AsyncStorage);
+      const parsedSettings = await getSettingsWithDefaults();
       console.log("Loading settings from storage:", parsedSettings);
 
       // Meditation settings
@@ -433,30 +437,30 @@ const SettingsScreen = ({ navigation }) => {
 
       // Load notification settings
       const taskNotificationsValue =
-        await AsyncStorage.getItem("taskNotifications");
+        await storageService.getItem("taskNotifications");
       if (taskNotificationsValue !== null) {
         setTaskNotifications(JSON.parse(taskNotificationsValue));
       }
 
       const notificationSoundValue =
-        await AsyncStorage.getItem("notificationSound");
+        await storageService.getItem("notificationSound");
       if (notificationSoundValue !== null) {
         setNotificationSound(notificationSoundValue);
       }
 
       const quietHoursEnabledValue =
-        await AsyncStorage.getItem("quietHoursEnabled");
+        await storageService.getItem("quietHoursEnabled");
       if (quietHoursEnabledValue !== null) {
         setQuietHoursEnabled(JSON.parse(quietHoursEnabledValue));
       }
 
       const quietHoursStartValue =
-        await AsyncStorage.getItem("quietHoursStart");
+        await storageService.getItem("quietHoursStart");
       if (quietHoursStartValue !== null) {
         setQuietHoursStart(parseInt(quietHoursStartValue));
       }
 
-      const quietHoursEndValue = await AsyncStorage.getItem("quietHoursEnd");
+      const quietHoursEndValue = await storageService.getItem("quietHoursEnd");
       if (quietHoursEndValue !== null) {
         setQuietHoursEnd(parseInt(quietHoursEndValue));
       }
@@ -514,7 +518,7 @@ const SettingsScreen = ({ navigation }) => {
       };
 
       console.log("Saving settings:", settings);
-      await AsyncStorage.setItem("userSettings", JSON.stringify(settings));
+      await storageService.setItem("userSettings", JSON.stringify(settings));
 
       // Set journal reminder notification if enabled
       if (journalReminder && notificationsEnabled) {
@@ -531,17 +535,17 @@ const SettingsScreen = ({ navigation }) => {
       }
 
       // Save notification settings
-      await AsyncStorage.setItem(
+      await storageService.setItem(
         "taskNotifications",
         JSON.stringify(taskNotifications),
       );
-      await AsyncStorage.setItem("notificationSound", notificationSound);
-      await AsyncStorage.setItem(
+      await storageService.setItem("notificationSound", notificationSound);
+      await storageService.setItem(
         "quietHoursEnabled",
         JSON.stringify(quietHoursEnabled),
       );
-      await AsyncStorage.setItem("quietHoursStart", quietHoursStart.toString());
-      await AsyncStorage.setItem("quietHoursEnd", quietHoursEnd.toString());
+      await storageService.setItem("quietHoursStart", quietHoursStart.toString());
+      await storageService.setItem("quietHoursEnd", quietHoursEnd.toString());
 
       // Update notification service configuration
       await notificationService.updateConfig({
@@ -608,8 +612,8 @@ const SettingsScreen = ({ navigation }) => {
   const exportData = async () => {
     try {
       const allData = {};
-      const allKeys = await AsyncStorage.getAllKeys();
-      const allResults = await AsyncStorage.multiGet(allKeys);
+      const allKeys = await storageService.getAllKeys();
+      const allResults = await storageService.multiGet(allKeys);
 
       allResults.forEach(([key, value]) => {
         allData[key] = value;
@@ -654,7 +658,7 @@ const SettingsScreen = ({ navigation }) => {
               text: "Import",
               onPress: async () => {
                 try {
-                  await AsyncStorage.clear();
+                  await storageService.clear();
 
                   const entries = Object.entries(parsedData);
                   const multiSetArray = entries.map(([key, value]) => [
@@ -662,7 +666,7 @@ const SettingsScreen = ({ navigation }) => {
                     value,
                   ]);
 
-                  await AsyncStorage.multiSet(multiSetArray);
+                  await storageService.multiSet(multiSetArray);
                   await loadSettings();
 
                   Alert.alert(
@@ -983,7 +987,7 @@ const SettingsScreen = ({ navigation }) => {
           onPress: async () => {
             try {
               // Get all keys
-              const allKeys = await AsyncStorage.getAllKeys();
+              const allKeys = await storageService.getAllKeys();
 
               // Filter out keys that shouldn't be deleted
               const keysToRemove = allKeys.filter(
@@ -992,7 +996,7 @@ const SettingsScreen = ({ navigation }) => {
               );
 
               // Remove all data
-              await AsyncStorage.multiRemove(keysToRemove);
+              await storageService.multiRemove(keysToRemove);
 
               // Reset state to defaults
               setDarkMode(true);

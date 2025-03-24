@@ -1,3 +1,7 @@
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   StyleSheet,
@@ -28,7 +32,7 @@ import {
   LAYOUT,
   SHADOWS,
 } from "../constants/DesignSystem";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import storageService from "../services/storage/StorageService";
 import { goBackToHome } from "../navigation/NavigationUtils";
 import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
@@ -194,7 +198,7 @@ const MeditationScreen = ({ navigation }) => {
       const loadMeditationSettings = async () => {
         try {
           // Use getSettingsWithDefaults to get default settings
-          const settings = await getSettingsWithDefaults(AsyncStorage);
+          const settings = await getSettingsWithDefaults();
           console.log("Loaded meditation settings:", settings);
 
           // Update meditation duration from settings
@@ -237,7 +241,7 @@ const MeditationScreen = ({ navigation }) => {
   useEffect(() => {
     const loadUserSettings = async () => {
       try {
-        const userSettings = await AsyncStorage.getItem('userSettings');
+        const userSettings = await storageService.getItem('userSettings');
         if (userSettings) {
           const settings = JSON.parse(userSettings);
           if (settings.appTheme) {
@@ -908,7 +912,7 @@ const MeditationScreen = ({ navigation }) => {
         };
 
         // Get existing sessions or initialize empty array
-        const sessionsJson = await AsyncStorage.getItem("meditation_sessions");
+        const sessionsJson = await storageService.getItem("meditation_sessions");
         let sessions = [];
         if (sessionsJson) {
           sessions = JSON.parse(sessionsJson);
@@ -918,7 +922,7 @@ const MeditationScreen = ({ navigation }) => {
         sessions.push(newSession);
 
         // Save updated sessions
-        await AsyncStorage.setItem(
+        await storageService.setItem(
           "meditation_sessions",
           JSON.stringify(sessions),
         );
@@ -1018,7 +1022,7 @@ const MeditationScreen = ({ navigation }) => {
       // Save meditation to history
       try {
         // Get existing history
-        const historyString = await AsyncStorage.getItem("meditationHistory");
+        const historyString = await storageService.getItem("meditationHistory");
         let history = historyString ? JSON.parse(historyString) : [];
         
         // Add new session
@@ -1031,7 +1035,7 @@ const MeditationScreen = ({ navigation }) => {
         history.push(newSession);
         
         // Save updated history
-        await AsyncStorage.setItem("meditationHistory", JSON.stringify(history));
+        await storageService.setItem("meditationHistory", JSON.stringify(history));
         console.log("Meditation session saved to history");
       } catch (error) {
         console.error("Error saving meditation history:", error);

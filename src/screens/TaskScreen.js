@@ -1,3 +1,7 @@
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
 import React, { useState, useEffect, useRef } from "react";
 import {
   StyleSheet,
@@ -17,7 +21,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import storageService from "../services/storage/StorageService";
 import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
 import FrogIcon from "../../assets/frog.svg";
 import CustomDateTimePicker from "../components/CustomDateTimePicker";
@@ -67,7 +71,7 @@ const TaskScreen = ({ navigation }) => {
   useEffect(() => {
     const loadUserSettings = async () => {
       try {
-        const settings = await getSettingsWithDefaults(AsyncStorage);
+        const settings = await getSettingsWithDefaults();
         if (settings.appTheme) {
           setAppTheme(settings.appTheme);
         }
@@ -101,7 +105,7 @@ const TaskScreen = ({ navigation }) => {
   // Load tasks from storage
   const loadTasks = async () => {
     try {
-      const savedTasks = await AsyncStorage.getItem("tasks");
+      const savedTasks = await storageService.getItem("tasks");
       if (savedTasks) {
         const parsedTasks = JSON.parse(savedTasks);
         setTasks(sortTasksByPriority(parsedTasks));
@@ -140,7 +144,7 @@ const TaskScreen = ({ navigation }) => {
   // Save tasks to storage
   const saveTasks = async (tasksToSave) => {
     try {
-      await AsyncStorage.setItem("tasks", JSON.stringify(tasksToSave));
+      await storageService.setItem("tasks", JSON.stringify(tasksToSave));
     } catch (error) {
       console.log("Error saving tasks:", error);
     }

@@ -1,4 +1,8 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
+import storageService from '../services/storage/StorageService';
 
 const ERROR_LOG_KEY = '@kukai/error_logs';
 
@@ -7,7 +11,7 @@ class ErrorLogger {
     try {
       const existingLogs = await this.getErrorLogs();
       const updatedLogs = [...existingLogs, log];
-      await AsyncStorage.setItem(ERROR_LOG_KEY, JSON.stringify(updatedLogs));
+      await storageService.setItem(ERROR_LOG_KEY, JSON.stringify(updatedLogs));
     } catch (error) {
       console.error('Failed to save error log:', error);
     }
@@ -15,7 +19,7 @@ class ErrorLogger {
 
   async getErrorLogs() {
     try {
-      const logs = await AsyncStorage.getItem(ERROR_LOG_KEY);
+      const logs = await storageService.getItem(ERROR_LOG_KEY);
       return logs ? JSON.parse(logs) : [];
     } catch (error) {
       console.error('Failed to get error logs:', error);
@@ -25,7 +29,7 @@ class ErrorLogger {
 
   async clearErrorLogs() {
     try {
-      await AsyncStorage.removeItem(ERROR_LOG_KEY);
+      await storageService.removeItem(ERROR_LOG_KEY);
     } catch (error) {
       console.error('Failed to clear error logs:', error);
     }

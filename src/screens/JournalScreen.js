@@ -1,3 +1,7 @@
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
 import React, { useState, useEffect, useRef } from "react";
 import {
   StyleSheet,
@@ -11,7 +15,7 @@ import {
   Platform,
 } from "react-native";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import storageService from "../services/storage/StorageService";
 import { useFocusEffect } from "@react-navigation/native";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 import CustomHeader from "../components/CustomHeader";
@@ -46,7 +50,7 @@ const JournalScreen = ({ navigation }) => {
   useEffect(() => {
     const loadUserSettings = async () => {
       try {
-        const settings = await getSettingsWithDefaults(AsyncStorage);
+        const settings = await getSettingsWithDefaults();
         if (settings.appTheme) {
           setAppTheme(settings.appTheme);
         }
@@ -110,13 +114,13 @@ const JournalScreen = ({ navigation }) => {
         const day = String(i).padStart(2, "0");
         const dateString = `${currentYear}-${month}-${day}`;
 
-        const hasEntry = await AsyncStorage.getItem(`journal_${dateString}`);
+        const hasEntry = await storageService.getItem(`journal_${dateString}`);
         days[i - 1] = !!hasEntry;
       }
 
       setEntriesByDay(days);
 
-      const journalData = await AsyncStorage.getItem("journal");
+      const journalData = await storageService.getItem("journal");
       if (journalData) {
         const journals = JSON.parse(journalData);
         journals.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -148,7 +152,7 @@ const JournalScreen = ({ navigation }) => {
       };
 
       const todayFormatted = formatDate(now);
-      const todayEntry = await AsyncStorage.getItem(
+      const todayEntry = await storageService.getItem(
         `journal_${todayFormatted}`,
       );
 
@@ -165,7 +169,7 @@ const JournalScreen = ({ navigation }) => {
         // If no entry for today, check yesterday
         checkDate.setDate(checkDate.getDate() - 1);
         const yesterdayFormatted = formatDate(checkDate);
-        const yesterdayEntry = await AsyncStorage.getItem(
+        const yesterdayEntry = await storageService.getItem(
           `journal_${yesterdayFormatted}`,
         );
 
@@ -181,7 +185,7 @@ const JournalScreen = ({ navigation }) => {
       if (currentStreak > 0) {
         while (true) {
           const dateStr = formatDate(checkDate);
-          const hasEntry = await AsyncStorage.getItem(`journal_${dateStr}`);
+          const hasEntry = await storageService.getItem(`journal_${dateStr}`);
 
           if (hasEntry) {
             currentStreak++;
@@ -195,7 +199,7 @@ const JournalScreen = ({ navigation }) => {
       setStreak(currentStreak);
 
       const monthStatus = Array(12).fill(0);
-      const journalKeys = await AsyncStorage.getAllKeys();
+      const journalKeys = await storageService.getAllKeys();
       const journalEntries = journalKeys.filter((key) =>
         key.startsWith("journal_"),
       );

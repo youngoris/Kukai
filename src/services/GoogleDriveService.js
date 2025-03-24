@@ -1,4 +1,8 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
+import storageService from "./storage/StorageService";
 import * as FileSystem from "expo-file-system";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
@@ -114,7 +118,7 @@ class GoogleDriveService {
   // Load authentication state from storage
   async loadAuthState() {
     try {
-      const authStateJson = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_STATE);
+      const authStateJson = await storageService.getItem(STORAGE_KEYS.AUTH_STATE);
       if (authStateJson) {
         const authState = JSON.parse(authStateJson);
         this.accessToken = authState.accessToken;
@@ -134,7 +138,7 @@ class GoogleDriveService {
         refreshToken: this.refreshToken,
         expiresAt: this.expiresAt,
       };
-      await AsyncStorage.setItem(
+      await storageService.setItem(
         STORAGE_KEYS.AUTH_STATE,
         JSON.stringify(authState),
       );
@@ -421,7 +425,7 @@ class GoogleDriveService {
       this.backupFolderId = null;
 
       // Remove authentication state from storage
-      await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_STATE);
+      await storageService.removeItem(STORAGE_KEYS.AUTH_STATE);
 
       return true;
     } catch (error) {
@@ -581,7 +585,7 @@ class GoogleDriveService {
       const uploadResult = await uploadResponse.json();
 
       // Update last sync time
-      await AsyncStorage.setItem(
+      await storageService.setItem(
         STORAGE_KEYS.LAST_SYNC,
         new Date().toISOString(),
       );
@@ -606,7 +610,7 @@ class GoogleDriveService {
   async generateBackupData() {
     try {
       // Get all AsyncStorage keys
-      const allKeys = await AsyncStorage.getAllKeys();
+      const allKeys = await storageService.getAllKeys();
 
       // Exclude keys that don't need to be backed up
       const keysToBackup = allKeys.filter(
@@ -617,7 +621,7 @@ class GoogleDriveService {
       );
 
       // Get all data
-      const keyValuePairs = await AsyncStorage.multiGet(keysToBackup);
+      const keyValuePairs = await storageService.multiGet(keysToBackup);
 
       // Create backup object
       const backupData = {
@@ -735,11 +739,11 @@ class GoogleDriveService {
 
       // Set data in batch
       if (restoreData.length > 0) {
-        await AsyncStorage.multiSet(restoreData);
+        await storageService.multiSet(restoreData);
       }
 
       // Update last sync time
-      await AsyncStorage.setItem(
+      await storageService.setItem(
         STORAGE_KEYS.LAST_SYNC,
         new Date().toISOString(),
       );
@@ -789,8 +793,8 @@ class GoogleDriveService {
   // Get last sync time
   async getLastSyncTime() {
     try {
-      const lastSync = await AsyncStorage.getItem(STORAGE_KEYS.LAST_SYNC);
-      return lastSync ? new Date(lastSync) : null;
+      const lastSync = await storageService.getItem(STORAGE_KEYS.LAST_SYNC);
+      return lastSync ? parseInt(lastSync, 10) : null;
     } catch (error) {
       console.error("Failed to get last sync time:", error);
       return null;
@@ -800,15 +804,15 @@ class GoogleDriveService {
   // Set auto sync
   async setAutoSync(enabled, frequency = "daily") {
     try {
-      await AsyncStorage.setItem(
+      const syncState = {
+        enabled,
+        frequency,
+        lastScheduled: Date.now(),
+      };
+      await storageService.setItem(
         STORAGE_KEYS.SYNC_STATE,
-        JSON.stringify({
-          enabled,
-          frequency,
-          lastChecked: new Date().toISOString(),
-        }),
+        JSON.stringify(syncState),
       );
-
       return true;
     } catch (error) {
       console.error("Failed to set auto sync:", error);
@@ -819,24 +823,14 @@ class GoogleDriveService {
   // Get auto sync settings
   async getAutoSyncSettings() {
     try {
-      const syncStateJson = await AsyncStorage.getItem(STORAGE_KEYS.SYNC_STATE);
+      const syncStateJson = await storageService.getItem(STORAGE_KEYS.SYNC_STATE);
       if (syncStateJson) {
         return JSON.parse(syncStateJson);
       }
-
-      // Default settings
-      return {
-        enabled: false,
-        frequency: "daily",
-        lastChecked: null,
-      };
+      return { enabled: false, frequency: "daily" };
     } catch (error) {
       console.error("Failed to get auto sync settings:", error);
-      return {
-        enabled: false,
-        frequency: "daily",
-        lastChecked: null,
-      };
+      return { enabled: false, frequency: "daily" };
     }
   }
 
@@ -859,8 +853,8 @@ class GoogleDriveService {
       }
 
       // Check last check time
-      const lastChecked = syncSettings.lastChecked
-        ? new Date(syncSettings.lastChecked)
+      const lastChecked = syncSettings.lastScheduled
+        ? new Date(syncSettings.lastScheduled)
         : null;
       const now = new Date();
 
@@ -869,8 +863,8 @@ class GoogleDriveService {
         await this.createBackup({ description: "Auto backup" });
 
         // Update last check time
-        syncSettings.lastChecked = now.toISOString();
-        await AsyncStorage.setItem(
+        syncSettings.lastScheduled = now.toISOString();
+        await storageService.setItem(
           STORAGE_KEYS.SYNC_STATE,
           JSON.stringify(syncSettings),
         );
@@ -899,8 +893,8 @@ class GoogleDriveService {
         });
 
         // Update last check time
-        syncSettings.lastChecked = now.toISOString();
-        await AsyncStorage.setItem(
+        syncSettings.lastScheduled = now.toISOString();
+        await storageService.setItem(
           STORAGE_KEYS.SYNC_STATE,
           JSON.stringify(syncSettings),
         );

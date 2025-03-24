@@ -1,3 +1,7 @@
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   StyleSheet,
@@ -10,7 +14,7 @@ import {
   Platform,
   StatusBar as RNStatusBar,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import storageService from "../services/storage/StorageService";
 import { useFocusEffect } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -90,7 +94,7 @@ const HomeScreen = ({ navigation }) => {
   useEffect(() => {
     const loadUserSettings = async () => {
       try {
-        const settings = await getSettingsWithDefaults(AsyncStorage);
+        const settings = await getSettingsWithDefaults();
         // Apply any settings needed for HomeScreen
       } catch (error) {
         console.error('Error loading user settings:', error);
@@ -111,7 +115,7 @@ const HomeScreen = ({ navigation }) => {
       // Get today's date string as key
       const today = new Date().toISOString().split("T")[0];
 
-      const savedTasks = await AsyncStorage.getItem("completedTasks");
+      const savedTasks = await storageService.getItem("completedTasks");
       if (savedTasks) {
         const parsedTasks = JSON.parse(savedTasks);
 
@@ -138,7 +142,7 @@ const HomeScreen = ({ navigation }) => {
   const saveCompletedTasks = async (newState) => {
     try {
       const today = new Date().toISOString().split("T")[0];
-      await AsyncStorage.setItem("completedTasks", JSON.stringify(newState));
+      await storageService.setItem("completedTasks", JSON.stringify(newState));
     } catch (error) {
       console.error("Error saving completed tasks:", error);
     }

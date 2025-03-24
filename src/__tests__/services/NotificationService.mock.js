@@ -19,11 +19,17 @@ jest.mock('expo-notifications', () => ({
   },
 }));
 
-// Mock for AsyncStorage
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
+// Mock for StorageService
+jest.mock('../../services/storage/StorageService', () => ({
+  __esModule: true,
+  default: {
+    getItem: jest.fn(),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+    multiGet: jest.fn(),
+    multiSet: jest.fn(),
+    getAllKeys: jest.fn(),
+  },
 }));
 
 // Mock for react-native Platform

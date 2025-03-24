@@ -1,3 +1,7 @@
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
 import React, { useState, useEffect, useRef } from "react";
 import {
   StyleSheet,
@@ -20,7 +24,7 @@ import {
   Ionicons,
   MaterialCommunityIcons,
 } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import storageService from "../services/storage/StorageService";
 import * as Location from "expo-location";
 import Markdown from "react-native-markdown-display"; // Import Markdown component
 import useWeather from "../utils/useWeather"; // Import weather Hook
@@ -92,7 +96,7 @@ const JournalEditScreen = ({ navigation, route }) => {
     setLoading(true);
     try {
       // Get user settings to check if weather and location should be included
-      const settings = await getSettingsWithDefaults(AsyncStorage);
+      const settings = await getSettingsWithDefaults();
       
       // Only fetch weather if user has enabled it in settings
       if (settings.includeWeather) {
@@ -128,7 +132,7 @@ const JournalEditScreen = ({ navigation, route }) => {
   useEffect(() => {
     const loadJournalMeta = async () => {
       try {
-        const journalData = await AsyncStorage.getItem("journal");
+        const journalData = await storageService.getItem("journal");
         if (journalData) {
           const journals = JSON.parse(journalData);
           const todayJournal = journals.find((j) => j.date === date);
@@ -163,7 +167,7 @@ const JournalEditScreen = ({ navigation, route }) => {
       // If it's a new journal (no existing content), check if a template needs to be applied
       if (!savedJournal || savedJournal.trim() === "") {
         try {
-          const settings = await getSettingsWithDefaults(AsyncStorage);
+          const settings = await getSettingsWithDefaults();
           
           // Always load default template content first
           const defaultTemplateContent = getTemplateContent("default");
@@ -189,7 +193,7 @@ const JournalEditScreen = ({ navigation, route }) => {
             }
           } else if (settings.selectedJournalTemplate === "custom") {
             // Apply custom template
-            const customTemplate = await AsyncStorage.getItem(
+            const customTemplate = await storageService.getItem(
               "customJournalTemplate",
             );
             if (customTemplate) {
@@ -255,7 +259,7 @@ const JournalEditScreen = ({ navigation, route }) => {
         timestamp: new Date().toISOString(),
       };
 
-      const journalData = await AsyncStorage.getItem("journal");
+      const journalData = await storageService.getItem("journal");
       let journals = [];
 
       if (journalData) {
@@ -265,8 +269,8 @@ const JournalEditScreen = ({ navigation, route }) => {
 
       journals.push(journalEntry);
 
-      await AsyncStorage.setItem("journal", JSON.stringify(journals));
-      await AsyncStorage.setItem(`journal_${date}`, journalText.trim());
+      await storageService.setItem("journal", JSON.stringify(journals));
+      await storageService.setItem(`journal_${date}`, journalText.trim());
 
       // After saving, go to preview mode
       navigation.setParams({
@@ -772,7 +776,7 @@ const JournalEditScreen = ({ navigation, route }) => {
   // Helper function to apply custom template
   const applyCustomTemplate = async () => {
     try {
-      const customTemplate = await AsyncStorage.getItem(
+      const customTemplate = await storageService.getItem(
         "customJournalTemplate",
       );
       if (customTemplate) {
@@ -836,7 +840,7 @@ const JournalEditScreen = ({ navigation, route }) => {
   useEffect(() => {
     const loadUserSettings = async () => {
       try {
-        const settings = await getSettingsWithDefaults(AsyncStorage);
+        const settings = await getSettingsWithDefaults();
         if (settings.appTheme) {
           setAppTheme(settings.appTheme);
         }

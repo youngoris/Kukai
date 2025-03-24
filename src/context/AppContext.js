@@ -1,5 +1,9 @@
+/**
+ * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
+ * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ */
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import storageService from '../services/storage/StorageService';
 
 // Create the context
 const AppContext = createContext();
@@ -36,12 +40,16 @@ export const AppProvider = ({ children }) => {
     loadSettings();
   }, []);
 
-  // Load settings from AsyncStorage
+  // Load settings from storage
   const loadSettings = async () => {
     try {
-      const storedSettings = await AsyncStorage.getItem('appSettings');
+      const storedSettings = await storageService.getItem('appSettings');
       if (storedSettings) {
-        const parsedSettings = JSON.parse(storedSettings);
+        // Handle both JSON string and object responses from StorageService
+        const parsedSettings = typeof storedSettings === 'string' 
+          ? JSON.parse(storedSettings) 
+          : storedSettings;
+        
         setSettings(parsedSettings);
         setTheme(parsedSettings.theme);
       }
@@ -52,10 +60,10 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // Save settings to AsyncStorage
+  // Save settings to storage
   const saveSettings = async (newSettings) => {
     try {
-      await AsyncStorage.setItem('appSettings', JSON.stringify(newSettings));
+      await storageService.setItem('appSettings', newSettings);
       setSettings(newSettings);
       if (newSettings.theme !== theme) {
         setTheme(newSettings.theme);

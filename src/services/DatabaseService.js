@@ -1,8 +1,9 @@
 import * as SQLite from 'expo-sqlite';
 import { DatabaseMigrationService } from './DatabaseMigrationService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import validationService from './validation/ValidationService';
 import { handleDatabaseError, DatabaseErrorCodes, DatabaseError } from './errors/DatabaseError';
+import configService from './ConfigService';
+import storageService, { initializeStorageService } from './storage/StorageService';
 
 const DB_NAME = 'kukai.db';
 
@@ -56,6 +57,22 @@ class DatabaseService {
       // Run migrations
       await this.migrationService.migrate();
       
+      // Initialize ConfigService
+      await configService.initialize(this.db);
+      
+      // Initialize StorageService
+      await initializeStorageService();
+      
+      // Check if AsyncStorage migration is needed
+      const migrationCompleted = await configService.getItem('asyncstorage_migration_completed', false);
+      if (!migrationCompleted) {
+        console.log('Starting migration from AsyncStorage to SQLite...');
+        const migrationResult = await configService.migrateFromAsyncStorage();
+        console.log('Migration result:', migrationResult);
+      } else {
+        console.log('AsyncStorage migration already completed');
+      }
+      
       this.initialized = true;
       console.log('Database initialized successfully');
       return { success: true };
@@ -67,8 +84,8 @@ class DatabaseService {
   async migrateFromAsyncStorage() {
     try {
       // Check if migration has been done before
-      const migrationDone = await AsyncStorage.getItem('@dbMigrationCompleted');
-      if (migrationDone === 'true') {
+      const migrationDone = await configService.getItem('dbMigrationCompleted', false);
+      if (migrationDone === true) {
         console.log('Data migration already completed');
         return { success: true };
       }
@@ -130,8 +147,8 @@ class DatabaseService {
         console.log(`Migrated ${entries.length} journal entries`);
       }
 
-      // Mark migration as completed
-      await AsyncStorage.setItem('@dbMigrationCompleted', 'true');
+      // Mark migration as completed using ConfigService
+      await configService.setItem('dbMigrationCompleted', true, 'Flag indicating data migration from AsyncStorage to SQLite has been completed');
       console.log('Data migration completed successfully');
       return { success: true };
     } catch (error) {
@@ -453,6 +470,56 @@ class DatabaseService {
       return { success: true, size: sizeInBytes };
     } catch (error) {
       return handleDatabaseError(error, 'getDatabaseSize');
+    }
+  }
+
+  /**
+   * Diagnostic method to check storage migration status
+   */
+  async checkMigrationStatus() {
+    if (!this.initialized) {
+      return {
+        success: false,
+        error: 'Database not initialized'
+      };
+    }
+    
+    try {
+      // Collect ConfigService keys
+      const configKeys = await configService.getAllKeys();
+      
+      // Check migration flags
+      const configMigrationFlag = await configService.getItem('dbMigrationCompleted');
+      const configAsyncStorageMigrationFlag = await configService.getItem('asyncstorage_migration_completed');
+      
+      // Check database schema version
+      const configServiceVersion = await configService.getItem('db_version');
+      
+      // Get migration log if available
+      const migrationLog = await configService.getItem('asyncstorage_migration_log', []);
+      
+      return {
+        success: true,
+        configServiceKeys: configKeys.length,
+        migrationFlags: {
+          configServiceMigrationFlag: configMigrationFlag,
+          asyncStorageMigrationCompletedFlag: configAsyncStorageMigrationFlag
+        },
+        databaseVersions: {
+          configService: configServiceVersion
+        },
+        migrationLogEntries: migrationLog.length,
+        storageServiceState: {
+          initialized: storageService.initialized,
+          useAsyncStorageFallback: storageService.useAsyncStorageFallback
+        }
+      };
+    } catch (error) {
+      console.error('Error checking migration status:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   }
 }
