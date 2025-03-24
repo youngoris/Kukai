@@ -3,7 +3,7 @@ import { DatabaseMigrationService } from './DatabaseMigrationService';
 import validationService from './validation/ValidationService';
 import { handleDatabaseError, DatabaseErrorCodes, DatabaseError } from './errors/DatabaseError';
 import configService from './ConfigService';
-import storageService, { initializeStorageService } from './storage/StorageService';
+import { initializeStorageService } from './storage/StorageService';
 
 const DB_NAME = 'kukai.db';
 
@@ -63,96 +63,11 @@ class DatabaseService {
       // Initialize StorageService
       await initializeStorageService();
       
-      // Check if AsyncStorage migration is needed
-      const migrationCompleted = await configService.getItem('asyncstorage_migration_completed', false);
-      if (!migrationCompleted) {
-        console.log('Starting migration from AsyncStorage to SQLite...');
-        const migrationResult = await configService.migrateFromAsyncStorage();
-        console.log('Migration result:', migrationResult);
-      } else {
-        console.log('AsyncStorage migration already completed');
-      }
-      
       this.initialized = true;
       console.log('Database initialized successfully');
       return { success: true };
     } catch (error) {
       return handleDatabaseError(error, 'initialize');
-    }
-  }
-
-  async migrateFromAsyncStorage() {
-    try {
-      // Check if migration has been done before
-      const migrationDone = await configService.getItem('dbMigrationCompleted', false);
-      if (migrationDone === true) {
-        console.log('Data migration already completed');
-        return { success: true };
-      }
-
-      console.log('Starting data migration from AsyncStorage to SQLite...');
-      
-      // Migrate meditation sessions
-      const meditationSessions = await AsyncStorage.getItem('@meditationSessions');
-      if (meditationSessions) {
-        const sessions = JSON.parse(meditationSessions);
-        for (const session of sessions) {
-          await this.create('meditation_sessions', {
-            id: session.id,
-            duration: session.duration,
-            sound_theme: session.soundTheme || 'default',
-            start_time: session.startTime,
-            end_time: session.endTime || null,
-            completed: session.completed ? 1 : 0,
-            notes: session.notes || null
-          });
-        }
-        console.log(`Migrated ${sessions.length} meditation sessions`);
-      }
-
-      // Migrate tasks
-      const tasks = await AsyncStorage.getItem('@tasks');
-      if (tasks) {
-        const taskList = JSON.parse(tasks);
-        for (const task of taskList) {
-          await this.create('tasks', {
-            id: task.id,
-            title: task.text,
-            description: task.description || null,
-            due_date: task.taskTime || null,
-            priority: task.priority || 0,
-            completed: task.completed ? 1 : 0,
-            is_frog: task.isFrog ? 1 : 0,
-            is_important: task.isImportant ? 1 : 0,
-            is_urgent: task.isUrgent ? 1 : 0,
-            reminder_time: task.reminderTime || null,
-            category_id: task.categoryId || null
-          });
-        }
-        console.log(`Migrated ${taskList.length} tasks`);
-      }
-
-      // Migrate journal entries
-      const journalEntries = await AsyncStorage.getItem('@journalEntries');
-      if (journalEntries) {
-        const entries = JSON.parse(journalEntries);
-        for (const entry of entries) {
-          await this.create('journal_entries', {
-            id: entry.id,
-            content: entry.content,
-            mood: entry.mood || null,
-            timestamp: entry.timestamp || new Date().toISOString()
-          });
-        }
-        console.log(`Migrated ${entries.length} journal entries`);
-      }
-
-      // Mark migration as completed using ConfigService
-      await configService.setItem('dbMigrationCompleted', true, 'Flag indicating data migration from AsyncStorage to SQLite has been completed');
-      console.log('Data migration completed successfully');
-      return { success: true };
-    } catch (error) {
-      return handleDatabaseError(error, 'migrateFromAsyncStorage');
     }
   }
 
@@ -474,7 +389,7 @@ class DatabaseService {
   }
 
   /**
-   * Diagnostic method to check storage migration status
+   * Diagnostic method to check database status
    */
   async checkMigrationStatus() {
     if (!this.initialized) {
@@ -488,34 +403,18 @@ class DatabaseService {
       // Collect ConfigService keys
       const configKeys = await configService.getAllKeys();
       
-      // Check migration flags
-      const configMigrationFlag = await configService.getItem('dbMigrationCompleted');
-      const configAsyncStorageMigrationFlag = await configService.getItem('asyncstorage_migration_completed');
-      
       // Check database schema version
       const configServiceVersion = await configService.getItem('db_version');
-      
-      // Get migration log if available
-      const migrationLog = await configService.getItem('asyncstorage_migration_log', []);
       
       return {
         success: true,
         configServiceKeys: configKeys.length,
-        migrationFlags: {
-          configServiceMigrationFlag: configMigrationFlag,
-          asyncStorageMigrationCompletedFlag: configAsyncStorageMigrationFlag
-        },
         databaseVersions: {
           configService: configServiceVersion
-        },
-        migrationLogEntries: migrationLog.length,
-        storageServiceState: {
-          initialized: storageService.initialized,
-          useAsyncStorageFallback: storageService.useAsyncStorageFallback
         }
       };
     } catch (error) {
-      console.error('Error checking migration status:', error);
+      console.error('Error checking database status:', error);
       return {
         success: false,
         error: error.message

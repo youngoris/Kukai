@@ -243,7 +243,22 @@ const MeditationScreen = ({ navigation }) => {
       try {
         const userSettings = await storageService.getItem('userSettings');
         if (userSettings) {
-          const settings = JSON.parse(userSettings);
+          // Check if userSettings is already an object (returned from SQLite)
+          // or a JSON string (legacy format)
+          let settings;
+          if (typeof userSettings === 'string') {
+            try {
+              settings = JSON.parse(userSettings);
+            } catch (parseError) {
+              console.error('Error parsing user settings:', parseError);
+              settings = {}; // Use empty object as fallback
+            }
+          } else {
+            // Already an object from SQLite/ConfigService
+            settings = userSettings;
+          }
+          
+          // Apply settings
           if (settings.appTheme) {
             setAppTheme(settings.appTheme);
           }
@@ -914,18 +929,27 @@ const MeditationScreen = ({ navigation }) => {
         // Get existing sessions or initialize empty array
         const sessionsJson = await storageService.getItem("meditation_sessions");
         let sessions = [];
+        
         if (sessionsJson) {
-          sessions = JSON.parse(sessionsJson);
+          // Handle both string and object formats
+          if (typeof sessionsJson === 'string') {
+            try {
+              sessions = JSON.parse(sessionsJson);
+            } catch (parseError) {
+              console.error("Error parsing meditation sessions:", parseError);
+              // Continue with empty array if parsing fails
+            }
+          } else {
+            // Already an object from SQLite/ConfigService
+            sessions = sessionsJson;
+          }
         }
 
         // Add new session
         sessions.push(newSession);
 
-        // Save updated sessions
-        await storageService.setItem(
-          "meditation_sessions",
-          JSON.stringify(sessions),
-        );
+        // Save updated sessions - let StorageService handle serialization
+        await storageService.setItem("meditation_sessions", sessions);
 
         console.log("Meditation session saved successfully");
       } catch (error) {
@@ -1023,7 +1047,22 @@ const MeditationScreen = ({ navigation }) => {
       try {
         // Get existing history
         const historyString = await storageService.getItem("meditationHistory");
-        let history = historyString ? JSON.parse(historyString) : [];
+        let history = [];
+        
+        if (historyString) {
+          // Handle both string and object formats
+          if (typeof historyString === 'string') {
+            try {
+              history = JSON.parse(historyString);
+            } catch (parseError) {
+              console.error("Error parsing meditation history:", parseError);
+              // Continue with empty array if parsing fails
+            }
+          } else {
+            // Already an object from SQLite/ConfigService
+            history = historyString;
+          }
+        }
         
         // Add new session
         const newSession = {
@@ -1034,8 +1073,8 @@ const MeditationScreen = ({ navigation }) => {
         
         history.push(newSession);
         
-        // Save updated history
-        await storageService.setItem("meditationHistory", JSON.stringify(history));
+        // Save updated history - let StorageService handle serialization
+        await storageService.setItem("meditationHistory", history);
         console.log("Meditation session saved to history");
       } catch (error) {
         console.error("Error saving meditation history:", error);

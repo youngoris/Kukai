@@ -50,7 +50,7 @@ class StorageService {
    */
   async setItem(key, value) {
     const formattedKey = this.formatKey(key);
-    const stringValue = typeof value !== 'string' ? JSON.stringify(value) : value;
+    // No need to manually stringify - ConfigService handles serialization
     
     // Store in ConfigService if initialized
     if (this.initialized && configService.initialized) {

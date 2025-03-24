@@ -191,27 +191,6 @@ class ConfigService {
     this.cache.clear();
     return { success: true };
   }
-  
-  /**
-   * Migrate from AsyncStorage
-   */
-  async migrateFromAsyncStorage() {
-    console.log('AsyncStorage migration no longer needed');
-    
-    // Mark migration as complete
-    await this.setItem(
-      'asyncstorage_migration_completed', 
-      true,
-      'Migration completed flag'
-    );
-    
-    return { 
-      success: true, 
-      totalItems: 0,
-      migratedItems: 0,
-      log: []
-    };
-  }
 }
 
 export default new ConfigService(); 

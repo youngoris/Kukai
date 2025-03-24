@@ -53,12 +53,28 @@ export const getSettingsWithDefaults = async () => {
     const storedSettings = await storageService.getItem("userSettings");
     
     if (storedSettings) {
-      // If settings exist, parse and return them
-      return JSON.parse(storedSettings);
+      // Handle the case where the storage service returns an object directly
+      // or a JSON string that needs parsing
+      let parsedSettings;
+      
+      if (typeof storedSettings === 'string') {
+        try {
+          parsedSettings = JSON.parse(storedSettings);
+        } catch (parseError) {
+          console.error("Error parsing settings:", parseError);
+          return defaultSettings; // Return defaults if parse fails
+        }
+      } else {
+        // Already an object from SQLite/ConfigService
+        parsedSettings = storedSettings;
+      }
+      
+      // Merge with defaults to ensure all properties exist
+      return { ...defaultSettings, ...parsedSettings };
     } else {
       // If no settings exist, save and return defaults
       console.log("No settings found, using defaults");
-      await storageService.setItem("userSettings", JSON.stringify(defaultSettings));
+      await storageService.setItem("userSettings", defaultSettings);
       return defaultSettings;
     }
   } catch (error) {

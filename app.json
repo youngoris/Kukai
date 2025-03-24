@@ -18,7 +18,10 @@
       "bundleIdentifier": "com.andre.kukai",
       "infoPlist": {
         "NSHealthShareUsageDescription": "This app requires access to save your meditation sessions as mindfulness data",
-        "NSHealthUpdateUsageDescription": "This app requires access to save your meditation sessions as mindfulness data"
+        "NSHealthUpdateUsageDescription": "This app requires access to save your meditation sessions as mindfulness data",
+        "NSLocationWhenInUseUsageDescription": "此应用需要访问您的位置以提供天气信息和地理位置相关服务",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "此应用需要访问您的位置以提供天气信息和地理位置相关功能",
+        "NSLocationAlwaysUsageDescription": "此应用需要访问您的位置以提供天气信息和地理位置相关功能"
       }
     },
     "android": {
