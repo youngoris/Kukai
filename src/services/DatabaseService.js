@@ -24,6 +24,26 @@ class DatabaseService {
     this.initialized = false;
   }
 
+  // Close database connection
+  async closeDatabase() {
+    if (this.db) {
+      try {
+        await this.db.closeAsync();
+        this.db = null;
+        console.log('Database connection closed');
+        return true;
+      } catch (error) {
+        console.error('Error closing database:', error);
+        throw new DatabaseError(
+          'Failed to close database',
+          DatabaseErrorCodes.CONNECTION_ERROR,
+          { operation: 'closeDatabase', original: error }
+        );
+      }
+    }
+    return false;
+  }
+
   // Open database connection
   async openDatabase() {
     if (!this.db) {
@@ -44,6 +64,10 @@ class DatabaseService {
     return this.db;
   }
 
+  /**
+   * Initialize the database service
+   * Opens connection, runs migrations, and initializes related services
+   */
   async initialize() {
     if (this.initialized) {
       return { success: true };
@@ -54,8 +78,21 @@ class DatabaseService {
       this.db = await this.openDatabase();
       console.log('Database opened successfully');
 
+      // Share db connection with migration service
+      this.migrationService.db = this.db;
+      
       // Run migrations
-      await this.migrationService.migrate();
+      const migrationResult = await this.migrationService.migrate();
+      
+      if (!migrationResult.success) {
+        console.error('Database migration failed:', migrationResult.message);
+        return { 
+          success: false, 
+          error: migrationResult.message 
+        };
+      }
+      
+      console.log('Database migrations completed:', migrationResult.message);
       
       // Initialize ConfigService
       await configService.initialize(this.db);
@@ -65,9 +102,53 @@ class DatabaseService {
       
       this.initialized = true;
       console.log('Database initialized successfully');
-      return { success: true };
+      
+      return { 
+        success: true,
+        dbVersion: migrationResult.currentVersion
+      };
     } catch (error) {
       return handleDatabaseError(error, 'initialize');
+    }
+  }
+
+  /**
+   * Get the current database version
+   */
+  async getDbVersion() {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    
+    return await this.migrationService.getCurrentVersion();
+  }
+
+  /**
+   * Get all table names in the database
+   */
+  async getAllTableNames() {
+    if (!this.initialized) {
+      throw new DatabaseError(
+        'Database not initialized',
+        DatabaseErrorCodes.INITIALIZATION_ERROR
+      );
+    }
+    
+    try {
+      const result = await this.db.getAllAsync(`
+        SELECT name FROM sqlite_master
+        WHERE type='table'
+        AND name NOT LIKE 'sqlite_%'
+        AND name NOT LIKE 'android_%'
+      `);
+      
+      return result.map(row => row.name);
+    } catch (error) {
+      throw new DatabaseError(
+        'Failed to get table names',
+        DatabaseErrorCodes.SQL_ERROR,
+        { operation: 'getAllTableNames', original: error }
+      );
     }
   }
 

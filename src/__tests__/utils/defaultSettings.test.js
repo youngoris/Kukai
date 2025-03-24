@@ -1,10 +1,14 @@
 import defaultSettings, { getSettingsWithDefaults } from '../../utils/defaultSettings';
+import storageService from '../../services/storage/StorageService';
 
-// Mock AsyncStorage
-const mockAsyncStorage = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-};
+// Mock StorageService
+jest.mock('../../services/storage/StorageService', () => ({
+  __esModule: true,
+  default: {
+    getItem: jest.fn(),
+    setItem: jest.fn(),
+  },
+}));
 
 // Mock console methods
 console.error = jest.fn();
@@ -70,7 +74,7 @@ describe('defaultSettings', () => {
   describe('getSettingsWithDefaults', () => {
     // Test when stored settings exist
     test('should return stored settings when they exist', async () => {
-      // Mock settings to return from AsyncStorage
+      // Mock settings to return from storageService
       const mockStoredSettings = { 
         darkMode: false, 
         focusDuration: 30,
@@ -78,39 +82,42 @@ describe('defaultSettings', () => {
       };
       
       // Setup the mock to return our test data
-      mockAsyncStorage.getItem.mockResolvedValue(JSON.stringify(mockStoredSettings));
+      storageService.getItem.mockResolvedValue(JSON.stringify(mockStoredSettings));
       
-      // Call the function with our mock
-      const result = await getSettingsWithDefaults(mockAsyncStorage);
+      // Call the function
+      const result = await getSettingsWithDefaults();
       
       // Verify that getItem was called with the correct key
-      expect(mockAsyncStorage.getItem).toHaveBeenCalledWith('userSettings');
+      expect(storageService.getItem).toHaveBeenCalledWith('userSettings');
       
-      // Verify that the result matches our mock data
-      expect(result).toEqual(mockStoredSettings);
+      // Verify that the result has our mock data (merged with defaults)
+      expect(result).toEqual({
+        ...defaultSettings,
+        ...mockStoredSettings
+      });
       
       // Verify that setItem was not called (since settings already exist)
-      expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+      expect(storageService.setItem).not.toHaveBeenCalled();
     });
 
     // Test when no stored settings exist
     test('should return and save default settings when no stored settings exist', async () => {
       // Setup the mock to return null (no settings found)
-      mockAsyncStorage.getItem.mockResolvedValue(null);
+      storageService.getItem.mockResolvedValue(null);
       
-      // Call the function with our mock
-      const result = await getSettingsWithDefaults(mockAsyncStorage);
+      // Call the function
+      const result = await getSettingsWithDefaults();
       
       // Verify that getItem was called with the correct key
-      expect(mockAsyncStorage.getItem).toHaveBeenCalledWith('userSettings');
+      expect(storageService.getItem).toHaveBeenCalledWith('userSettings');
       
       // Verify that the result matches the default settings
       expect(result).toEqual(defaultSettings);
       
       // Verify that setItem was called to save the default settings
-      expect(mockAsyncStorage.setItem).toHaveBeenCalledWith(
+      expect(storageService.setItem).toHaveBeenCalledWith(
         'userSettings',
-        JSON.stringify(defaultSettings)
+        defaultSettings
       );
       
       // Verify that the log message was output
@@ -121,19 +128,19 @@ describe('defaultSettings', () => {
     test('should return default settings when an error occurs', async () => {
       // Setup the mock to throw an error
       const mockError = new Error('Test error');
-      mockAsyncStorage.getItem.mockRejectedValue(mockError);
+      storageService.getItem.mockRejectedValue(mockError);
       
-      // Call the function with our mock
-      const result = await getSettingsWithDefaults(mockAsyncStorage);
+      // Call the function
+      const result = await getSettingsWithDefaults();
       
       // Verify that getItem was called with the correct key
-      expect(mockAsyncStorage.getItem).toHaveBeenCalledWith('userSettings');
+      expect(storageService.getItem).toHaveBeenCalledWith('userSettings');
       
       // Verify that the result matches the default settings
       expect(result).toEqual(defaultSettings);
       
       // Verify that setItem was not called (we don't save on error)
-      expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+      expect(storageService.setItem).not.toHaveBeenCalled();
       
       // Verify that the error was logged
       expect(console.error).toHaveBeenCalledWith('Error getting settings:', mockError);

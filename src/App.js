@@ -68,6 +68,7 @@ export default function App() {
         
         if (dbResult.success) {
           console.log("Database initialized successfully");
+          console.log(`Database schema version: ${dbResult.dbVersion || 'unknown'}`);
           
           // Initialize backup service
           await databaseBackupService.initialize();
@@ -101,6 +102,14 @@ export default function App() {
           console.log("Focus sessions count:", focusCount);
         } else {
           console.error("Database initialization failed:", dbResult.error);
+          
+          // Attempt to recover from initialization failure
+          // This might happen if a migration failed
+          if (dbResult.error && dbResult.error.includes('migration')) {
+            console.log("Attempting to recover from migration failure...");
+            // In a production app, you might want to show a dialog to the user here
+            // For now, we'll just log the error
+          }
         }
       } catch (error) {
         console.error("Failed to initialize database:", error);
