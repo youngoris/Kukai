@@ -193,80 +193,151 @@ export default function useWeather(options = {}) {
       console.log("Making Weather API request:", {
         baseUrl: WEATHER_API.BASE_URL,
         units: WEATHER_API.UNITS,
-        keySource:
-          WEATHER_API.API_KEY === "847915028262f4981a07546eb43696ce"
-            ? "Default fallback value"
-            : "Environment variable (.env)",
+        endpoint: "/weather",
+        coordinates: `lat=${latitude}&lon=${longitude}`,
+        keySource: "Current configuration",
+        keyLength: WEATHER_API.API_KEY.length,
+        keyStart: WEATHER_API.API_KEY.substring(0, 4),
+        keyEnd: WEATHER_API.API_KEY.substring(WEATHER_API.API_KEY.length - 4),
       });
+
+      // Debug: Show API key being used
+      console.log("Using API key: " + WEATHER_API.API_KEY.substring(0, 4) + "..." + WEATHER_API.API_KEY.substring(WEATHER_API.API_KEY.length - 4));
 
       // Add timeout handling
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds timeout
 
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
+      try {
+        // Log the full URL for debugging (with key hidden)
+        const debugUrl = url.replace(WEATHER_API.API_KEY, "API_KEY_HIDDEN");
+        console.log("Full request URL (key hidden):", debugUrl);
+        
+        const response = await fetch(url, { 
+          signal: controller.signal,
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          }
+        });
+        clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(
-          "Weather API response error:",
-          response.status,
-          errorText,
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(
+            "Weather API response error:",
+            response.status,
+            errorText,
+            "\nURL:", url.replace(WEATHER_API.API_KEY, "API_KEY_HIDDEN") // Hide API key but show URL structure
+          );
+
+          // Special handling for 401 errors
+          if (response.status === 401) {
+            // Try direct test of the API key with a simple request
+            console.log("Testing API key with a direct fetch...");
+            try {
+              const testUrl = `https://api.openweathermap.org/data/2.5/weather?q=London&appid=${WEATHER_API.API_KEY}`;
+              const testResponse = await fetch(testUrl);
+              console.log("Test API response status:", testResponse.status);
+              
+              const apiError = {
+                type: ERROR_TYPES.API,
+                message: `API authentication failed (401): API key may be invalid or expired`,
+                details: `Please check if your OpenWeatherMap API key is valid. Key: ${WEATHER_API.API_KEY.substring(0, 4)}...${WEATHER_API.API_KEY.substring(WEATHER_API.API_KEY.length - 4)} (length: ${WEATHER_API.API_KEY.length}). Test response: ${testResponse.status}`,
+              };
+              setError(apiError);
+              setIsLoading(false);
+              return { error: apiError };
+            } catch (testError) {
+              console.error("API key test failed:", testError);
+              const apiError = {
+                type: ERROR_TYPES.API,
+                message: `API authentication failed (401): API key may be invalid or expired`,
+                details: `Please check if your OpenWeatherMap API key is valid. Key: ${WEATHER_API.API_KEY.substring(0, 4)}...${WEATHER_API.API_KEY.substring(WEATHER_API.API_KEY.length - 4)} (length: ${WEATHER_API.API_KEY.length}). Test error: ${testError.message}`,
+              };
+              setError(apiError);
+              setIsLoading(false);
+              return { error: apiError };
+            }
+          }
+
+          const apiError = {
+            type: ERROR_TYPES.API,
+            message: `Failed to get weather data: ${response.status}`,
+            details: errorText,
+          };
+          setError(apiError);
+          setIsLoading(false);
+          return { error: apiError };
+        }
+
+        const weatherData = await response.json();
+        console.log("Weather API response successful:", {
+          city: weatherData.name,
+          weatherCondition: weatherData.weather[0].main,
+          responseStatus: response.status,
+        });
+
+        // Set states
+        const weatherMain = weatherData.weather[0].main;
+        const weatherIcon = weatherData.weather[0].icon;
+        const temp = Math.round(weatherData.main.temp);
+        const locationName = weatherData.name;
+
+        setWeather({
+          main: weatherMain,
+          icon: weatherIcon,
+        });
+        setTemperature(temp);
+        setLocation(locationName);
+        setSource("api");
+
+        // Save weather data to AsyncStorage
+        await storageService.setItem(
+          STORAGE_KEYS.WEATHER_DATA,
+          JSON.stringify({
+            weather: weatherMain,
+            icon: getWeatherIcon(weatherIcon),
+            temperature: temp,
+            location: locationName,
+            timestamp: new Date().toISOString(),
+          })
         );
 
-        const apiError = {
-          type: ERROR_TYPES.API,
-          message: `Failed to get weather data: ${response.status}`,
-          details: errorText,
-        };
-        setError(apiError);
         setIsLoading(false);
-        return { error: apiError };
-      }
-
-      const weatherData = await response.json();
-      console.log("Weather API response successful:", {
-        city: weatherData.name,
-        weatherCondition: weatherData.weather[0].main,
-        responseStatus: response.status,
-      });
-
-      // Set states
-      const weatherMain = weatherData.weather[0].main;
-      const weatherIcon = weatherData.weather[0].icon;
-      const temp = Math.round(weatherData.main.temp);
-      const locationName = weatherData.name;
-
-      setWeather({
-        main: weatherMain,
-        icon: weatherIcon,
-      });
-      setTemperature(temp);
-      setLocation(locationName);
-      setSource("api");
-
-      // Save weather data to AsyncStorage
-      await storageService.setItem(
-        STORAGE_KEYS.WEATHER_DATA,
-        JSON.stringify({
+        return {
           weather: weatherMain,
-          icon: weatherIcon,
           temperature: temp,
           location: locationName,
-          timestamp: new Date().toISOString(),
-          data: weatherData,
-        }),
-      );
-
-      setIsLoading(false);
-
-      return {
-        weather: weatherMain,
-        temperature: temp,
-        location: locationName,
-        source: "api",
-        icon: weatherIcon,
-      };
+          source: "api",
+          icon: getWeatherIcon(weatherIcon),
+        };
+      } catch (error) {
+        clearTimeout(timeoutId);
+        console.error("Fetch error:", error.message);
+        
+        // Handle abort error separately
+        if (error.name === 'AbortError') {
+          const timeoutError = {
+            type: ERROR_TYPES.NETWORK,
+            message: "Request timeout",
+            details: "Weather API request timed out, please check your network connection",
+          };
+          setError(timeoutError);
+          setIsLoading(false);
+          return { error: timeoutError };
+        }
+        
+        // Handle network errors
+        const networkError = {
+          type: ERROR_TYPES.NETWORK,
+          message: "Network connection error",
+          details: error.message || "Please check your network connection", 
+        };
+        setError(networkError);
+        setIsLoading(false);
+        return { error: networkError };
+      }
     } catch (error) {
       console.error("Error getting weather data:", error);
 

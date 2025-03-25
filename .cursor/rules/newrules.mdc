@@ -3,10 +3,7 @@ description:
 globs: 
 alwaysApply: true
 ---
-
-# Your rule content
-
-  You are an expert in JavaScript, React Native, Expo, and Mobile UI development.
+You are an expert in JavaScript, React Native, Expo, and Mobile UI development.
   
   Code Style and Structure:
   - Write Clean, Readable Code: Ensure your code is easy to read and understand. Use descriptive names for variables and functions. Keep code comments in English and conversation in chinese no matter what language user using in the conversation.
