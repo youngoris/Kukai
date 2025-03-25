@@ -19,8 +19,9 @@ import {
   BackHandler,
   StatusBar as RNStatusBar,
   AppState,
+  Switch,
 } from "react-native";
-import { MaterialIcons, Ionicons } from "@expo/vector-icons";
+import { MaterialIcons, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import * as Progress from "react-native-progress";
 import { useFocusEffect } from "@react-navigation/native";
@@ -42,18 +43,10 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 // Ignore specific warnings
 LogBox.ignoreLogs(["Animated: `useNativeDriver`"]);
 
-// Check if running on web platform
-const isWeb = Platform.OS === 'web';
-
-// Audio configuration - Adjust these values to customize the audio experience
-// CROSSFADE_DURATION: Controls how smooth the transition is between loops (in milliseconds)
-// - Lower values (300-500ms): Quicker transitions but might be noticeable
-// - Medium values (800-1200ms): Good balance between smoothness and responsiveness
-// - Higher values (1500-3000ms): Very smooth transitions but uses more resources
-// FADE_IN_DURATION: Controls how long it takes for audio to fade in when starting (in milliseconds)
+// Audio configuration
 const AUDIO_CONFIG = {
-  CROSSFADE_DURATION: 2500, // Milliseconds for crossfade between audio loops
-  FADE_IN_DURATION: 1500,   // Milliseconds for initial fade-in when starting
+  CROSSFADE_DURATION: 2500, // Milliseconds for crossfade
+  FADE_IN_DURATION: 1500,   // Milliseconds for initial fade-in
   DEFAULT_VOLUME: 0.5,      // Default background sound volume
 };
 
@@ -62,24 +55,15 @@ const TIMER_SIZE = width * 0.8;
 
 // Audio session configuration for seamless playback
 const configureAudioSession = async () => {
-  // Skip audio configuration on web platform
-  if (isWeb) {
-    console.log("Audio session configuration skipped on web platform");
-    return;
-  }
-  
   try {
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
       staysActiveInBackground: true, 
-      // Use numeric constants instead of Audio enum values to avoid compatibility issues
-      // 1 = INTERRUPTION_MODE_IOS_DO_NOT_MIX / INTERRUPTION_MODE_ANDROID_DO_NOT_MIX
       interruptionModeIOS: 1,
       interruptionModeAndroid: 1,
       shouldDuckAndroid: false,
       playThroughEarpieceAndroid: false,
     });
-    console.log("Audio session configured for optimal meditation experience");
   } catch (error) {
     console.error("Failed to configure audio session:", error);
   }
@@ -132,6 +116,21 @@ const soundThemes = [
   },
 ];
 
+// Define guided meditation prompts - these will be spoken by AI during meditation
+const guidedMeditationPrompts = [
+  { time: 0, message: "Find a comfortable position and gently close your eyes." },
+  { time: 30, message: "Take a deep breath in through your nose, and slowly exhale through your mouth." },
+  { time: 60, message: "Notice the weight of your body against the surface beneath you." },
+  { time: 120, message: "As thoughts arise, acknowledge them without judgment, then let them go." },
+  { time: 180, message: "Bring your attention to your breath. Notice the natural rhythm of your breathing." },
+  { time: 300, message: "If your mind has wandered, gently bring your focus back to the present moment." },
+  { time: 480, message: "Observe any sensations in your body without trying to change them." },
+  { time: 600, message: "Allow your body to relax more deeply with each breath." },
+  { time: 900, message: "Remember that thoughts come and go, like clouds in the sky." },
+  { time: 1200, message: "Cultivate a sense of kindness toward yourself." },
+  { time: 1500, message: "Notice the quality of your awareness in this moment." },
+];
+
 // Define quick duration options
 const durationOptions = [
   { value: 5, label: "5 min" },
@@ -177,17 +176,20 @@ const MeditationScreen = ({ navigation }) => {
   const audioPositionRef = useRef(0);
   const audioDurationRef = useRef(0);
 
-  // New state variables
+  // State variables
   const [customDuration, setCustomDuration] = useState(10); // Default custom duration
   const [selectedSoundTheme, setSelectedSoundTheme] = useState("silence"); // Default set to silent
-  const [isAudioReleasing, setIsAudioReleasing] = useState(false); // Add state flag
-  const audioLoopCountRef = useRef(0);
-  const statusLogTimeRef = useRef(0);
   const [keepScreenAwake, setKeepScreenAwake] = useState(true); // Default to true until settings are loaded
   const appState = useRef(AppState.currentState);
 
+  // Guided meditation state
+  const [isGuidedMeditation, setIsGuidedMeditation] = useState(false);
+  const [currentPrompt, setCurrentPrompt] = useState("");
+  const promptTimerRef = useRef(null);
+  const promptFadeAnim = useRef(new Animated.Value(0)).current;
+
   // Get safe area insets
-  const insets = useSafeAreaInsets();
+  const insets = useSafeAreaInsets ? useSafeAreaInsets() : { top: 0, bottom: 0, left: 0, right: 0 };
   
   // Get status bar height for Android
   const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
@@ -199,42 +201,36 @@ const MeditationScreen = ({ navigation }) => {
         try {
           // Use getSettingsWithDefaults to get default settings
           const settings = await getSettingsWithDefaults();
-          console.log("Loaded meditation settings:", settings);
 
           // Update meditation duration from settings
           if (settings.meditationDuration) {
-            console.log(
-              "Setting meditation duration to:",
-              settings.meditationDuration,
-            );
             setCustomDuration(settings.meditationDuration);
           }
 
           // Update sound theme from settings
           if (settings.selectedSoundTheme) {
-            console.log(
-              "Setting sound theme to:",
-              settings.selectedSoundTheme,
-            );
             setSelectedSoundTheme(settings.selectedSoundTheme);
           }
           
           // Update keep screen awake setting
           if (settings.keepScreenAwake !== undefined) {
-            console.log(
-              "Setting keep screen awake to:",
-              settings.keepScreenAwake,
-            );
             setKeepScreenAwake(settings.keepScreenAwake);
+          }
+
+          // Update theme setting
+          if (settings.theme) {
+            setAppTheme(settings.theme);
           }
         } catch (error) {
           console.error("Error loading meditation settings:", error);
         }
       };
 
+      // Load settings
       loadMeditationSettings();
+
       return () => {};
-    }, [navigation]),
+    }, []),
   );
 
   // Load user settings including theme
@@ -243,8 +239,7 @@ const MeditationScreen = ({ navigation }) => {
       try {
         const userSettings = await storageService.getItem('userSettings');
         if (userSettings) {
-          // Check if userSettings is already an object (returned from SQLite)
-          // or a JSON string (legacy format)
+          // Parse settings if needed
           let settings;
           if (typeof userSettings === 'string') {
             try {
@@ -324,9 +319,11 @@ const MeditationScreen = ({ navigation }) => {
 
     return () => {
       // Clean up audio resources
-      releaseAllAudioResources();
+      if (typeof releaseAllAudioResources === 'function') {
+        releaseAllAudioResources();
+      }
     };
-  }, []);
+  }, [releaseAllAudioResources]);
 
   // Monitor app state changes to handle background/foreground transitions
   useEffect(() => {
@@ -336,12 +333,11 @@ const MeditationScreen = ({ navigation }) => {
         nextAppState === "active" &&
         isMeditating
       ) {
-        console.log("App has come to the foreground during meditation");
+        // App has come to the foreground during meditation
         // Ensure audio is still playing when app comes to foreground
         if (selectedSoundTheme !== "silence" && primarySoundRef.current) {
           primarySoundRef.current.getStatusAsync().then(status => {
             if (!status.isPlaying) {
-              console.log("Resuming audio playback after app foregrounded");
               primarySoundRef.current.playAsync();
             }
           });
@@ -351,7 +347,7 @@ const MeditationScreen = ({ navigation }) => {
         nextAppState.match(/inactive|background/) &&
         isMeditating
       ) {
-        console.log("App has gone to the background during meditation");
+        // App has gone to the background during meditation
         // Ensure audio session is configured for background playback
         configureAudioSession();
       }
@@ -365,77 +361,70 @@ const MeditationScreen = ({ navigation }) => {
   }, [isMeditating, selectedSoundTheme]);
 
   // Function to release all audio resources
-  const releaseAllAudioResources = async () => {
-    // Skip on web platform
-    if (isWeb) {
-      console.log("Audio resources release skipped on web platform");
-      return;
-    }
-    
+  const releaseAllAudioResources = useCallback(async () => {
+    // First clear and cleanup timers
     try {
-      // If already releasing, avoid duplicate execution
-      if (isAudioReleasing) {
-        console.log("[Audio Debug] Release already in progress, skipping");
-        return;
-      }
-      
-      setIsAudioReleasing(true);
-      console.log(
-        "[Audio Debug] Release called from:",
-        new Error().stack.split("\n")[2],
-      );
-      // Clear any pending crossfade timers
       if (crossfadeTimerRef.current) {
         clearTimeout(crossfadeTimerRef.current);
         crossfadeTimerRef.current = null;
       }
-
-      // Unload primary sound
-      if (primarySoundRef.current) {
-        try {
-          await primarySoundRef.current.unloadAsync();
-          primarySoundRef.current = null;
-        } catch (error) {
-          console.log("Error unloading primary sound:", error);
-        }
-      }
-
-      // Unload secondary sound
-      if (secondarySoundRef.current) {
-        try {
-          await secondarySoundRef.current.unloadAsync();
-          secondarySoundRef.current = null;
-        } catch (error) {
-          console.log("Error unloading secondary sound:", error);
-        }
-      }
-
-      // Don't release completion sound here, let it continue playing after meditation is complete
-      // Only release completion sound resources when component unmounts (in useEffect cleanup function)
-
-      // Reset audio state
-      audioDurationRef.current = 0;
-      audioPositionRef.current = 0;
-      audioLoopCountRef.current = 0;
-      
-      console.log("[Audio Cleanup] Background audio resources released");
-      setIsAudioReleasing(false);
     } catch (error) {
-      console.error("Error releasing audio resources:", error);
-      setIsAudioReleasing(false);
+      console.error("Error clearing crossfade timer:", error);
     }
-  };
+
+    // Safely handle primary sound reference
+    try {
+      const primary = primarySoundRef.current;
+      if (primary) {
+        try {
+          const status = await primary.getStatusAsync();
+          if (status && status.isLoaded) {
+            if (status.isPlaying) {
+              await primary.pauseAsync().catch(() => {});
+            }
+            await primary.unloadAsync().catch(() => {});
+          }
+        } catch (e) {
+          // Ignore errors and continue processing
+        }
+      }
+    } catch (error) {
+      console.error("Error handling primary sound:", error);
+    } finally {
+      primarySoundRef.current = null;
+    }
+    
+    // Safely handle secondary sound reference
+    try {
+      const secondary = secondarySoundRef.current;
+      if (secondary) {
+        try {
+          const status = await secondary.getStatusAsync();
+          if (status && status.isLoaded) {
+            if (status.isPlaying) {
+              await secondary.pauseAsync().catch(() => {});
+            }
+            await secondary.unloadAsync().catch(() => {});
+          }
+        } catch (e) {
+          // Ignore errors and continue processing
+        }
+      }
+    } catch (error) {
+      console.error("Error handling secondary sound:", error);
+    } finally {
+      secondarySoundRef.current = null;
+    }
+
+    // Reset other audio state variables
+    audioPositionRef.current = 0;
+    audioDurationRef.current = 0;
+  }, []);
 
   // Load meditation completion sound
   useEffect(() => {
     const loadSound = async () => {
       try {
-        // Skip loading sound on web platform to prevent errors
-        if (isWeb) {
-          console.log("Sound loading skipped on web platform");
-          return;
-        }
-        
         // Load notification sound using online URL method which is more reliable
         const { sound: completionSound } = await Audio.Sound.createAsync(
           {
@@ -464,12 +453,6 @@ const MeditationScreen = ({ navigation }) => {
   useEffect(() => {
     const initializeSeamlessAudio = async () => {
       try {
-        // Skip audio initialization on web platform
-        if (isWeb) {
-          console.log("Seamless audio initialization skipped on web platform");
-          return;
-        }
-        
         // Don't load sounds if silent mode or not meditating
         if (selectedSoundTheme === "silence" || !isMeditating) {
           // Only release resources if we had resources loaded previously
@@ -493,7 +476,7 @@ const MeditationScreen = ({ navigation }) => {
         console.log(`Loading sound theme: ${theme.label} (${theme.id})`);
 
         // Reset loop counter
-        audioLoopCountRef.current = 0;
+        audioDurationRef.current = theme.source.duration;
 
         // Load primary sound instance with lower initial volume for fade-in
         const initialVolume = 0.1; // Start with lower volume for fade-in effect
@@ -551,9 +534,11 @@ const MeditationScreen = ({ navigation }) => {
     initializeSeamlessAudio();
 
     return () => {
-      releaseAllAudioResources();
+      if (typeof releaseAllAudioResources === 'function') {
+        releaseAllAudioResources();
+      }
     };
-  }, [isMeditating, selectedSoundTheme]);
+  }, [isMeditating, selectedSoundTheme, releaseAllAudioResources]);
 
   // Monitor playback status and handle seamless looping
   const onPlaybackStatusUpdate = useCallback(
@@ -569,10 +554,7 @@ const MeditationScreen = ({ navigation }) => {
 
       // Print playback status every 10 seconds to avoid excessive logging
       const currentTime = Date.now();
-      if (
-        statusLogTimeRef.current === 0 ||
-        currentTime - statusLogTimeRef.current > 10000
-      ) {
+      if (currentTime - statusLogTimeRef.current > 10000) {
         console.log(
           `Audio position: ${status.positionMillis}/${audioDurationRef.current}ms, isPlaying: ${status.isPlaying}`,
         );
@@ -756,21 +738,27 @@ const MeditationScreen = ({ navigation }) => {
     }
   }, [remainingTime, isMeditating, totalTime, progressAnim, fluidProgressAnim]);
 
-  // Start countdown timer
+  // Handle countdown phase
   useEffect(() => {
     if (isCountingDown) {
       countdownTimer.current = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
+        setCountdown((prevCount) => {
+          const newCount = prevCount - 1;
+          
+          // When countdown reaches 0, start the meditation
+          if (newCount <= 0) {
             clearInterval(countdownTimer.current);
+            
             setIsCountingDown(false);
             setIsMeditating(true);
-            meditationStartTime.current = new Date();
+            meditationStartTime.current = Date.now();
             
-            // Audio will be initialized by the useEffect that watches isMeditating
+            // Start animation
+            startBreathingAnimation();
             return 0;
           }
-          return prev - 1;
+          
+          return newCount;
         });
       }, 1000);
     }
@@ -780,48 +768,42 @@ const MeditationScreen = ({ navigation }) => {
         clearInterval(countdownTimer.current);
       }
     };
-  }, [isCountingDown]);
+  }, [isCountingDown, startBreathingAnimation]);
 
   // Meditation timer
   useEffect(() => {
-    if (isMeditating && remainingTime > 0) {
+    if (isMeditating) {
+      // Update timer
       meditationTimer.current = setInterval(() => {
-        setRemainingTime((prevTime) => {
-          const newTime = prevTime - 1;
-          // Update progress
-          setProgress(1 - newTime / totalTime);
-          return newTime;
-        });
-      }, 1000);
-    } else if (isMeditating && remainingTime === 0) {
-      // Clear timer
-      if (meditationTimer.current) {
-        clearInterval(meditationTimer.current);
-        meditationTimer.current = null;
-      }
-      
-      // Meditation complete
-      console.log("Meditation time ended, triggering completion handler");
-      
-      // Ensure handleMeditationComplete is called only once
-      if (isMeditating) {
-        // Vibration notification
-        if (!isWeb) {
+        const elapsedSecs = Math.floor((Date.now() - meditationStartTime.current) / 1000);
+        const newRemaining = Math.max(0, totalTime - elapsedSecs);
+        
+        // Update state for UI
+        setRemainingTime(newRemaining);
+        setProgress(1 - newRemaining / totalTime);
+        
+        // If time's up, complete the meditation
+        if (newRemaining <= 0) {
+          clearInterval(meditationTimer.current);
+          
+          // Handle meditation completion
+          handleMeditationComplete(selectedDuration);
+          
+          // Save the meditation session
+          saveMeditationSession(selectedDuration);
+          
+          // Vibration notification
           Vibration.vibrate(500);
         }
-        
-        // Handle meditation completion
-        handleMeditationComplete(selectedDuration);
-      }
+      }, 1000);
     }
 
     return () => {
       if (meditationTimer.current) {
         clearInterval(meditationTimer.current);
-        meditationTimer.current = null;
       }
     };
-  }, [isMeditating, remainingTime, totalTime, selectedDuration, handleMeditationComplete, isWeb]);
+  }, [isMeditating, remainingTime, totalTime, selectedDuration, handleMeditationComplete, saveMeditationSession]);
 
   // Manage screen wake lock based on meditation state and user preference
   useEffect(() => {
@@ -854,22 +836,142 @@ const MeditationScreen = ({ navigation }) => {
     };
   }, [isMeditating, keepScreenAwake]);
 
-  // Function to start meditation with selected duration
-  const startMeditation = () => {
-    console.log("Starting meditation with duration:", customDuration);
+  // Function to get appropriate prompts based on session duration
+  const getPromptsByDuration = (durationInSeconds) => {
+    // Start with the basic prompts
+    const selectedPrompts = [
+      { time: 0, message: "Find a comfortable position and gently close your eyes." },
+      { time: 30, message: "Take a deep breath in through your nose, and slowly exhale through your mouth." },
+    ];
     
-    // Ensure audio session is configured before starting
+    // Add appropriate prompts based on session length
+    guidedMeditationPrompts.forEach(prompt => {
+      // Only include prompts that happen before 90% of the session duration
+      if (prompt.time > 30 && prompt.time < durationInSeconds * 0.9) {
+        // Space out prompts for shorter sessions
+        if (durationInSeconds <= 300 && selectedPrompts.length > 0) {
+          // For 5-minute sessions, ensure at least 45 seconds between prompts
+          const lastTime = selectedPrompts[selectedPrompts.length - 1].time;
+          if (prompt.time - lastTime >= 45) {
+            selectedPrompts.push(prompt);
+          }
+        } else {
+          selectedPrompts.push(prompt);
+        }
+      }
+    });
+    
+    // Add ending prompts
+    if (durationInSeconds > 600) { // For sessions > 10 minutes
+      selectedPrompts.push(
+        { time: durationInSeconds - 180, message: "As we begin to bring this session to a close, take a deep breath." },
+        { time: durationInSeconds - 60, message: "Gently bring awareness back to your body and surroundings." }
+      );
+    } else {
+      selectedPrompts.push(
+        { time: durationInSeconds - 60, message: "Take one final deep breath as we conclude this practice." }
+      );
+    }
+    
+    return selectedPrompts;
+  };
+
+  // Function to set current prompt with animation
+  const setPromptWithAnimation = useCallback((text) => {
+    // Fade out current prompt if any
+    Animated.timing(promptFadeAnim, {
+      toValue: 0,
+      duration: 500,
+      useNativeDriver: true,
+    }).start(() => {
+      // Update prompt text
+      setCurrentPrompt(text);
+      
+      // Only fade in if there's a new prompt
+      if (text) {
+        Animated.timing(promptFadeAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }).start();
+      }
+    });
+  }, [promptFadeAnim]);
+
+  // Function to handle guided meditation prompts
+  const manageGuidedMeditationPrompts = () => {
+    if (!isGuidedMeditation || !isMeditating) return;
+    
+    // Clear any existing prompt timers
+    if (promptTimerRef.current) {
+      clearTimeout(promptTimerRef.current);
+      promptTimerRef.current = null;
+    }
+    
+    // Get appropriate prompts for this session duration
+    const totalSeconds = totalTime;
+    const sessionPrompts = getPromptsByDuration(totalSeconds);
+    
+    console.log(`Scheduling ${sessionPrompts.length} prompts for ${totalSeconds} second session`);
+    
+    // Schedule each prompt
+    sessionPrompts.forEach(prompt => {
+      // Calculate when to show this prompt (session start time - elapsed time + prompt time)
+      const secondsFromStart = (totalTime - remainingTime);
+      const secondsUntilPrompt = prompt.time - secondsFromStart;
+      
+      if (secondsUntilPrompt > 0) {
+        promptTimerRef.current = setTimeout(() => {
+          setPromptWithAnimation(prompt.message);
+          
+          // Clear the prompt after 10 seconds
+          promptTimerRef.current = setTimeout(() => {
+            setPromptWithAnimation("");
+          }, 10000);
+        }, secondsUntilPrompt * 1000);
+      }
+    });
+  };
+  
+  // Update manageGuidedMeditationPrompts when meditation state changes
+  useEffect(() => {
+    if (isMeditating && isGuidedMeditation) {
+      manageGuidedMeditationPrompts();
+    }
+    
+    return () => {
+      if (promptTimerRef.current) {
+        clearTimeout(promptTimerRef.current);
+        promptTimerRef.current = null;
+      }
+    };
+  }, [isMeditating, isGuidedMeditation, remainingTime]);
+
+  // Function to start meditation with selected duration
+  const startMeditation = async () => {
     configureAudioSession();
     
     setSelectedDuration(customDuration);
     setRemainingTime(customDuration * 60);
     setTotalTime(customDuration * 60);
     setIsCountingDown(true);
+    
+    // Initialize the first prompt for guided meditation
+    if (isGuidedMeditation) {
+      // Wait a bit before showing first prompt to let user settle
+      setTimeout(() => {
+        setPromptWithAnimation(guidedMeditationPrompts[0].message);
+        
+        // Clear first prompt after 10 seconds
+        promptTimerRef.current = setTimeout(() => {
+          setPromptWithAnimation("");
+        }, 10000);
+      }, 1000);
+    }
   };
 
   // Function to handle quick duration selection
   const selectQuickDuration = (minutes) => {
-    console.log("Selected quick duration:", minutes);
     setCustomDuration(minutes);
   };
 
@@ -883,25 +985,15 @@ const MeditationScreen = ({ navigation }) => {
   // Play completion sound
   const playCompletionSound = useCallback(async () => {
     try {
-      // Skip on web platform
-      if (isWeb) {
-        console.log("Completion sound playback skipped on web platform");
-        return;
-      }
-      
       if (sound) {
-        console.log("Playing meditation completion sound");
-        
         // Ensure playback starts from the beginning
         await sound.setPositionAsync(0);
         
         // Play the sound
         await sound.playAsync();
-      } else {
-        console.log("Meditation completion sound not loaded");
       }
     } catch (error) {
-      console.log("Error playing sound:", error);
+      console.error("Error playing sound:", error);
     }
   }, [sound]);
 
@@ -909,12 +1001,6 @@ const MeditationScreen = ({ navigation }) => {
   const saveMeditationSession = useCallback(
     async (durationInMinutes) => {
       try {
-        // Skip saving on web platform
-        if (isWeb) {
-          console.log("Saving meditation session skipped on web platform");
-          return;
-        }
-        
         // Get current date in YYYY-MM-DD format
         const today = new Date().toISOString().split("T")[0];
 
@@ -923,6 +1009,7 @@ const MeditationScreen = ({ navigation }) => {
           date: today,
           duration: durationInMinutes,
           soundTheme: selectedSoundTheme,
+          guided: isGuidedMeditation,
           timestamp: new Date().toISOString(),
         };
 
@@ -937,7 +1024,6 @@ const MeditationScreen = ({ navigation }) => {
               sessions = JSON.parse(sessionsJson);
             } catch (parseError) {
               console.error("Error parsing meditation sessions:", parseError);
-              // Continue with empty array if parsing fails
             }
           } else {
             // Already an object from SQLite/ConfigService
@@ -950,54 +1036,42 @@ const MeditationScreen = ({ navigation }) => {
 
         // Save updated sessions - let StorageService handle serialization
         await storageService.setItem("meditation_sessions", sessions);
-
-        console.log("Meditation session saved successfully");
       } catch (error) {
         console.error("Error saving meditation session:", error);
       }
     },
-    [selectedSoundTheme, isWeb],
+    [selectedSoundTheme, isGuidedMeditation],
   );
 
   // End meditation
   const endMeditation = useCallback(
     (callback, resetDuration = true) => {
-      console.log("Ending meditation session");
-
-      // Stop meditation timer
+      // First stop all timers
       if (meditationTimer.current) {
         clearInterval(meditationTimer.current);
         meditationTimer.current = null;
       }
-
-      // If manually ending meditation (not completion), release all audio resources
-      if (!isMeditationComplete) {
-        // Release audio resources
-        releaseAllAudioResources();
-      } else {
-        // If meditation is complete, only stop background music, don't release completion sound resources
-        if (primarySoundRef.current) {
-          try {
-            primarySoundRef.current.stopAsync();
-          } catch (error) {
-            console.error("Error stopping primary sound:", error);
-          }
-        }
+      
+      if (promptTimerRef.current) {
+        clearTimeout(promptTimerRef.current);
+        promptTimerRef.current = null;
       }
 
-      // Log audio loops for debugging
-      console.log(
-        `Meditation ended after ${audioLoopCountRef.current} audio loops`,
-      );
+      // Safely handle audio resources with delay
+      setTimeout(() => {
+        releaseAllAudioResources();
+      }, 200);
 
       // Reset animation values
       breatheAnim.setValue(1);
       pulseAnim.setValue(0);
+      promptFadeAnim.setValue(0);
 
-      // Reset state
+      // Reset UI state
       setIsMeditating(false);
+      setCurrentPrompt("");
 
-      // Only reset these if not showing completion screen
+      // Only reset these states if not showing completion screen
       if (resetDuration) {
         setIsMeditationComplete(false);
         setSelectedDuration(null);
@@ -1005,19 +1079,19 @@ const MeditationScreen = ({ navigation }) => {
         setRemainingTime(0);
       }
 
-      // Execute callback if provided
-      if (callback && typeof callback === "function") {
-        callback();
-      }
+      // Execute callback if provided with delay
+      setTimeout(() => {
+        if (callback && typeof callback === "function") {
+          callback();
+        }
+      }, 300);
     },
-    [breatheAnim, pulseAnim, releaseAllAudioResources, isMeditationComplete]
+    [breatheAnim, pulseAnim, promptFadeAnim, releaseAllAudioResources]
   );
 
   // Handle meditation completion
   const handleMeditationComplete = useCallback(
     async (duration) => {
-      console.log(`Meditation completed: ${duration} minutes`);
-      
       // Stop background music first, then play completion sound
       // Stop any playing background sounds but don't release resources yet
       if (primarySoundRef.current) {
@@ -1034,10 +1108,8 @@ const MeditationScreen = ({ navigation }) => {
       // Play completion sound
       await playCompletionSound();
       
-      // Vibrate device (if not on web)
-      if (!isWeb) {
-        Vibration.vibrate([0, 500, 200, 500]);
-      }
+      // Vibrate device
+      Vibration.vibrate([0, 500, 200, 500]);
       
       // Update UI state
       setIsMeditating(false);
@@ -1056,7 +1128,6 @@ const MeditationScreen = ({ navigation }) => {
               history = JSON.parse(historyString);
             } catch (parseError) {
               console.error("Error parsing meditation history:", parseError);
-              // Continue with empty array if parsing fails
             }
           } else {
             // Already an object from SQLite/ConfigService
@@ -1075,12 +1146,11 @@ const MeditationScreen = ({ navigation }) => {
         
         // Save updated history - let StorageService handle serialization
         await storageService.setItem("meditationHistory", history);
-        console.log("Meditation session saved to history");
       } catch (error) {
         console.error("Error saving meditation history:", error);
       }
     },
-    [playCompletionSound, isWeb, selectedSoundTheme]
+    [playCompletionSound, selectedSoundTheme]
   );
 
   // Navigation handler - with confirmation if needed
@@ -1116,166 +1186,181 @@ const MeditationScreen = ({ navigation }) => {
     endMeditation,
   ]);
 
-  // Render Web compatibility message if on web platform
-  if (isWeb) {
-    return (
-      <View style={[
-        styles.container, 
-        isLightTheme && styles.lightContainer,
-        { 
-          paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
-        }
-      ]}>
-        <CustomHeader 
-          title="MEDITATION"
-          onBackPress={() => goBackToHome(navigation)}
-          showBottomBorder={false}
-        />
-        
-        <View style={[styles.contentContainer, {justifyContent: 'center', alignItems: 'center'}]}>
-          <MaterialIcons name="web" size={64} color={COLORS.PRIMARY} />
-          <Text style={[styles.title, {marginTop: 20}]}>
-            Web Platform Notice
-          </Text>
-          <Text style={[styles.subtitle, {textAlign: 'center', marginHorizontal: 40, marginTop: 10}]}>
-            The meditation experience is optimized for mobile devices.
-            For the best experience, please use the Kukai app on iOS or Android.
-          </Text>
-          
-          <View style={{marginTop: 40}}>
-            <TouchableOpacity
-              style={styles.webActionButton}
-              onPress={() => goBackToHome(navigation)}
-            >
-              <Text style={styles.webActionButtonText}>Return to Home</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+  // Add startBreathingAnimation function
+  const startBreathingAnimation = useCallback(() => {
+    // Create looping breath animation
+    const breathAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breatheAnim, {
+          toValue: 1.05,
+          duration: 4000,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(breatheAnim, {
+          toValue: 1,
+          duration: 4000,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
     );
-  }
+
+    // Start animation
+    breathAnimation.start();
+  }, [breatheAnim]);
+
+  // Add statusLogTimeRef variable
+  const audioLoopCountRef = useRef(0);
+  const statusLogTimeRef = useRef(0);
 
   return (
     <View style={[
       styles.container, 
       isLightTheme && styles.lightContainer,
-      { 
-        paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
-        paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
-      }
+      { paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT : (insets?.top || 0) }
     ]}>
-      {!isMeditating && !isCountingDown && (
-        <CustomHeader 
-          title="MEDITATION"
-          onBackPress={() => goBackToHome(navigation)}
-          showBottomBorder={false}
-        />
-      )}
+      {!isLightTheme && <RNStatusBar barStyle="light-content" />}
+      {isLightTheme && <RNStatusBar barStyle="dark-content" />}
 
-      {!selectedDuration && (
-        <View style={styles.selectionContent}>
-          {/* Duration Selection */}
-          <View style={styles.durationSection}>
-            <Text style={styles.sectionTitle}>Duration</Text>
-
-            <View style={styles.quickDurationContainer}>
-              {durationOptions.map((option) => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.quickDurationButton,
-                    customDuration === option.value &&
-                      styles.quickDurationButtonSelected,
-                  ]}
-                  onPress={() => selectQuickDuration(option.value)}
-                >
-                  <Text
-                    style={[
-                      styles.quickDurationText,
-                      customDuration === option.value &&
-                        styles.quickDurationTextSelected,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.customContainer}>
-              <Text style={styles.customDurationText}>
-                {customDuration} min
-              </Text>
-
-              <Slider
-                style={styles.slider}
-                minimumValue={1}
-                maximumValue={60}
-                step={1}
-                value={customDuration}
-                onValueChange={(value) => setCustomDuration(value)}
-                minimumTrackTintColor={COLORS.text.primary}
-                maximumTrackTintColor="#444"
-                thumbTintColor={COLORS.text.primary}
-              />
-
-              <View style={styles.sliderLabels}>
-                <Text style={styles.sliderLabel}>1 min</Text>
-                <Text style={styles.sliderLabel}>60 min</Text>
-              </View>
-            </View>
+      {!isMeditating && !isCountingDown && !isMeditationComplete && (
+        <>
+          <View style={styles.headerContainer}>
+            <CustomHeader 
+              title="MEDITATION"
+              onBackPress={() => goBackToHome(navigation)}
+              showBottomBorder={false}
+            />
           </View>
+          <View style={styles.selectionContent}>
+            <View style={styles.scrollContent}>
+              <View style={styles.durationSection}>
+                <Text style={styles.sectionTitle}>Duration</Text>
 
-          {/* Sound themes */}
-          <View style={styles.settingSection}>
-            <Text style={styles.settingSectionTitle}>Background Sounds</Text>
-            <Text style={styles.settingSectionSubtitle}>
-              Professional seamless looping audio
-            </Text>
-            <View style={styles.soundThemeContainer}>
-              {soundThemes.map((theme) => (
-                <TouchableOpacity
-                  key={theme.id}
-                  style={[
-                    styles.soundThemeButton,
-                    selectedSoundTheme === theme.id &&
-                      styles.soundThemeButtonSelected,
-                  ]}
-                  onPress={() => setSelectedSoundTheme(theme.id)}
-                >
-                  <Ionicons
-                    name={theme.icon}
-                    size={24}
-                    color={
-                      selectedSoundTheme === theme.id
-                        ? COLORS.background
-                        : COLORS.text.secondary
-                    }
+                <View style={styles.quickDurationContainer}>
+                  {durationOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.quickDurationButton,
+                        customDuration === option.value &&
+                          styles.quickDurationButtonSelected,
+                      ]}
+                      onPress={() => selectQuickDuration(option.value)}
+                    >
+                      <Text
+                        style={[
+                          styles.quickDurationText,
+                          customDuration === option.value &&
+                            styles.quickDurationTextSelected,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <View style={styles.customContainer}>
+                  <Text style={styles.customDurationText}>
+                    {customDuration} minute{customDuration !== 1 ? "s" : ""}
+                  </Text>
+
+                  <Slider
+                    style={styles.slider}
+                    minimumValue={1}
+                    maximumValue={60}
+                    value={customDuration}
+                    onValueChange={(value) => setCustomDuration(Math.round(value))}
+                    step={1}
+                    minimumTrackTintColor={COLORS.text.primary}
+                    maximumTrackTintColor="rgba(255, 255, 255, 0.2)"
+                    thumbTintColor={COLORS.text.primary}
                   />
-                  <Text
-                    style={[
-                      styles.soundThemeText,
-                      selectedSoundTheme === theme.id &&
-                        styles.soundThemeTextSelected,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {theme.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+
+                  <View style={styles.sliderLabels}>
+                    <Text style={styles.sliderLabel}>1 min</Text>
+                    <Text style={styles.sliderLabel}>60 min</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.soundSection}>
+                <Text style={styles.sectionTitle}>Background Sound</Text>
+
+                <View style={styles.soundThemeContainer}>
+                  {soundThemes.map((theme) => (
+                    <TouchableOpacity
+                      key={theme.id}
+                      style={[
+                        styles.soundThemeButton,
+                        selectedSoundTheme === theme.id &&
+                          styles.soundThemeButtonSelected,
+                      ]}
+                      onPress={() => {
+                        setSelectedSoundTheme(theme.id);
+                        console.log("Selected sound theme:", theme.id);
+                      }}
+                    >
+                      <Ionicons
+                        name={theme.icon}
+                        size={22}
+                        color={
+                          selectedSoundTheme === theme.id
+                            ? COLORS.background
+                            : COLORS.text.secondary
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.soundThemeText,
+                          selectedSoundTheme === theme.id &&
+                            styles.soundThemeTextSelected,
+                        ]}
+                      >
+                        {theme.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Guided Meditation Toggle */}
+              
+              <View style={styles.guidedMeditationContainer}>
+                <View style={styles.guidedMeditationTextContainer}>
+                  <MaterialCommunityIcons
+                    name="meditation"
+                    size={24}
+                    color={COLORS.text.secondary}
+                    style={styles.guidedMeditationIcon}
+                  />
+                  <View>
+                    <Text style={styles.guidedMeditationTitle}>
+                      Guided Meditation
+                    </Text>
+                    <Text style={styles.guidedMeditationSubtitle}>
+                      AI voice prompts will guide your practice
+                    </Text>
+                  </View>
+                </View>
+                <Switch
+                  value={isGuidedMeditation}
+                  onValueChange={setIsGuidedMeditation}
+                  trackColor={{ false: "#222", true: "#444" }}
+                  thumbColor={isGuidedMeditation ? COLORS.text.primary : "#888"}
+                />
+              </View>
+            
+            </View>
+
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity style={styles.startButton} onPress={startMeditation}>
+                <Text style={styles.startButtonText}>Begin Meditation</Text>
+              </TouchableOpacity>
             </View>
           </View>
-
-          {/* Start Button */}
-          <TouchableOpacity
-            style={styles.startButton}
-            onPress={startMeditation}
-          >
-            <Text style={styles.startButtonText}>BEGIN</Text>
-          </TouchableOpacity>
-        </View>
+        </>
       )}
 
       {isCountingDown && (
@@ -1298,74 +1383,121 @@ const MeditationScreen = ({ navigation }) => {
             {selectedDuration !== 1 ? "s" : ""} of meditation
           </Text>
 
-          <TouchableOpacity
-            style={styles.continueButton}
-            onPress={() => navigation.navigate("Task")}
-          >
-            <Text style={styles.continueButtonText}>Continue to Tasks</Text>
-          </TouchableOpacity>
+          <View style={styles.completionButtonsContainer}>
+            <TouchableOpacity
+              style={styles.continueButton}
+              onPress={() => navigation.navigate("Task")}
+            >
+              <Text style={styles.continueButtonText}>Continue to Tasks</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.homeButton}
-            onPress={() => {
-              setIsMeditationComplete(false);
-              setSelectedDuration(null);
-              goBackToHome(navigation);
-            }}
-          >
-            <Text style={styles.homeButtonText}>Back to Home</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.homeButton}
+              onPress={() => {
+                setIsMeditationComplete(false);
+                setSelectedDuration(null);
+                goBackToHome(navigation);
+              }}
+            >
+              <Text style={styles.homeButtonText}>Back to Home</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
       {isMeditating && !isMeditationComplete && (
         <View style={styles.meditationContainer}>
-          {/* Timer circle */}
-          <Animated.View
+          {/* Guided meditation toggle switch */}
+          <View style={styles.guidedSwitchContainer}>
+            <MaterialCommunityIcons
+              name="meditation"
+              size={16}
+              color={COLORS.text.primary}
+            />
+            <Text style={styles.guidedSwitchText}>Guided</Text>
+            <Switch
+              value={isGuidedMeditation}
+              onValueChange={(value) => {
+                setIsGuidedMeditation(value);
+                // Reset prompt when turning off guided mode
+                if (!value) {
+                  setPromptWithAnimation("");
+                }
+              }}
+              trackColor={{ false: "rgba(255, 255, 255, 0.1)", true: "rgba(255, 255, 255, 0.3)" }}
+              thumbColor={isGuidedMeditation ? COLORS.text.primary : "#888"}
+              style={styles.guidedSwitch}
+            />
+          </View>
+          
+          {/* Meditation prompt container - shows either guided prompts or "Breathe and relax" */}
+          <Animated.View 
             style={[
-              styles.timerCircle,
-              {
-                transform: [{ scale: breatheAnim }],
-              },
+              styles.promptContainer,
+              { 
+                opacity: isGuidedMeditation ? promptFadeAnim : 1,
+                backgroundColor: isGuidedMeditation ? 'rgba(0, 0, 0, 0.6)' : 'rgba(0, 0, 0, 0.4)'  
+              }
             ]}
           >
-            <Progress.Circle
-              size={TIMER_SIZE}
-              thickness={6}
-              color={COLORS.text.primary}
-              unfilledColor="rgba(255, 255, 255, 0.2)"
-              borderWidth={0}
-              progress={progress}
-              formatText={() => formatTime(remainingTime)}
-              showsText={true}
-              textStyle={styles.progressText}
-              style={styles.progressCircle}
-            />
+            {isGuidedMeditation ? (
+              // Show guided meditation prompt when available
+              currentPrompt && <Text style={styles.promptText}>{currentPrompt}</Text>
+            ) : (
+              // Show "Breathe and relax" when not in guided mode
+              <Text style={styles.promptText}>Breathe and relax...</Text>
+            )}
           </Animated.View>
-
-          <Text style={styles.durationText}>
-            {selectedDuration} minute{selectedDuration !== 1 ? "s" : ""} session
-          </Text>
-
-          {selectedSoundTheme !== "silence" && (
-            <View style={styles.soundIndicator}>
-              <Ionicons
-                name={
-                  soundThemes.find((t) => t.id === selectedSoundTheme)?.icon ||
-                  "volume-medium"
-                }
-                size={16}
-                color={COLORS.text.secondary}
+          
+          {/* Timer circle */}
+          <View style={styles.timerCircleContainer}>
+            <Animated.View
+              style={[
+                styles.timerCircle,
+                {
+                  transform: [{ scale: breatheAnim }],
+                },
+              ]}
+            >
+              <Progress.Circle
+                size={TIMER_SIZE}
+                thickness={6}
+                color={COLORS.text.primary}
+                unfilledColor="rgba(255, 255, 255, 0.2)"
+                borderWidth={0}
+                progress={progress}
+                formatText={() => formatTime(remainingTime)}
+                showsText={true}
+                textStyle={styles.progressText}
               />
-              <Text style={styles.soundIndicatorText}>
-                {soundThemes.find((t) => t.id === selectedSoundTheme)?.label ||
-                  "Sound"}
-              </Text>
-            </View>
-          )}
+            </Animated.View>
+          </View>
 
-          <Text style={styles.meditationSubtext}>Breathe and relax...</Text>
+          {/* Session info */}
+          <View style={styles.sessionInfoContainer}>
+            <Text style={styles.durationText}>
+              {selectedDuration} minute{selectedDuration !== 1 ? "s" : ""} session
+            </Text>
 
+            {selectedSoundTheme !== "silence" && (
+              <View style={styles.soundIndicator}>
+                <Ionicons
+                  name={
+                    soundThemes.find((t) => t.id === selectedSoundTheme)?.icon ||
+                    "volume-medium"
+                  }
+                  size={16}
+                  color={COLORS.text.secondary}
+                />
+                <Text style={styles.soundIndicatorText}>
+                  {soundThemes.find((t) => t.id === selectedSoundTheme)?.label ||
+                    "Sound"}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* End meditation button */}
           <TouchableOpacity
             style={styles.endMeditationButton}
             onPress={() => {
@@ -1379,8 +1511,22 @@ const MeditationScreen = ({ navigation }) => {
                   },
                   {
                     text: "End Session",
-                    onPress: () =>
-                      endMeditation(() => goBackToHome(navigation)),
+                    onPress: () => {
+                      // Safely call endMeditation
+                      try {
+                        endMeditation(() => {
+                          // Ensure navigation happens after state updates
+                          setTimeout(() => {
+                            goBackToHome(navigation);
+                          }, 100);
+                        });
+                      } catch (error) {
+                        console.error("Error ending meditation:", error);
+                        // If failed, at least try to reset UI state
+                        setIsMeditating(false);
+                        goBackToHome(navigation);
+                      }
+                    },
                     style: "destructive",
                   },
                 ],
@@ -1405,46 +1551,55 @@ const styles = StyleSheet.create({
   lightContainer: {
     backgroundColor: "#fff",
   },
+  headerContainer: {
+    paddingTop: SPACING.s,
+    marginBottom: SPACING.s,
+  },
   selectionContent: {
     flex: 1,
     alignItems: "center",
     width: "100%",
-    justifyContent: "flex-start",
-    paddingTop: SPACING.l,
+    justifyContent: "space-between",
     paddingHorizontal: SPACING.l,
-    paddingBottom: SPACING.l,
+    paddingBottom: SPACING.m,
+  },
+  scrollContent: {
+    flex: 1,
+    width: "100%",
+    paddingTop: SPACING.xs,
   },
   durationSection: {
     width: "100%",
+    marginTop: SPACING.s,
     marginBottom: SPACING.l,
-    marginTop: SPACING.m,
   },
   soundSection: {
     width: "100%",
-    marginBottom: SPACING.m,
+    marginTop: SPACING.s,
+    marginBottom: SPACING.l,
   },
   sectionTitle: {
     color: COLORS.text.secondary,
-    fontSize: FONT_SIZE.l,
+    fontSize: FONT_SIZE.m,
     marginBottom: SPACING.m,
-    fontWeight: "400",
+    fontWeight: "500",
   },
   quickDurationContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: SPACING.l,
+    marginBottom: SPACING.m,
   },
   quickDurationButton: {
     borderWidth: 1,
     borderColor: "#555",
     borderRadius: LAYOUT.borderRadius.m,
-    paddingVertical: SPACING.m,
+    paddingVertical: SPACING.xs,
     paddingHorizontal: 0,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.card,
     flex: 1,
-    marginHorizontal: 4,
+    marginHorizontal: 3,
     aspectRatio: 1.5,
   },
   quickDurationButtonSelected: {
@@ -1459,109 +1614,28 @@ const styles = StyleSheet.create({
   quickDurationTextSelected: {
     color: COLORS.background,
   },
-  countdownContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  countdownText: {
-    color: COLORS.text.primary,
-    fontSize: 80,
-    fontWeight: "200",
-    fontFamily:
-      Platform.OS === "ios"
-        ? "Courier New" 
-        : "monospace",
-  },
-  countdownSubtext: {
-    color: COLORS.text.secondary,
-    fontSize: FONT_SIZE.l,
-    marginTop: SPACING.l,
-  },
-  meditationContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: SPACING.l,
-  },
-  progressCircle: {
-    marginBottom: SPACING.xl,
-  },
-  progressText: {
-    color: COLORS.text.primary,
-    fontSize: 36,
-    fontWeight: "200",
-    fontFamily:
-      Platform.OS === "ios"
-        ? "Courier New" 
-        : "monospace",
-  },
-  durationText: {
-    color: COLORS.text.secondary,
-    fontSize: FONT_SIZE.m,
-    marginBottom: SPACING.s,
-  },
-  soundIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.m,
-    borderRadius: LAYOUT.borderRadius.l,
-    marginBottom: SPACING.l,
-  },
-  soundIndicatorText: {
-    color: COLORS.text.secondary,
-    fontSize: FONT_SIZE.s,
-    marginLeft: SPACING.xs,
-  },
-  meditationSubtext: {
-    color: COLORS.text.secondary,
-    fontSize: FONT_SIZE.l,
-    marginTop: SPACING.xl,
-  },
-  endMeditationButton: {
-    position: "absolute",
-    bottom: SPACING.xxl,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.card,
-    paddingVertical: SPACING.m,
-    paddingHorizontal: SPACING.l,
-    borderRadius: LAYOUT.borderRadius.m,
-    borderWidth: 1,
-    borderColor: "#444",
-    ...SHADOWS.small,
-  },
-  endMeditationText: {
-    color: COLORS.text.primary,
-    fontSize: FONT_SIZE.m,
-    fontWeight: "500",
-    marginLeft: SPACING.xs,
-  },
   customContainer: {
     width: "100%",
     backgroundColor: COLORS.card,
     borderRadius: LAYOUT.borderRadius.l,
-    padding: SPACING.l,
+    padding: SPACING.m,
     alignItems: "center",
   },
   customDurationText: {
     color: COLORS.text.primary,
-    fontSize: FONT_SIZE.xl,
+    fontSize: FONT_SIZE.m,
     fontWeight: "600",
-    marginBottom: SPACING.l,
+    marginBottom: SPACING.m,
   },
   slider: {
     width: "100%",
     height: 40,
+    marginBottom: SPACING.xs,
   },
   sliderLabels: {
     flexDirection: "row",
     justifyContent: "space-between",
     width: "100%",
-    marginTop: SPACING.xs,
   },
   sliderLabel: {
     color: COLORS.text.tertiary,
@@ -1572,18 +1646,17 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "space-between",
     width: "100%",
-    marginTop: SPACING.xs,
   },
   soundThemeButton: {
     borderWidth: 1,
     borderColor: "#555",
     borderRadius: LAYOUT.borderRadius.m,
     padding: SPACING.s,
-    marginBottom: SPACING.m,
+    marginBottom: SPACING.s,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.card,
-    width: "22%",
+    width: "23%", 
     aspectRatio: 1,
   },
   soundThemeButtonSelected: {
@@ -1592,20 +1665,56 @@ const styles = StyleSheet.create({
   },
   soundThemeText: {
     color: COLORS.text.secondary,
-    fontSize: 10,
-    marginTop: 4,
+    fontSize: 11,
+    marginTop: 6,
     textAlign: "center",
   },
   soundThemeTextSelected: {
     color: COLORS.background,
+  },
+
+  
+  guidedMeditationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.card,
+    borderRadius: LAYOUT.borderRadius.l,
+    padding: SPACING.m,
+    width: '100%',
+  },
+    guidedMeditationTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  guidedMeditationIcon: {
+    marginRight: SPACING.m,
+  },
+  guidedMeditationTitle: {
+    color: COLORS.text.primary,
+    fontSize: FONT_SIZE.m,
+    fontWeight: '500',
+  },
+  guidedMeditationSubtitle: {
+    color: COLORS.text.tertiary,
+    fontSize: FONT_SIZE.xs,
+    marginTop: 2,
+    paddingRight: 50,
+  },
+  
+  buttonContainer: {
+    width: "100%",
+    paddingVertical: SPACING.s,
+    marginTop: SPACING.s,
+    marginBottom: SPACING.l,
+    
   },
   startButton: {
     backgroundColor: COLORS.text.primary,
     paddingVertical: SPACING.m,
     paddingHorizontal: SPACING.xl,
     borderRadius: LAYOUT.borderRadius.m,
-    marginTop: SPACING.xl,
-    marginBottom: SPACING.m,
     width: "100%",
     alignItems: "center",
   },
@@ -1613,6 +1722,144 @@ const styles = StyleSheet.create({
     color: COLORS.background,
     fontWeight: "600",
     fontSize: FONT_SIZE.m,
+  },
+  countdownContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  countdownText: {
+    color: COLORS.text.primary,
+    fontSize: 96,
+    fontWeight: "200",
+    fontFamily: Platform.OS === "ios" ? "Courier New" : "monospace",
+    marginBottom: SPACING.m,
+  },
+  countdownSubtext: {
+    color: COLORS.text.secondary,
+    fontSize: FONT_SIZE.l,
+    marginTop: SPACING.s,
+  },
+  meditationContainer: {
+    flex: 1,
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+    paddingTop: SPACING.xl,
+  },
+  guidedSwitchContainer: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.m,
+    borderRadius: LAYOUT.borderRadius.l,
+    zIndex: 20,
+    top: SPACING.xl,
+    left: '50%',
+    transform: [{ translateX: -70 }],
+  },
+  guidedSwitchText: {
+    color: COLORS.text.primary,
+    fontSize: FONT_SIZE.s,
+    marginLeft: SPACING.xs,
+    marginRight: SPACING.s,
+    fontWeight: '500',
+  },
+  guidedSwitch: {
+    transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }],
+  },
+  promptContainer: {
+    position: 'absolute',
+    top: SPACING.xl + 60,
+    left: '4%',
+    right: '4%',
+    padding: SPACING.m,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: LAYOUT.borderRadius.l,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '92%',
+    zIndex: 15,
+  },
+  promptText: {
+    color: COLORS.text.primary,
+    fontSize: FONT_SIZE.m,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  timerCircleContainer: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -TIMER_SIZE/2 }, { translateY: -TIMER_SIZE/2 }],
+    zIndex: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timerCircle: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressText: {
+    color: COLORS.text.primary,
+    fontSize: 36,
+    fontWeight: "200",
+    fontFamily: Platform.OS === "ios" ? "Courier New" : "monospace",
+  },
+  sessionInfoContainer: {
+    position: 'absolute',
+    alignItems: 'center',
+    width: '100%',
+    bottom: 120,
+    paddingHorizontal: SPACING.l,
+    zIndex: 5,
+  },
+  durationText: {
+    color: COLORS.text.secondary,
+    fontSize: FONT_SIZE.m,
+    marginBottom: SPACING.m,
+    textAlign: 'center',
+  },
+  soundIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.m,
+    borderRadius: LAYOUT.borderRadius.l,
+    marginBottom: SPACING.m,
+  },
+  soundIndicatorText: {
+    color: COLORS.text.secondary,
+    fontSize: FONT_SIZE.s,
+    marginLeft: SPACING.xs,
+  },
+  endMeditationButton: {
+    position: "absolute",
+    bottom: 50,
+    left: '50%',
+    transform: [{ translateX: -60 }],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.card,
+    paddingVertical: SPACING.m,
+    paddingHorizontal: SPACING.l,
+    borderRadius: LAYOUT.borderRadius.m,
+    borderWidth: 1,
+    borderColor: "#444",
+    width: 120,
+    ...SHADOWS.small,
+    zIndex: 30,
+  },
+  endMeditationText: {
+    color: COLORS.text.primary,
+    fontSize: FONT_SIZE.m,
+    fontWeight: "500",
+    marginLeft: SPACING.xs,
   },
   completionContainer: {
     flex: 1,
@@ -1624,19 +1871,25 @@ const styles = StyleSheet.create({
     color: COLORS.text.primary,
     fontSize: FONT_SIZE.xl,
     fontWeight: "bold",
+    marginTop: SPACING.l,
     marginBottom: SPACING.m,
   },
   completionText: {
     color: COLORS.text.secondary,
     fontSize: FONT_SIZE.m,
-    marginBottom: SPACING.l,
+    marginBottom: SPACING.xl,
+    textAlign: "center",
+  },
+  completionButtonsContainer: {
+    width: "100%",
+    marginTop: SPACING.xl,
   },
   continueButton: {
     backgroundColor: COLORS.text.primary,
     paddingVertical: SPACING.m,
     paddingHorizontal: SPACING.xl,
     borderRadius: LAYOUT.borderRadius.m,
-    marginTop: SPACING.m,
+    marginTop: SPACING.s,
     width: "100%",
     alignItems: "center",
   },
@@ -1650,7 +1903,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.m,
     paddingHorizontal: SPACING.xl,
     borderRadius: LAYOUT.borderRadius.m,
-    marginTop: SPACING.s,
+    marginTop: SPACING.m,
     width: "100%",
     alignItems: "center",
     borderWidth: 1,
@@ -1661,49 +1914,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: FONT_SIZE.m,
   },
-  settingSection: {
-    width: "100%",
-    marginBottom: SPACING.l,
-  },
-  settingSectionTitle: {
-    color: COLORS.text.secondary,
-    fontSize: FONT_SIZE.l,
-    marginBottom: SPACING.xs,
-    fontWeight: "400",
-  },
-  settingSectionSubtitle: {
-    color: COLORS.text.tertiary,
-    fontSize: FONT_SIZE.s,
-    marginBottom: SPACING.s,
-  },
-  timerCircle: {
-    marginBottom: SPACING.xl,
-  },
-  contentContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    color: COLORS.text.primary,
-    fontSize: FONT_SIZE.xl,
-    fontWeight: "bold",
-  },
-  subtitle: {
-    color: COLORS.text.secondary,
-    fontSize: FONT_SIZE.m,
-  },
-  webActionButton: {
-    backgroundColor: COLORS.text.primary,
-    paddingVertical: SPACING.m,
-    paddingHorizontal: SPACING.xl,
-    borderRadius: LAYOUT.borderRadius.m,
-  },
-  webActionButtonText: {
-    color: COLORS.background,
-    fontWeight: "600",
-    fontSize: FONT_SIZE.m,
-  },
+
 });
 
 export default MeditationScreen;
