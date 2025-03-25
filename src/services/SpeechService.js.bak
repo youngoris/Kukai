@@ -24,9 +24,9 @@ const SPEECH_ENDPOINT = Constants.expoConfig?.extra?.AZURE_SPEECH_ENDPOINT || 'h
 const AUDIO_MODE = {
   playsInSilentModeIOS: true,
   allowsRecordingIOS: false,
-  staysActiveInBackground: false,
-  interruptionModeIOS: 0, // MixWithOthers (0), DoNotMix (1), DuckOthers (2)
-  interruptionModeAndroid: 2, // DoNotMix (1), DuckOthers (2)
+  staysActiveInBackground: true,
+  interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_MIX_WITH_OTHERS,
+  interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
   shouldDuckAndroid: true,
   playThroughEarpieceAndroid: false
 };
@@ -168,38 +168,48 @@ class SpeechService {
         return true;
       }
 
-      // Configure audio mode for optimal playback with valid interrupt mode values
-      try {
-        await Audio.setAudioModeAsync(AUDIO_MODE);
-        console.log('Audio session configured successfully');
-        this.audioSessionConfigured = true;
-        return true;
-      } catch (modeError) {
-        console.error('Error setting audio mode:', modeError);
-        
-        // Fallback to minimal audio configuration if standard config fails
-        const minimalConfig = {
-          allowsRecordingIOS: false,
-          interruptionModeIOS: 0,
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
-          interruptionModeAndroid: 2,
-          shouldDuckAndroid: true
-        };
-
-        // Try with minimal config
-        await Audio.setAudioModeAsync(minimalConfig);
-        console.log('Audio session configured with minimal settings');
-        this.audioSessionConfigured = true;
-        return true;
+      // Prevent iOS errors by adding delay to ensure audio session initializes correctly
+      if (Platform.OS === 'ios') {
+        // Wait a short time on iOS to ensure proper audio session initialization
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
+
+      // Use simpler settings for iOS platform to avoid echo cancellation errors
+      const audioMode = Platform.OS === 'ios' 
+        ? {
+            playsInSilentModeIOS: true,
+            allowsRecordingIOS: false,
+            staysActiveInBackground: true,
+            interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_MIX_WITH_OTHERS
+          }
+        : AUDIO_MODE;
+      
+      console.log(`Configuring audio mode for ${Platform.OS}`);
+      await Audio.setAudioModeAsync(audioMode);
+      
+      console.log('Audio session configured successfully');
+      this.audioSessionConfigured = true;
+      return true;
     } catch (error) {
       console.error('Failed to configure audio session:', error);
-      // Even if configuration fails, we'll still try to proceed
-      this.audioSessionConfigured = true;
+      
+      // If initial configuration fails, try simplified configuration
+      if (Platform.OS === 'ios') {
+        try {
+          console.log('Trying simplified audio configuration for iOS');
+          await Audio.setAudioModeAsync({
+            playsInSilentModeIOS: true
+          });
+          console.log('Simplified audio configuration successful');
+          this.audioSessionConfigured = true;
+          return true;
+        } catch (fallbackError) {
+          console.error('All audio configuration attempts failed:', fallbackError);
+        }
+      }
+      
       return false;
     }
-  }
 
   /**
    * Initialize the speech service
@@ -338,23 +348,48 @@ class SpeechService {
     const {
       voice = DEFAULT_VOICE,
       rate = DEFAULT_RATE,
-      pitch = DEFAULT_PITCH
+      pitch = DEFAULT_PITCH,
+      pauseBefore = 0,
+      pauseAfter = 0
     } = options;
 
-    // Sanitize and truncate text to prevent SSML errors
-    // Shorter text is safer - Azure has limits
-    const maxTextLength = 200; // Very conservative limit to avoid 400 errors
+    // Sanitize and truncate text if it's too long
+    // Azure TTS has a limit on input text length
+    const maxTextLength = 500; // Reduced from 1000 to be safer
     const truncatedText = text.length > maxTextLength ? 
       text.substring(0, maxTextLength - 3) + "..." : 
       text;
     
     const cleanText = this.sanitizeTextForSSML(truncatedText);
     
-    // Absolute minimal SSML format - only what's required
-    const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="${voice}">${cleanText}</voice></speak>`;
+    // Ultra minimal SSML format to avoid 400 errors
+    // Only include essential elements
+    let ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">`;
+    
+    // Voice tag with minimal attributes
+    ssml += `<voice name="${voice}">`;
+    
+    // Skip prosody completely if using default values
+    if (rate === DEFAULT_RATE && pitch === DEFAULT_PITCH) {
+      ssml += cleanText;
+    } else {
+      // Only include rate/pitch that differ from defaults
+      let prosodyAttrs = [];
+      if (rate !== DEFAULT_RATE) prosodyAttrs.push(`rate="${rate}"`);
+      if (pitch !== DEFAULT_PITCH) prosodyAttrs.push(`pitch="${pitch}"`);
+      
+      if (prosodyAttrs.length > 0) {
+        ssml += `<prosody ${prosodyAttrs.join(' ')}>${cleanText}</prosody>`;
+      } else {
+        ssml += cleanText;
+      }
+    }
+    
+    ssml += `</voice>`;
+    ssml += `</speak>`;
     
     // Log SSML info
-    console.log(`Generated SSML (${ssml.length} chars) for text: "${truncatedText.substring(0, 30)}${truncatedText.length > 30 ? '...' : ''}" (truncated from ${text.length} chars)`);
+    console.log(`Generated minimal SSML (${ssml.length} chars) for text: "${truncatedText.substring(0, 30)}${truncatedText.length > 30 ? '...' : ''}" (truncated from ${text.length} chars)`);
     
     return ssml;
   }
@@ -369,12 +404,10 @@ class SpeechService {
     
     // Remove any potential problematic characters first
     let cleaned = text
-      // Remove any existing XML/HTML tags
+      // Remove any existing XML/HTML tags that might cause issues
       .replace(/<\/?[^>]+(>|$)/g, '')
       // Remove problematic control characters
       .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
-      // Remove any unusual unicode characters
-      .replace(/[^\x20-\x7E]/g, ' ')
       // Replace XML special characters
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -415,8 +448,8 @@ class SpeechService {
         return null;
       }
       
-      // Limit text length
-      const maxLength = 200; // Very conservative limit
+      // Limit text length for all methods
+      const maxLength = 300; // Further reduced from 500 to avoid 400 errors
       const processedText = text.length > maxLength ? 
         text.substring(0, maxLength - 3) + "..." : 
         text;
@@ -425,21 +458,16 @@ class SpeechService {
       const finalPath = `${FileSystem.documentDirectory}speech-direct-${Date.now()}.mp3`;
       
       try {
-        // Direct API key request - most reliable method
-        // Create minimal SSML for maximum compatibility
-        const minimalSsml = this.generateSSML(processedText, {
-          voice: options.voice || DEFAULT_VOICE
-        });
-        
-        console.log(`Making TTS request to Azure (${minimalSsml.length} chars)`);
-        
-        const endpoint = `https://${SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
-        
-        // Set reasonable timeout and abort controller
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-        
+        // Attempt direct API key method first - more reliable than token method
         try {
+          // Create minimal SSML with shortest possible format
+          const minimalText = processedText.substring(0, Math.min(processedText.length, 250));
+          const minimalSsml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="${options.voice || DEFAULT_VOICE}">${this.sanitizeTextForSSML(minimalText)}</voice></speak>`;
+          
+          console.log(`Making direct TTS request with API key (${minimalSsml.length} chars)`);
+          
+          const endpoint = `https://${SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
+          
           // Use direct API key - more reliable than token auth
           const response = await fetch(endpoint, {
             method: 'POST',
@@ -449,21 +477,12 @@ class SpeechService {
               'X-Microsoft-OutputFormat': 'audio-16khz-32kbitrate-mono-mp3',
               'User-Agent': 'ReactNative-TTS'
             },
-            body: minimalSsml,
-            signal: controller.signal
+            body: minimalSsml
           });
-          
-          clearTimeout(timeoutId);
           
           if (!response.ok) {
             const errorText = await response.text().catch(() => '');
-            console.error(`TTS request failed: ${response.status} ${response.statusText}`, errorText);
-            
-            // For 400 errors, try even shorter text
-            if (response.status === 400) {
-              throw new Error("Bad request - will try with shorter text");
-            }
-            
+            console.error(`Direct TTS request failed: ${response.status} ${response.statusText}`, errorText);
             throw new Error(`TTS request failed with status ${response.status}`);
           }
           
@@ -489,32 +508,26 @@ class SpeechService {
           
           console.log(`Speech audio saved to: ${finalPath} (${fileInfo.size} bytes)`);
           return finalPath;
-        } catch (apiError) {
-          clearTimeout(timeoutId);
-          
-          if (apiError.name === 'AbortError') {
-            console.error('TTS request timed out after 15 seconds');
-          }
-          
-          console.error('API request error:', apiError.message);
-          throw apiError;
+        } catch (directApiError) {
+          console.error('Direct API method failed:', directApiError);
+          throw directApiError; // Let fallback method handle it
         }
-      } catch (primaryError) {
+      } catch (primaryMethodError) {
         console.log(`Primary TTS method failed, attempting ultra-simplified fallback`);
         
         try {
-          // Ultra-simplified approach - shortest possible text
-          const shortenedText = processedText.substring(0, Math.min(processedText.length, 100));
+          // Ultra-simplified approach with absolute minimal SSML
+          const fallbackEndpoint = `https://${SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
           
-          // Use different voice for fallback to avoid same server-side caching issues
-          const fallbackVoice = "en-US-JennyNeural";
+          // Use an even shorter version of the text
+          const shortenedText = processedText.substring(0, Math.min(processedText.length, 150));
           
-          // Absolute minimal SSML - no extra attributes
-          const ultraMinimalSsml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="${fallbackVoice}">${this.sanitizeTextForSSML(shortenedText)}</voice></speak>`;
+          // Absolute minimal SSML
+          const ultraMinimalSsml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="en-US-JennyNeural">${this.sanitizeTextForSSML(shortenedText)}</voice></speak>`;
           
-          console.log(`Fallback TTS request with ultra-minimal SSML (${ultraMinimalSsml.length} chars)`);
+          console.log(`Ultra minimal fallback TTS request (${ultraMinimalSsml.length} chars)`);
           
-          const response = await fetch(`https://${SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+          const response = await fetch(fallbackEndpoint, {
             method: 'POST',
             headers: {
               'Ocp-Apim-Subscription-Key': SPEECH_KEY,
@@ -542,12 +555,12 @@ class SpeechService {
           console.log(`Fallback TTS audio saved to: ${finalPath}`);
           return finalPath;
         } catch (fallbackError) {
-          console.error("All TTS methods failed:", fallbackError.message);
+          console.error("All TTS methods failed:", fallbackError);
           return null;
         }
       }
     } catch (error) {
-      console.error('Error in text to speech conversion:', error.message);
+      console.error('Error in text to speech conversion:', error);
       return null;
     }
   }
@@ -590,14 +603,23 @@ class SpeechService {
         return false;
       }
       
-      // Ensure audio session is configured before playback - use minimal config
-      try {
+      // Ensure iOS audio session is configured
+      if (Platform.OS === 'ios') {
+        try {
+          // Apply lightweight audio configuration on iOS to resolve AudioSession errors
+          await Audio.setAudioModeAsync({
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: true,
+          });
+        } catch (iosAudioError) {
+          console.warn('iOS audio mode configuration warning:', iosAudioError);
+          // Continue processing instead of aborting
+        }
+      } else {
+        // Ensure audio session is configured (non-iOS platforms)
         if (!this.audioSessionConfigured) {
           await this.configureAudioSession();
         }
-      } catch (audioConfigError) {
-        // Continue even if audio config fails - iOS might still play audio
-        console.warn('Audio session config error, continuing anyway:', audioConfigError.message);
       }
       
       // Add retry count
@@ -644,8 +666,20 @@ class SpeechService {
           await this.audioPlayer.unloadAsync();
         }
         
-        // Skip audio mode reconfiguration - just try to play the audio
-        // iOS AudioSession errors often happen when attempting to reconfigure
+        // Configure audio settings again right before playback to prevent session errors
+        if (Platform.OS === 'ios') {
+          try {
+            await Audio.setAudioModeAsync({
+              ...AUDIO_MODE,
+              // Specific iOS settings to avoid AudioSession errors
+              playsInSilentModeIOS: true,
+              // Set to false to avoid echo cancellation errors
+              allowsRecordingIOS: false
+            });
+          } catch (audioModeError) {
+            console.warn('Failed to reconfigure audio mode before playback:', audioModeError);
+          }
+        }
         
         // Load and play audio file
         await this.audioPlayer.loadAsync({ uri: audioFilePath });
@@ -676,7 +710,15 @@ class SpeechService {
       } catch (playbackError) {
         console.error('Error during audio playback:', playbackError);
         
-        // Avoid attempt to reconfigure audio - often causes more errors on iOS
+        // Try to recover by reconfiguring audio session
+        if (Platform.OS === 'ios') {
+          try {
+            console.log('Attempting to recover audio session...');
+            await Audio.setAudioModeAsync(AUDIO_MODE);
+          } catch (recoveryError) {
+            console.error('Failed to recover audio session:', recoveryError);
+          }
+        }
         
         // Ensure failure clears state and try to continue queue
         this.isPlaying = false;
