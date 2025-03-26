@@ -71,8 +71,8 @@ const baseConfig = {
     GOOGLE_WEB_CLIENT_ID: process.env.GOOGLE_WEB_CLIENT_ID,
     // Azure Speech服务配置
     AZURE_SPEECH_KEY: process.env.AZURE_SPEECH_KEY || "3Y8Qt08l6WRPyDvcvOdhS2ykUJoVXENnrHHVWsZfaOoCSXspOIWLJQQJ99BCAC3pKaRXJ3w3AAAYACOGitgl",
-    AZURE_SPEECH_REGION: process.env.AZURE_SPEECH_REGION || "eastasia",
-    AZURE_SPEECH_ENDPOINT: process.env.AZURE_SPEECH_ENDPOINT || "https://eastasia.api.cognitive.microsoft.com/"
+    AZURE_SPEECH_REGION: process.env.AZURE_SPEECH_REGION || "eastus",
+    AZURE_SPEECH_ENDPOINT: process.env.AZURE_SPEECH_ENDPOINT || "https://eastus.api.cognitive.microsoft.com/"
   },
   owner: "andreho",
   runtimeVersion: "1.0.0",

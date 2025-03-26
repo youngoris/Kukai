@@ -1,0 +1,39 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+### Core Technologies
+- **React Native**: Cross-platform mobile development framework
+- **Expo**: Development toolkit for React Native
+- **SQLite**: Local relational database
+- **React Navigation**: Navigation library for React Native
+
+### State Management
+- **React Context API**: Application-wide state management
+- **useReducer**: Complex state logic handling
+- **Custom Hooks**: Feature-specific state access patterns
+
+### UI Components
+- **Custom Component Library**: Minimalist design system
+- **React Native Gesture Handler**: Touch and gesture handling
+- **React Native Reanimated**: Advanced animations
+- **React Native SVG**: Vector graphics rendering
+
+### Testing Tools
+- **Jest**: JavaScript testing framework
+- **React Native Testing Library**: Component testing utilities
+- **Detox**: End-to-end testing for mobile apps
+
+### Development Tools
+- **Prettier**: Code formatting
+- **ESLint**: Code quality and style checking
+- **Husky**: Git hooks for code quality enforcement
+
+### Build & Deployment
+- **Expo EAS**: Build service for creating native binaries
+- **Expo Updates**: Over-the-air update system
+

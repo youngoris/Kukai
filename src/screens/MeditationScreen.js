@@ -39,7 +39,7 @@ import { goBackToHome } from "../navigation/NavigationUtils";
 import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { activateKeepAwake, deactivateKeepAwake } from 'expo-keep-awake';
 import speechService, { MEDITATION_SCRIPTS } from "../services/SpeechService";
 
 // Ignore specific warnings
@@ -183,31 +183,59 @@ const MeditationScreen = ({ navigation }) => {
   const promptTimerRef = useRef(null);
   const promptFadeAnim = useRef(new Animated.Value(0)).current;
 
+  // Track app background state
+  const APP_IS_BACKGROUNDED = useRef(false);
+
+  // State variables for screen transitions
+  const [showScreen, setShowScreen] = useState('setup'); // 'setup', 'meditation', 'completion'
+  const [sessionStartTime, setSessionStartTime] = useState(null);
+
   // Function to set prompt with animation
   const setPromptWithAnimation = (text) => {
-    // First fade out current prompt if any
+    console.log(`Setting prompt with animation: ${text ? text.substring(0, 20) + '...' : 'empty'}`);
+    
+    // If we're clearing the text and there's no current text, do nothing
+    if (!text && !currentPrompt) {
+      return;
+    }
+    
+    // If there's a current prompt, fade it out first
     if (currentPrompt) {
+      // Reset animation value to 1 before starting fade out
+      promptFadeAnim.setValue(1);
+      
+      // Fade out animation with spring for more natural feel
       Animated.timing(promptFadeAnim, {
         toValue: 0,
         duration: 500,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }).start(() => {
-        // Set new text and fade in
+        // After fade out completes, set the new text and fade in
         setCurrentPrompt(text);
+        
         if (text) {
+          // Reset to 0 before fading in
+          promptFadeAnim.setValue(0);
+          
+          // Fade in with spring for more natural feel
           Animated.timing(promptFadeAnim, {
             toValue: 1,
             duration: 800,
+            easing: Easing.in(Easing.cubic),
             useNativeDriver: true,
           }).start();
         }
       });
     } else if (text) {
-      // No current prompt, just set and fade in
+      // No current prompt but we have new text, set and fade in
       setCurrentPrompt(text);
+      promptFadeAnim.setValue(0);
+      
       Animated.timing(promptFadeAnim, {
         toValue: 1,
         duration: 800,
+        easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
       }).start();
     } else {
@@ -225,77 +253,87 @@ const MeditationScreen = ({ navigation }) => {
   // Get status bar height for Android
   const STATUSBAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0;
 
-  // Load settings from AsyncStorage when screen focuses
+  // Load settings from StorageService when screen focuses
   useFocusEffect(
     useCallback(() => {
       const loadMeditationSettings = async () => {
         try {
-          // Use getSettingsWithDefaults to get default settings
-          const settings = await getSettingsWithDefaults();
-
-          // Update meditation duration from settings
-          if (settings.meditationDuration) {
-            setCustomDuration(settings.meditationDuration);
+          console.log('Loading user meditation settings from storage...');
+          
+          // Load saved settings
+          const settingsJson = await storageService.getItem('userSettings');
+          if (!settingsJson) {
+            console.log('No saved settings found - using defaults');
+            // Use safe defaults
+            setIsGuidedMeditation(false); // Default closed voice guidance
+            setGuidedMeditationType('dailyFocus');
+            setSelectedSoundTheme('rain');
+            setCustomDuration(10);
+            setKeepScreenAwake(true);
+            return;
           }
-
-          // Update sound theme from settings
+          
+          // Parse settings if needed
+          const settings = typeof settingsJson === 'string' ? JSON.parse(settingsJson) : settingsJson;
+          
+          console.log('Loaded settings from storage:', 
+            JSON.stringify({
+              meditationDuration: settings.meditationDuration,
+              soundTheme: settings.selectedSoundTheme,
+              voiceGuidanceEnabled: settings.voiceGuidanceEnabled,
+              defaultGuidanceType: settings.defaultGuidanceType
+            })
+          );
+          
+          // Key: Strictly apply voice guidance settings according to user preferences
+          // Important: If voiceGuidanceEnabled is explicitly set to false in settings, it must remain off
+          if (settings.voiceGuidanceEnabled !== undefined) {
+            console.log(`Setting voice guidance to user preference: ${settings.voiceGuidanceEnabled}`);
+            setIsGuidedMeditation(settings.voiceGuidanceEnabled);
+          } else {
+            console.log('No voice guidance preference found, defaulting to off');
+            setIsGuidedMeditation(false);
+          }
+          
+          // Apply other settings
+          if (settings.defaultGuidanceType) {
+            setGuidedMeditationType(settings.defaultGuidanceType);
+          }
+          
           if (settings.selectedSoundTheme) {
             setSelectedSoundTheme(settings.selectedSoundTheme);
           }
           
-          // Update keep screen awake setting
+          if (settings.meditationDuration) {
+            setCustomDuration(settings.meditationDuration);
+          }
+          
           if (settings.keepScreenAwake !== undefined) {
             setKeepScreenAwake(settings.keepScreenAwake);
           }
-
-          // Update theme setting
-          if (settings.theme) {
-            setAppTheme(settings.theme);
-          }
-        } catch (error) {
-          console.error("Error loading meditation settings:", error);
-        }
-      };
-
-      // Load settings
-      loadMeditationSettings();
-
-      return () => {};
-    }, []),
-  );
-
-  // Load user settings including theme
-  useEffect(() => {
-    const loadUserSettings = async () => {
-      try {
-        const userSettings = await storageService.getItem('userSettings');
-        if (userSettings) {
-          // Parse settings if needed
-          let settings;
-          if (typeof userSettings === 'string') {
-            try {
-              settings = JSON.parse(userSettings);
-            } catch (parseError) {
-              console.error('Error parsing user settings:', parseError);
-              settings = {}; // Use empty object as fallback
-            }
-          } else {
-            // Already an object from SQLite/ConfigService
-            settings = userSettings;
-          }
           
-          // Apply settings
+          // Apply theme settings
           if (settings.appTheme) {
             setAppTheme(settings.appTheme);
           }
+          
+          console.log(`Final meditation settings applied:
+            - Voice guidance: ${settings.voiceGuidanceEnabled !== undefined ? settings.voiceGuidanceEnabled : false}
+            - Guidance type: ${settings.defaultGuidanceType || 'dailyFocus'}
+            - Sound theme: ${settings.selectedSoundTheme || 'rain'}
+            - Duration: ${settings.meditationDuration || 10}m`
+          );
+        } catch (error) {
+          console.error('Error loading meditation settings:', error);
+          // Use default values on error and ensure voice guidance is off
+          setIsGuidedMeditation(false);
         }
-      } catch (error) {
-        console.error('Error loading user settings:', error);
-      }
-    };
-    
-    loadUserSettings();
-  }, []);
+      };
+
+      // Force reload settings every time this screen gains focus
+      loadMeditationSettings();
+    }, []),
+  );
 
   // Handle back button
   useFocusEffect(
@@ -304,11 +342,11 @@ const MeditationScreen = ({ navigation }) => {
         if (isMeditating) {
           Alert.alert(
             "End Meditation",
-            "Are you sure you want to end your meditation session?",
+            "Are you sure you want to end your current session? This will end the meditation permanently.",
             [
-              { text: "Cancel", style: "cancel" },
+              { text: "Continue", style: "cancel" },
               {
-                text: "End",
+                text: "End Session",
                 onPress: () => endMeditation(() => goBackToHome(navigation)),
                 style: "destructive",
               },
@@ -356,40 +394,43 @@ const MeditationScreen = ({ navigation }) => {
     };
   }, [releaseAllAudioResources]);
 
-  // Monitor app state changes to handle background/foreground transitions
+  // Monitor app state changes
   useEffect(() => {
-    const subscription = AppState.addEventListener("change", nextAppState => {
-      if (
-        appState.current.match(/inactive|background/) &&
-        nextAppState === "active" &&
-        isMeditating
-      ) {
-        // App has come to the foreground during meditation
-        // Ensure audio is still playing when app comes to foreground
-        if (selectedSoundTheme !== "silence" && primarySoundRef.current) {
-          primarySoundRef.current.getStatusAsync().then(status => {
-            if (!status.isPlaying) {
-              primarySoundRef.current.playAsync();
-            }
-          });
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (appState.current === 'active' && nextAppState.match(/inactive|background/)) {
+        // App moving to background
+        console.log('App moving to background - ensuring meditation continues');
+        
+        // Reconfigure audio to ensure playback continues in background
+        if (isMeditating) {
+          // Configure audio session for background playback
+          Audio.setAudioModeAsync({
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: true,
+            interruptionModeIOS: 1,
+            interruptionModeAndroid: 1,
+            shouldDuckAndroid: false,
+            playThroughEarpieceAndroid: false
+          }).catch(err => console.log('Audio config error:', err));
         }
-      } else if (
-        appState.current === "active" &&
-        nextAppState.match(/inactive|background/) &&
-        isMeditating
-      ) {
-        // App has gone to the background during meditation
-        // Ensure audio session is configured for background playback
-        configureAudioSession();
+      } else if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        // App coming to foreground
+        console.log('App returning to foreground');
+        
+        // Ensure audio session is still properly configured
+        if (isMeditating) {
+          configureAudioSession();
+        }
       }
       
+      // Save current state
       appState.current = nextAppState;
     });
     
     return () => {
       subscription.remove();
     };
-  }, [isMeditating, selectedSoundTheme]);
+  }, [isMeditating]);
 
   // Function to release all audio resources
   const releaseAllAudioResources = useCallback(async () => {
@@ -780,12 +821,27 @@ const MeditationScreen = ({ navigation }) => {
           if (newCount <= 0) {
             clearInterval(countdownTimer.current);
             
+            // Set up meditation state
+            const durationInSeconds = customDuration * 60;
+            setRemainingTime(durationInSeconds);
+            setTotalTime(durationInSeconds);
+            
+            // Record start time
+            meditationStartTime.current = Date.now();
+            setSessionStartTime(new Date());
+            
+            // Switch screen state
             setIsCountingDown(false);
             setIsMeditating(true);
-            meditationStartTime.current = Date.now();
+            
+            // Keep screen awake if enabled
+            if (keepScreenAwake) {
+              activateKeepAwake();
+            }
             
             // Start animation
             startBreathingAnimation();
+            
             return 0;
           }
           
@@ -799,32 +855,58 @@ const MeditationScreen = ({ navigation }) => {
         clearInterval(countdownTimer.current);
       }
     };
-  }, [isCountingDown, startBreathingAnimation]);
+  }, [isCountingDown, startBreathingAnimation, customDuration, keepScreenAwake, isGuidedMeditation, guidedMeditationType]);
 
-  // Meditation timer
+  // Main meditation timer
   useEffect(() => {
-    if (isMeditating) {
-      // Update timer
+    if (isMeditating && !isCountingDown) {
+      // Configure audio session for background playback
+      configureAudioSession();
+      
+      // Set start time if not already set
+      if (!meditationStartTime.current) {
+        meditationStartTime.current = Date.now();
+      }
+
+      // Set up timer - use more precise timing mechanism
       meditationTimer.current = setInterval(() => {
-        const elapsedSecs = Math.floor((Date.now() - meditationStartTime.current) / 1000);
-        const newRemaining = Math.max(0, totalTime - elapsedSecs);
+        // Skip updates if app is transitioning to background to avoid React state updates
+        // during potential component unmount
+        if (APP_IS_BACKGROUNDED.current) {
+          return;
+        }
         
-        // Update state for UI
-        setRemainingTime(newRemaining);
-        setProgress(1 - newRemaining / totalTime);
+        // Calculate time remaining
+        const elapsedSeconds = Math.floor((Date.now() - meditationStartTime.current) / 1000);
+        const newRemainingTime = Math.max(0, totalTime - elapsedSeconds);
         
-        // If time's up, complete the meditation
-        if (newRemaining <= 0) {
-          clearInterval(meditationTimer.current);
+        // Update progress
+        const newProgress = 1 - newRemainingTime / totalTime;
+        
+        // Update state
+        setRemainingTime(newRemainingTime);
+        setProgress(newProgress);
+        
+        // Check if meditation is complete
+        if (newRemainingTime === 0) {
+          // Clear interval first to prevent any further updates
+          if (meditationTimer.current) {
+            clearInterval(meditationTimer.current);
+            meditationTimer.current = null;
+          }
           
-          // Handle meditation completion
-          handleMeditationComplete(selectedDuration);
+          console.log("Meditation timer reached 0, completing meditation session");
           
-          // Save the meditation session
-          saveMeditationSession(selectedDuration);
+          // Complete meditation immediately to ensure completion screen is shown
+          setIsMeditating(false);
+          setIsMeditationComplete(true);
           
-          // Vibration notification
-          Vibration.vibrate(500);
+          // Then call handlers after a short delay
+          setTimeout(() => {
+            const durationInMinutes = customDuration || selectedDuration;
+            handleMeditationComplete(durationInMinutes);
+            saveMeditationSession(durationInMinutes);
+          }, 200);
         }
       }, 1000);
     }
@@ -834,19 +916,25 @@ const MeditationScreen = ({ navigation }) => {
         clearInterval(meditationTimer.current);
       }
     };
-  }, [isMeditating, remainingTime, totalTime, selectedDuration, handleMeditationComplete, saveMeditationSession]);
+  }, [isMeditating, remainingTime, totalTime, selectedDuration, handleMeditationComplete, saveMeditationSession, isCountingDown]);
 
   // Manage screen wake lock based on meditation state and user preference
   useEffect(() => {
     const manageScreenWakeLock = async () => {
       try {
         if (isMeditating && keepScreenAwake) {
-          // Activate keep awake when meditation is active and setting is enabled
-          await activateKeepAwakeAsync('MeditationScreen');
+          // Activate screen wake lock with tag
+          await activateKeepAwake('MeditationScreen');
           console.log('Screen keep awake activated for meditation');
+          
+          // Set additional screen timeout protection
+          if (Platform.OS === 'android') {
+            // On Android, we need additional protection against system power saving
+            console.log('Additional Android wake lock protection enabled');
+          }
         } else {
-          // Deactivate keep awake when meditation ends or setting is disabled
-          deactivateKeepAwake('MeditationScreen');
+          // Deactivate screen wake lock
+          await deactivateKeepAwake();
           console.log('Screen keep awake deactivated for meditation');
         }
       } catch (error) {
@@ -859,13 +947,24 @@ const MeditationScreen = ({ navigation }) => {
     // Clean up on component unmount
     return () => {
       try {
-        deactivateKeepAwake('MeditationScreen');
+        deactivateKeepAwake();
         console.log('Screen keep awake deactivated on cleanup');
       } catch (error) {
         console.error('Error deactivating screen wake lock:', error);
       }
     };
   }, [isMeditating, keepScreenAwake]);
+  
+  // Update app background state tracker
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      APP_IS_BACKGROUNDED.current = nextAppState.match(/inactive|background/);
+    });
+    
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   // Initialize speech service when component loads
   useEffect(() => {
@@ -930,56 +1029,97 @@ const MeditationScreen = ({ navigation }) => {
   useEffect(() => {
     if (isMeditating && isGuidedMeditation) {
       // Schedule guided meditation prompts when meditation starts
-      manageGuidedMeditationPrompts();
+      manageGuidedMeditationPrompts(totalTime);
     }
-  }, [isMeditating, isGuidedMeditation, guidedMeditationType]);
+  }, [isMeditating, isGuidedMeditation, guidedMeditationType, totalTime]);
 
-  // Update manageGuidedMeditationPrompts function
-  const manageGuidedMeditationPrompts = useCallback(() => {
-    if (!isGuidedMeditation || !isMeditating) return;
+  /**
+   * Set up and schedule meditation guidance prompts
+   * @param {number} totalSeconds - Total meditation duration in seconds
+   */
+  const manageGuidedMeditationPrompts = (totalSeconds) => {
+    if (!isGuidedMeditation) return;
     
-    const totalDurationInSeconds = totalTime;
-    const prompts = speechService.getMeditationScript(guidedMeditationType);
-    const adjustedPrompts = speechService.adjustPromptsForDuration(prompts, totalDurationInSeconds);
-    
-    console.log(`Scheduling ${adjustedPrompts.length} guided meditation prompts for ${totalDurationInSeconds} seconds`);
-    
-    // Schedule guided meditation prompts
-    speechService.scheduleGuidedMeditationPrompts(
-      adjustedPrompts, 
-      totalDurationInSeconds,
-      (text) => {
-        // Update current prompt for display with animation
-        setPromptWithAnimation(text);
-      }
-    );
-  }, [isMeditating, isGuidedMeditation, guidedMeditationType, totalTime, setPromptWithAnimation]);
+    try {
+      // First make sure any previous prompts are stopped
+      speechService.cancelAllPrompts();
+      speechService.stopPlayback();
+      
+      // Add a small delay before starting new prompts to avoid audio conflicts
+      setTimeout(() => {
+        // Use the guidance type from UI state
+        const scriptType = guidedMeditationType || 'dailyFocus';
+        console.log(`Setting up meditation guidance prompts: type=${scriptType}, duration=${totalSeconds} seconds`);
+        
+        // Get meditation script
+        const scriptPrompts = speechService.getMeditationScript(scriptType);
+        
+        if (!scriptPrompts || scriptPrompts.length === 0) {
+          console.log(`Could not get prompts for type ${scriptType}`);
+          return;
+        }
+        
+        // Adjust prompts to match total duration
+        const adjustedPrompts = speechService.adjustPromptsForDuration(scriptPrompts, totalSeconds);
+        console.log(`Got ${adjustedPrompts.length} meditation prompts`);
+        
+        // Show first prompt after a short delay
+        const firstPrompt = adjustedPrompts[0]?.text;
+        if (firstPrompt) {
+          // Small additional delay before first prompt
+          setTimeout(() => {
+            // Use animation function to properly fade in the text
+            setPromptWithAnimation(firstPrompt);
+            speechService.speak(firstPrompt);
+            
+            // Clear prompt after 10 seconds with proper fade out
+            setTimeout(() => {
+              setPromptWithAnimation("");
+            }, 10000);
+          }, 500);
+        }
+        
+        // Use speech service to schedule remaining prompts, skipping the first one
+        const remainingPrompts = adjustedPrompts.slice(1);
+        
+        speechService.scheduleGuidedMeditationPrompts(
+          remainingPrompts, 
+          totalSeconds, 
+          (promptText) => {
+            console.log(`Playing prompt: ${promptText.substring(0, 30)}...`);
+            // Use animation function for smooth transitions
+            setPromptWithAnimation(promptText);
+            
+            // Clear prompt after 10 seconds with proper fade out
+            setTimeout(() => {
+              setPromptWithAnimation("");
+            }, 10000);
+          }
+        );
+      }, 200);
+    } catch (error) {
+      console.error('Error setting up meditation guidance prompts:', error);
+    }
+  };
 
   // Function to start meditation with selected duration
-  const startMeditation = async () => {
-    configureAudioSession();
-    
-    setSelectedDuration(customDuration);
-    setRemainingTime(customDuration * 60);
-    setTotalTime(customDuration * 60);
-    setIsCountingDown(true);
-    
-    // Initialize the first prompt for guided meditation
-    if (isGuidedMeditation) {
-      // Get meditation prompts for the selected type
-      const prompts = speechService.getMeditationScript(guidedMeditationType);
+  const startMeditation = () => {
+    try {
+      console.log(`Starting meditation session - Duration: ${customDuration}m, Sound: ${selectedSoundTheme}, Voice: ${isGuidedMeditation ? 'Enabled' : 'Disabled'}`);
       
-      // Wait a bit before showing first prompt to let user settle
-      setTimeout(() => {
-        if (prompts && prompts.length > 0) {
-          setPromptWithAnimation(prompts[0].text);
-          
-          // Clear first prompt after 10 seconds
-          promptTimerRef.current = setTimeout(() => {
-            setPromptWithAnimation("");
-          }, 10000);
-        }
-      }, 1000);
+      // Start with 5-second countdown
+      setCountdown(5);
+      setIsCountingDown(true);
+      
+      // Set selected duration
+      setSelectedDuration(customDuration);
+      
+      // Set up remaining time and total time after countdown completes
+      // This is now handled in the countdown useEffect
+
+    } catch (error) {
+      console.error('Error starting meditation:', error);
+      Alert.alert('Error', 'There was a problem starting the meditation session.');
     }
   };
 
@@ -1014,40 +1154,29 @@ const MeditationScreen = ({ navigation }) => {
   const saveMeditationSession = useCallback(
     async (durationInMinutes) => {
       try {
-        // Get current date in YYYY-MM-DD format
-        const today = new Date().toISOString().split("T")[0];
-
-        // Create new session object
-        const newSession = {
-          date: today,
-          duration: durationInMinutes,
-          soundTheme: selectedSoundTheme,
-          guided: isGuidedMeditation,
+        console.log(`Saving meditation session: ${durationInMinutes}m, theme: ${selectedSoundTheme}, guided: ${isGuidedMeditation}`);
+        
+        // Create session object
+        const session = {
+          id: Date.now().toString(),
+          duration: durationInMinutes,  // in minutes
           timestamp: new Date().toISOString(),
+          theme: selectedSoundTheme,
+          isGuided: isGuidedMeditation
         };
-
+        
         // Get existing sessions or initialize empty array
         const sessionsJson = await storageService.getItem("meditation_sessions");
         let sessions = [];
         
         if (sessionsJson) {
-          // Handle both string and object formats
-          if (typeof sessionsJson === 'string') {
-            try {
-              sessions = JSON.parse(sessionsJson);
-            } catch (parseError) {
-              console.error("Error parsing meditation sessions:", parseError);
-            }
-          } else {
-            // Already an object from SQLite/ConfigService
-            sessions = sessionsJson;
-          }
+          sessions = typeof sessionsJson === 'string' ? JSON.parse(sessionsJson) : sessionsJson;
         }
-
+        
         // Add new session
-        sessions.push(newSession);
-
-        // Save updated sessions - let StorageService handle serialization
+        sessions.push(session);
+        
+        // Save updated sessions
         await storageService.setItem("meditation_sessions", sessions);
       } catch (error) {
         console.error("Error saving meditation session:", error);
@@ -1070,6 +1199,18 @@ const MeditationScreen = ({ navigation }) => {
         promptTimerRef.current = null;
       }
 
+      // Ensure all voice prompts and playback are completely stopped
+      try {
+        // Cancel all scheduled voice prompts
+        speechService.cancelAllPrompts();
+        // Immediately stop any currently playing voice
+        speechService.stopPlayback();
+        // Clear current prompt (with animation effect)
+        setPromptWithAnimation("");
+      } catch (speechError) {
+        console.error("Error stopping speech playback:", speechError);
+      }
+
       // Safely handle audio resources with delay
       setTimeout(() => {
         releaseAllAudioResources();
@@ -1082,8 +1223,7 @@ const MeditationScreen = ({ navigation }) => {
 
       // Reset UI state
       setIsMeditating(false);
-      setCurrentPrompt("");
-
+      
       // Only reset these states if not showing completion screen
       if (resetDuration) {
         setIsMeditationComplete(false);
@@ -1091,23 +1231,37 @@ const MeditationScreen = ({ navigation }) => {
         setProgress(0);
         setRemainingTime(0);
       }
-
+      
+      // Deactivate screen wake lock if it was active
+      try {
+        deactivateKeepAwake();
+      } catch (error) {
+        console.error('Error deactivating screen wake lock:', error);
+      }
+      
       // Execute callback if provided with delay
       setTimeout(() => {
         if (callback && typeof callback === "function") {
           callback();
         }
       }, 300);
-
-      // Stop any speech playback
-      speechService.stopPlayback();
     },
     [breatheAnim, pulseAnim, promptFadeAnim, releaseAllAudioResources]
   );
 
+  // Update completeMeditation to show task redirect option
+  const completeMeditation = useCallback(async () => {
+    console.log("Running completeMeditation function");
+    // Add condition to show task redirection button after dailyFocus meditation
+    if (isGuidedMeditation && guidedMeditationType === 'dailyFocus') {
+      setShowTaskRedirect(true);
+    }
+  }, [guidedMeditationType, isGuidedMeditation]);
+
   // Handle meditation completion
   const handleMeditationComplete = useCallback(
     async (duration) => {
+      console.log("MEDITATION COMPLETE - Setting up completion screen");
       // Stop background music first, then play completion sound
       // Stop any playing background sounds but don't release resources yet
       if (primarySoundRef.current) {
@@ -1121,52 +1275,68 @@ const MeditationScreen = ({ navigation }) => {
         }
       }
       
+      // Stop all voice guidance first
+      try {
+        // Cancel all scheduled prompts
+        speechService.cancelAllPrompts();
+        // Stop any currently playing voice
+        speechService.stopPlayback();
+        // Clear current prompt with animation
+        setPromptWithAnimation("");
+      } catch (speechError) {
+        console.error("Error stopping voice guidance:", speechError);
+      }
+      
       // Play completion sound
       await playCompletionSound();
       
       // Vibrate device
       Vibration.vibrate([0, 500, 200, 500]);
       
-      // Update UI state
-      setIsMeditating(false);
-      setIsMeditationComplete(true);
+      // Call completeMeditation to properly set up the completion screen
+      completeMeditation();
+
+      // Force UI refresh
+      setTimeout(() => {
+        console.log("Checking if meditation complete screen is showing:", isMeditationComplete);
+      }, 500);
       
       // Save meditation to history
       try {
         // Get existing history
-        const historyString = await storageService.getItem("meditationHistory");
+        const historyJson = await storageService.getItem("meditationHistory");
         let history = [];
         
-        if (historyString) {
-          // Handle both string and object formats
-          if (typeof historyString === 'string') {
-            try {
-              history = JSON.parse(historyString);
-            } catch (parseError) {
-              console.error("Error parsing meditation history:", parseError);
-            }
-          } else {
-            // Already an object from SQLite/ConfigService
-            history = historyString;
-          }
+        if (historyJson) {
+          history = typeof historyJson === 'string' ? JSON.parse(historyJson) : historyJson;
         }
         
-        // Add new session
-        const newSession = {
-          date: new Date().toISOString(),
-          duration: duration,
-          soundTheme: selectedSoundTheme,
-        };
+        // Create today's entry
+        const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
         
-        history.push(newSession);
+        // Check if today's entry exists
+        const todayIndex = history.findIndex(item => item.date === today);
         
-        // Save updated history - let StorageService handle serialization
+        if (todayIndex >= 0) {
+          // Update existing entry
+          history[todayIndex].duration += duration;
+          history[todayIndex].sessions += 1;
+        } else {
+          // Create new entry
+          history.push({
+            date: today,
+            duration: duration,
+            sessions: 1
+          });
+        }
+        
+        // Save updated history
         await storageService.setItem("meditationHistory", history);
       } catch (error) {
         console.error("Error saving meditation history:", error);
       }
     },
-    [playCompletionSound, selectedSoundTheme]
+    [playCompletionSound, completeMeditation],
   );
 
   // Navigation handler - with confirmation if needed
@@ -1174,7 +1344,7 @@ const MeditationScreen = ({ navigation }) => {
     if (isMeditating || isCountingDown) {
       Alert.alert(
         "End Meditation",
-        "Are you sure you want to end your current session?",
+        "Are you sure you want to end your current session? This will end the meditation permanently.",
         [
           { text: "Continue", style: "cancel" },
           {
@@ -1233,18 +1403,6 @@ const MeditationScreen = ({ navigation }) => {
   // Add a new state for showing task redirection button
   const [showTaskRedirect, setShowTaskRedirect] = useState(false);
 
-  // Update completeMeditation to show task redirect option
-  const completeMeditation = useCallback(async () => {
-    // ... existing code (keep all the current code) ...
-    
-    // Add condition to show task redirection button after dailyFocus meditation
-    if (isGuidedMeditation && guidedMeditationType === 'dailyFocus') {
-      setShowTaskRedirect(true);
-    }
-    
-    // ... existing code ...
-  }, [/* existing dependencies */, guidedMeditationType]);
-  
   // Function to navigate to task screen
   const navigateToTasks = useCallback(() => {
     navigation.navigate('Tasks');
@@ -1255,66 +1413,171 @@ const MeditationScreen = ({ navigation }) => {
     if (!isMeditationComplete) return null;
     
     return (
-      <Animated.View 
-        style={[
-          styles.completionContainer,
-          { backgroundColor: isLightTheme ? COLORS.lighterGray : COLORS.darkBackground },
-          { opacity: fadeAnim }
-        ]}
+      <View 
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: SPACING.large,
+          backgroundColor: isLightTheme ? COLORS.lighterGray : COLORS.darkBackground,
+          zIndex: 50
+        }}
       >
+        <MaterialCommunityIcons 
+          name="meditation" 
+          size={60} 
+          color={isLightTheme ? COLORS.primary : COLORS.secondaryLight} 
+          style={{marginBottom: SPACING.medium}}
+        />
+        
         <Text 
-          style={[
-            styles.completionTitle, 
-            { color: isLightTheme ? COLORS.dark : COLORS.light }
-          ]}
+          style={{
+            fontSize: FONT_SIZE.xxlarge,
+            fontWeight: 'bold',
+            marginBottom: SPACING.medium,
+            textAlign: 'center',
+            color: isLightTheme ? COLORS.dark : COLORS.light
+          }}
         >
           Meditation Complete
         </Text>
         
         <Text 
-          style={[
-            styles.completionSubtitle, 
-            { color: isLightTheme ? COLORS.darkGray : COLORS.lightGray }
-          ]}
+          style={{
+            fontSize: FONT_SIZE.large,
+            marginBottom: SPACING.xxlarge,
+            textAlign: 'center',
+            color: isLightTheme ? COLORS.darkGray : COLORS.lightGray
+          }}
         >
           {Math.floor(totalTime / 60)} minutes of mindfulness
+        </Text>
+        
+        <View 
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            width: '100%',
+            marginBottom: SPACING.medium
+          }}
+        >
+          <View style={{alignItems: 'center', flex: 1}}>
+            <Text 
+              style={{
+                fontSize: FONT_SIZE.m,
+                fontWeight: 'bold',
+                marginBottom: SPACING.tiny,
+                color: isLightTheme ? COLORS.dark : COLORS.light
+              }}
+            >
+              {selectedSoundTheme !== 'silence' ? selectedSoundTheme : 'None'}
+            </Text>
+            <Text 
+              style={{
+                fontSize: FONT_SIZE.s,
+                color: isLightTheme ? COLORS.darkGray : COLORS.lightGray
+              }}
+            >
+              Sound
+            </Text>
+          </View>
+          <View style={{alignItems: 'center', flex: 1}}>
+            <Text 
+              style={{
+                fontSize: FONT_SIZE.m,
+                fontWeight: 'bold',
+                marginBottom: SPACING.tiny,
+                color: isLightTheme ? COLORS.dark : COLORS.light
+              }}
+            >
+              {isGuidedMeditation ? 'Yes' : 'No'}
+            </Text>
+            <Text 
+              style={{
+                fontSize: FONT_SIZE.s,
+                color: isLightTheme ? COLORS.darkGray : COLORS.lightGray
+              }}
+            >
+              Guided
+            </Text>
+          </View>
+        </View>
+        
+        <Text 
+          style={{
+            fontSize: FONT_SIZE.large,
+            textAlign: 'center',
+            marginBottom: SPACING.xxlarge,
+            color: isLightTheme ? COLORS.darkGray : COLORS.lightGray
+          }}
+        >
+          Take a moment to notice how you feel right now.
         </Text>
         
         {showTaskRedirect && (
           <View style={styles.taskRedirectContainer}>
             <Text 
-              style={[
-                styles.taskRedirectText, 
-                { color: isLightTheme ? COLORS.darkGray : COLORS.lightGray }
-              ]}
+              style={{
+                fontSize: FONT_SIZE.medium,
+                textAlign: 'center',
+                marginBottom: SPACING.medium,
+                color: isLightTheme ? COLORS.darkGray : COLORS.lightGray
+              }}
             >
               Ready to focus on your important tasks?
             </Text>
             
             <TouchableOpacity
-              style={[
-                styles.taskButton,
-                { backgroundColor: isLightTheme ? COLORS.primary : COLORS.secondaryLight }
-              ]}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: SPACING.medium,
+                borderRadius: SPACING.small,
+                width: '80%',
+                backgroundColor: isLightTheme ? COLORS.primary : COLORS.secondaryLight,
+                ...SHADOWS.medium
+              }}
               onPress={navigateToTasks}
             >
               <MaterialIcons name="assignment" size={24} color={COLORS.light} />
-              <Text style={styles.taskButtonText}>Go to Tasks</Text>
+              <Text style={{
+                color: COLORS.light,
+                fontSize: FONT_SIZE.medium,
+                fontWeight: 'bold',
+                marginLeft: SPACING.small
+              }}>Go to Tasks</Text>
             </TouchableOpacity>
           </View>
         )}
         
         <TouchableOpacity
-          style={[
-            styles.homeButton,
-            { backgroundColor: isLightTheme ? COLORS.primary : COLORS.secondaryLight }
-          ]}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: SPACING.medium,
+            borderRadius: SPACING.small,
+            width: '80%',
+            backgroundColor: isLightTheme ? COLORS.primary : COLORS.secondaryLight,
+            marginTop: SPACING.large,
+            ...SHADOWS.medium
+          }}
           onPress={() => navigation.navigate('Home')}
         >
           <MaterialIcons name="home" size={24} color={COLORS.light} />
-          <Text style={styles.homeButtonText}>Return Home</Text>
+          <Text style={{
+            color: COLORS.light,
+            fontSize: FONT_SIZE.medium,
+            fontWeight: 'bold',
+            marginLeft: SPACING.small
+          }}>Return Home</Text>
         </TouchableOpacity>
-      </Animated.View>
+      </View>
     );
   };
 
@@ -1502,23 +1765,27 @@ const MeditationScreen = ({ navigation }) => {
           </View>
           
           {/* Meditation prompt container - shows either guided prompts or "Breathe and relax" */}
-          <Animated.View 
-            style={[
-              styles.promptContainer,
-              { 
-                opacity: isGuidedMeditation ? promptFadeAnim : 1,
-                backgroundColor: isGuidedMeditation ? 'rgba(0, 0, 0, 0.6)' : 'rgba(0, 0, 0, 0.4)'  
-              }
-            ]}
-          >
-            {isGuidedMeditation ? (
-              // Show guided meditation prompt when available
-              currentPrompt && <Text style={styles.promptText}>{currentPrompt}</Text>
-            ) : (
-              // Show "Breathe and relax" when not in guided mode
-              <Text style={styles.promptText}>Breathe and relax...</Text>
-            )}
-          </Animated.View>
+          {(isGuidedMeditation && currentPrompt) || (!isGuidedMeditation) ? (
+            <Animated.View 
+              style={[
+                styles.promptContainer,
+                { 
+                  opacity: isGuidedMeditation ? promptFadeAnim : 1,
+                  backgroundColor: isGuidedMeditation ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.4)',
+                  // Only display the container when prompt text exists
+                  display: (isGuidedMeditation && !currentPrompt) ? 'none' : 'flex'
+                }
+              ]}
+            >
+              {isGuidedMeditation ? (
+                // Show guided meditation prompt when available
+                currentPrompt && <Text style={styles.promptText}>{currentPrompt}</Text>
+              ) : (
+                // Show "Breathe and relax" when not in guided mode
+                <Text style={styles.promptText}>Breathe and relax...</Text>
+              )}
+            </Animated.View>
+          ) : null}
           
           {/* Timer circle */}
           <View style={styles.timerCircleContainer}>
@@ -1574,7 +1841,7 @@ const MeditationScreen = ({ navigation }) => {
             onPress={() => {
               Alert.alert(
                 "End Meditation",
-                "Are you sure you want to end your current meditation session?",
+                "Are you sure you want to end your current session? This will end the meditation permanently.",
                 [
                   {
                     text: "Continue",
@@ -1851,18 +2118,29 @@ const styles = StyleSheet.create({
     left: '4%',
     right: '4%',
     padding: SPACING.m,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: LAYOUT.borderRadius.l,
     alignItems: 'center',
     justifyContent: 'center',
     width: '92%',
     zIndex: 15,
+    minHeight: 80,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
   },
   promptText: {
-    color: COLORS.text.primary,
+    color: COLORS.text.secondary,
     fontSize: FONT_SIZE.m,
     textAlign: 'center',
     lineHeight: 24,
+    fontWeight: "400",
+    paddingVertical: SPACING.xs,
   },
   timerCircleContainer: {
     position: 'absolute',
@@ -1946,6 +2224,12 @@ const styles = StyleSheet.create({
     padding: SPACING.large,
     zIndex: 10,
   },
+  completionContentContainer: {
+    alignItems: 'center',
+  },
+  completionIcon: {
+    marginBottom: SPACING.medium,
+  },
   completionTitle: {
     fontSize: FONT_SIZE.xxlarge,
     fontWeight: 'bold',
@@ -1957,21 +2241,28 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xxlarge,
     textAlign: 'center',
   },
-  homeButton: {
+  completionStatsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: SPACING.medium,
-    borderRadius: SPACING.small,
-    width: '80%',
-    marginTop: SPACING.large,
-    ...SHADOWS.medium,
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: SPACING.medium,
   },
-  homeButtonText: {
-    color: COLORS.light,
-    fontSize: FONT_SIZE.medium,
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: FONT_SIZE.m,
     fontWeight: 'bold',
-    marginLeft: SPACING.small,
+    marginBottom: SPACING.tiny,
+  },
+  statLabel: {
+    fontSize: FONT_SIZE.s,
+    color: COLORS.text.tertiary,
+  },
+  completionMessage: {
+    fontSize: FONT_SIZE.large,
+    textAlign: 'center',
+    marginBottom: SPACING.xxlarge,
   },
   taskRedirectContainer: {
     width: '100%',
@@ -1993,6 +2284,22 @@ const styles = StyleSheet.create({
     ...SHADOWS.medium,
   },
   taskButtonText: {
+    color: COLORS.light,
+    fontSize: FONT_SIZE.medium,
+    fontWeight: 'bold',
+    marginLeft: SPACING.small,
+  },
+  homeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.medium,
+    borderRadius: SPACING.small,
+    width: '80%',
+    marginTop: SPACING.large,
+    ...SHADOWS.medium,
+  },
+  homeButtonText: {
     color: COLORS.light,
     fontSize: FONT_SIZE.medium,
     fontWeight: 'bold',

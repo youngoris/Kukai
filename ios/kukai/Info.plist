@@ -62,7 +62,9 @@
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>此应用需要访问您的位置以提供天气信息和地理位置相关服务</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <string>此应用需要使用麦克风来提供语音功能</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>此应用需要使用语音识别功能</string>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>

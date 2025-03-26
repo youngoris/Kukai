@@ -1,0 +1,67 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+1. **Project Setup**
+   - Initialize React Native with Expo
+   - Configure TypeScript
+   - Set up ESLint and Prettier
+   - Create basic project structure
+
+2. **Core Architecture**
+   - Implement navigation system
+   - Create state management architecture with Context API
+   - Set up database and storage services
+   - Build theming system
+
+3. **Meditation Module**
+   - Design timer interface
+   - Implement audio service for background sounds
+   - Create session tracking and statistics
+   - Build meditation history display
+
+4. **Task Management Module**
+   - Design task list and creation interfaces
+   - Implement task categorization and prioritization
+   - Create task filtering and sorting
+   - Build statistics and analytics
+
+5. **Journal Module**
+   - Design journal entry interface
+   - Implement templates system
+   - Create rich text editor
+   - Build journal history and search
+
+6. **Focus Timer**
+   - Design Pomodoro interface
+   - Implement timer functionality with notifications
+   - Create session tracking
+   - Build focus statistics
+
+7. **Integration & Analytics**
+   - Create cross-module data analysis
+   - Implement unified dashboard
+   - Build progress visualization
+   - Create achievements system
+
+8. **Settings & Customization**
+   - Implement theme management
+   - Create notification preferences
+   - Build backup and restore functionality
+   - Implement data export options
+
+9. **Testing & Refinement**
+   - Conduct unit and integration testing
+   - Perform usability testing
+   - Optimize performance
+   - Refine user interface
+
+10. **Deployment Preparation**
+    - Configure Expo EAS Build
+    - Prepare app store assets
+    - Create documentation
+    - Set up analytics and monitoring

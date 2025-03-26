@@ -33,6 +33,7 @@ import notificationService from "../services/NotificationService";
 import { AVAILABLE_TEMPLATES } from "../constants/JournalTemplates";
 import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
+import VoiceGuidanceModal from "../components/VoiceGuidanceModal";
 
 const SettingsScreen = ({ navigation }) => {
   // Get safe area insets
@@ -45,9 +46,11 @@ const SettingsScreen = ({ navigation }) => {
   const [meditationDuration, setMeditationDuration] = useState(10);
   const [selectedSoundTheme, setSelectedSoundTheme] = useState("rain");
   const [keepScreenAwake, setKeepScreenAwake] = useState(true);
-  const [voiceGuidanceEnabled, setVoiceGuidanceEnabled] = useState(true);
+  const [voiceGuidanceEnabled, setVoiceGuidanceEnabled] = useState(false);
   const [defaultGuidanceType, setDefaultGuidanceType] = useState("dailyFocus");
   const [voiceGuidanceVolume, setVoiceGuidanceVolume] = useState(0.7);
+  const [selectedVoice, setSelectedVoice] = useState("en-US-JennyMultilingualNeural");
+  const [voiceSpeed, setVoiceSpeed] = useState(0.85); // Default voice speed from SpeechService
 
   // Focus Settings
   const [focusDuration, setFocusDuration] = useState(25);
@@ -186,8 +189,19 @@ const SettingsScreen = ({ navigation }) => {
     { value: "bedtime", label: "Bedtime" },
   ];
 
+  // Voice options for TTS guidance
+  const voiceOptions = [
+    { value: "en-US-JennyMultilingualNeural", label: "Jenny (Default)" },
+    { value: "en-US-GuyNeural", label: "Guy" },
+    { value: "en-US-AriaNeural", label: "Aria" },
+    { value: "en-US-ChristopherNeural", label: "Christopher" },
+  ];
+
   // New state for CloudBackupSection visibility
   const [showCloudBackup, setShowCloudBackup] = useState(false);
+
+  // Add state for Voice Guidance modal visibility
+  const [showVoiceGuidanceModal, setShowVoiceGuidanceModal] = useState(false);
 
   // Add new notification settings state
   const [taskNotifications, setTaskNotifications] = useState(true);
@@ -263,6 +277,11 @@ const SettingsScreen = ({ navigation }) => {
     meditationReminder,
     meditationReminderTime,
     keepScreenAwake,
+    voiceGuidanceEnabled,
+    defaultGuidanceType,
+    voiceGuidanceVolume,
+    selectedVoice,
+    voiceSpeed,
   ]);
 
   // Add useEffect to sync darkMode with appTheme
@@ -285,15 +304,8 @@ const SettingsScreen = ({ navigation }) => {
   // Auto-save settings function
   const autoSaveSettings = async () => {
     try {
-      // Ensure darkMode is consistent with appTheme before saving
-      let currentDarkMode = darkMode;
-      if (appTheme === 'dark') {
-        currentDarkMode = true;
-      } else if (appTheme === 'light') {
-        currentDarkMode = false;
-      }
-      // For 'auto' theme, we keep the current darkMode value
-      
+      console.log("Auto saving settings...");
+      // Create settings object
       const settings = {
         // Meditation settings
         meditationDuration,
@@ -301,6 +313,11 @@ const SettingsScreen = ({ navigation }) => {
         meditationReminder,
         meditationReminderTime: meditationReminderTime.toISOString(),
         keepScreenAwake,
+        voiceGuidanceEnabled,
+        defaultGuidanceType,
+        voiceGuidanceVolume,
+        selectedVoice,
+        voiceSpeed,
 
         // Focus settings
         focusDuration,
@@ -324,7 +341,7 @@ const SettingsScreen = ({ navigation }) => {
         meditationReminderTime: meditationReminderTime.toISOString(),
 
         // General settings
-        darkMode: currentDarkMode, // Use the synchronized value
+        darkMode,
         appTheme,
         fontSizeScale,
         notificationsEnabled,
@@ -336,11 +353,6 @@ const SettingsScreen = ({ navigation }) => {
         quietHoursEnabled,
         quietHoursStart: quietHoursStart.toString(),
         quietHoursEnd: quietHoursEnd.toString(),
-
-        // Voice Guidance settings
-        voiceGuidanceEnabled,
-        defaultGuidanceType,
-        voiceGuidanceVolume,
       };
 
       console.log("Auto-saving settings:", settings);
@@ -406,34 +418,19 @@ const SettingsScreen = ({ navigation }) => {
   const loadSettings = async () => {
     try {
       const settings = await getSettingsWithDefaults();
-
-      // Meditation Settings
+      
+      // Meditation settings
       setMeditationDuration(settings.meditationDuration || 10);
       setSelectedSoundTheme(settings.selectedSoundTheme || "rain");
-      setMeditationReminder(settings.meditationReminder || false);
-      
-      if (settings.meditationReminderTime) {
-        let reminderTime;
-        if (typeof settings.meditationReminderTime === "string") {
-          reminderTime = new Date(settings.meditationReminderTime);
-        } else {
-          reminderTime = new Date(settings.meditationReminderTime);
-        }
-        setMeditationReminderTime(reminderTime);
-      }
-      
-      // Keep screen awake setting
-      setKeepScreenAwake(
-        settings.keepScreenAwake !== undefined ? settings.keepScreenAwake : true
-      );
-      
-      // 加载语音引导设置
-      setVoiceGuidanceEnabled(
-        settings.voiceGuidanceEnabled !== undefined ? settings.voiceGuidanceEnabled : true
-      );
+      setMeditationReminder(settings.meditationReminder !== undefined ? settings.meditationReminder : false);
+      setMeditationReminderTime(new Date(settings.meditationReminderTime || new Date().setHours(8, 30, 0, 0)));
+      setKeepScreenAwake(settings.keepScreenAwake !== undefined ? settings.keepScreenAwake : true);
+      setVoiceGuidanceEnabled(settings.voiceGuidanceEnabled !== undefined ? settings.voiceGuidanceEnabled : true);
       setDefaultGuidanceType(settings.defaultGuidanceType || "dailyFocus");
-      setVoiceGuidanceVolume(settings.voiceGuidanceVolume || 0.7);
-      
+      setVoiceGuidanceVolume(settings.voiceGuidanceVolume !== undefined ? settings.voiceGuidanceVolume : 0.7);
+      setSelectedVoice(settings.selectedVoice || "en-US-JennyMultilingualNeural");
+      setVoiceSpeed(settings.voiceSpeed !== undefined ? settings.voiceSpeed : 0.85);
+
       // Focus Settings
       setFocusDuration(settings.focusDuration || 25);
       setBreakDuration(settings.breakDuration || 5);
@@ -508,25 +505,22 @@ const SettingsScreen = ({ navigation }) => {
 
   const saveSettings = async () => {
     try {
+      console.log("Saving settings...");
+      // Create settings object
       const settings = {
-        // General Settings
-        darkMode,
-        appTheme,
-        fontSizeScale,
-        notificationsEnabled,
-        
-        // Meditation Settings
+        // Meditation settings
         meditationDuration,
         selectedSoundTheme,
         meditationReminder,
         meditationReminderTime: meditationReminderTime.toISOString(),
         keepScreenAwake,
-        // 添加语音引导设置
         voiceGuidanceEnabled,
         defaultGuidanceType,
         voiceGuidanceVolume,
-        
-        // Focus Settings
+        selectedVoice,
+        voiceSpeed,
+
+        // Focus settings
         focusDuration,
         breakDuration,
         longBreakDuration,
@@ -534,15 +528,15 @@ const SettingsScreen = ({ navigation }) => {
         focusNotifications,
         autoStartNextFocus,
         differentWeekendSettings,
-        
-        // Journal Settings
+
+        // Journal settings
         includeWeather,
         includeLocation,
         markdownSupport,
         journalReminder,
         journalReminderTime: journalReminderTime.toISOString(),
         selectedJournalTemplate,
-        
+
         // Notifications
         taskNotifications,
         notificationSound,
@@ -1223,81 +1217,110 @@ const SettingsScreen = ({ navigation }) => {
             "Choose your preferred background sound",
           )}
 
-          {/* Meditation reminder */}
+          {/* Voice Guidance - Single entry with modal */}
+          <TouchableOpacity 
+            style={[
+              styles.settingItem, 
+              appTheme === "light" ? {backgroundColor: "#FFFFFF"} : {backgroundColor: "#1A1A1A"},
+              { borderRadius: 10, marginBottom: 10 }
+            ]}
+            onPress={() => setShowVoiceGuidanceModal(true)}
+          >
+            <View style={styles.settingContent}>
+              <Text style={[
+                styles.settingLabel, 
+                appTheme === "light" ? styles.lightText : null
+              ]}>
+                Voice Guidance
+              </Text>
+              <Text style={[
+                styles.settingDescription, 
+                appTheme === "light" ? styles.lightSettingDescription : null
+              ]}>
+                Configure spoken meditation guidance
+              </Text>
+            </View>
+            <MaterialIcons 
+              name="chevron-right" 
+              size={24} 
+              color={appTheme === "light" ? "#555" : "#AAA"} 
+            />
+          </TouchableOpacity>
+
+          {/* Voice Guidance Modal */}
+          <VoiceGuidanceModal 
+            visible={showVoiceGuidanceModal}
+            onClose={() => setShowVoiceGuidanceModal(false)}
+            settings={{
+              voiceGuidanceEnabled,
+              guidanceType: defaultGuidanceType,
+              selectedVoice,
+              voiceVolume: voiceGuidanceVolume,
+              voiceSpeed
+            }}
+            setSettingsChanged={setSettingsChanged}
+            onSettingChange={(key, value) => {
+              switch (key) {
+                case 'voiceGuidanceEnabled':
+                  setVoiceGuidanceEnabled(value);
+                  break;
+                case 'guidanceType':
+                  setDefaultGuidanceType(value);
+                  break;
+                case 'selectedVoice':
+                  setSelectedVoice(value);
+                  break;
+                case 'voiceVolume':
+                  setVoiceGuidanceVolume(value);
+                  break;
+                case 'voiceSpeed':
+                  setVoiceSpeed(value);
+                  break;
+                case 'guidanceTypeSelector':
+                  // 关闭当前模态窗口
+                  setShowVoiceGuidanceModal(false);
+                  // 打开选项选择器
+                  setTimeout(() => {
+                    openOptionModal(
+                      guidanceTypes, 
+                      defaultGuidanceType, 
+                      (value) => {
+                        setDefaultGuidanceType(value);
+                        setSettingsChanged(true);
+                      }, 
+                      "Guidance Type"
+                    );
+                  }, 300);
+                  break;
+                case 'voiceSelector':
+                  // 关闭当前模态窗口
+                  setShowVoiceGuidanceModal(false);
+                  // 打开选项选择器
+                  setTimeout(() => {
+                    openOptionModal(
+                      voiceOptions, 
+                      selectedVoice, 
+                      (value) => {
+                        setSelectedVoice(value);
+                        setSettingsChanged(true);
+                      }, 
+                      "Voice"
+                    );
+                  }, 300);
+                  break;
+                default:
+                  break;
+              }
+              setSettingsChanged(true);
+            }}
+          />
+
+          {/* Meditation reminder - moved to the end */}
           {renderSettingSwitch(
             meditationReminder,
             setMeditationReminder,
             "Meditation Reminder",
             "Get a reminder to meditate"
-          )}
-
-          {/* Add Voice Guidance Settings */}
-          {renderSettingSwitch(
-            voiceGuidanceEnabled,
-            setVoiceGuidanceEnabled,
-            "Voice Guidance",
-            "Enable spoken guidance during meditation"
-          )}
-          
-          {voiceGuidanceEnabled && (
-            <>
-              {renderDropdownOption(
-                defaultGuidanceType,
-                guidanceTypes,
-                "Default Guidance Type",
-                "Choose the default meditation guidance script"
-              )}
-              
-              <View style={[
-                styles.sliderContainer, 
-                appTheme === "light" ? {backgroundColor: '#fff'} : {backgroundColor: '#111'}
-              ]}>
-                <Text style={[
-                  styles.settingLabel, 
-                  appTheme === "light" ? {color: '#000'} : {color: '#CCC'}
-                ]}>Voice Volume</Text>
-                <Text style={[
-                  styles.settingDescription,
-                  appTheme === "light" ? {color: '#333'} : {color: '#888'}
-                ]}>
-                  Adjust the volume of the guidance voice
-                </Text>
-                <View style={styles.sliderRow}>
-                  <MaterialIcons 
-                    name="volume-down" 
-                    size={22} 
-                    color={appTheme === "light" ? "#777" : "#AAA"} 
-                  />
-                  <Slider
-                    style={styles.slider}
-                    minimumValue={0}
-                    maximumValue={1}
-                    step={0.1}
-                    value={voiceGuidanceVolume}
-                    onValueChange={(value) => {
-                      setVoiceGuidanceVolume(value);
-                      setSettingsChanged(true);
-                      
-                      // Debounce save to avoid excessive saving during slide
-                      if (saveTimeoutRef.current) {
-                        clearTimeout(saveTimeoutRef.current);
-                      }
-                      saveTimeoutRef.current = setTimeout(() => {
-                        autoSaveSettings();
-                      }, 500);
-                    }}
-                    minimumTrackTintColor={appTheme === "light" ? "#007BFF" : "#3399FF"}
-                    maximumTrackTintColor={appTheme === "light" ? "#D3D3D3" : "#555"}
-                    thumbTintColor={appTheme === "light" ? "#007BFF" : "#3399FF"}
-                  />
-                  <MaterialIcons 
-                    name="volume-up" 
-                    size={22} 
-                    color={appTheme === "light" ? "#777" : "#AAA"} 
-                  />
-                </View>
-              </View>
-            </>
           )}
 
           {meditationReminder &&
@@ -2242,6 +2265,24 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 40,
     marginHorizontal: 10,
+  },
+  speedValueLabel: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+    color: '#AAA',
+  },
+  settingItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 15,
+  },
+  lightSettingItem: {
+    backgroundColor: "#DDDDDD",
+  },
+  settingContent: {
+    flex: 1,
   },
 });
 
