@@ -251,108 +251,114 @@ const SummaryScreen = ({ navigation }) => {
 
   const loadData = async () => {
     try {
-      // Load completed tasks
-      const completedTasksJson = await storageService.getItem("completedTasks");
-      if (completedTasksJson) {
-        try {
-          const completedTasksData = JSON.parse(completedTasksJson);
-          setCompletedTasks(completedTasksData);
-        } catch (parseError) {
-          console.error("Error parsing completed tasks:", parseError);
-          setCompletedTasks([]);
-          await storageService.setItem("completedTasks", JSON.stringify([]));
-        }
+      const today = new Date().toISOString().split("T")[0];
+
+      // Load task data
+      const tasksJson = await storageService.getItem("tasks");
+      let allTasks = [];
+
+      // Process task data
+      if (tasksJson) {
+        allTasks = JSON.parse(tasksJson);
+        // Filter completed and pending tasks for today
+        const todayTasks = allTasks.filter((task) => {
+          // If task has a completion time, check if it's today's task
+          if (task.completedAt) {
+            const completedDate = new Date(task.completedAt)
+              .toISOString()
+              .split("T")[0];
+            return completedDate === today;
+          }
+          // For pending tasks, default to showing all pending tasks
+          return !task.completed;
+        });
+
+        const completed = todayTasks.filter((task) => task.completed);
+        const pending = todayTasks.filter((task) => !task.completed);
+
+        setCompletedTasks(completed);
+        setPendingTasks(pending);
+
+        // Calculate today's task completion rate (only consider today's tasks)
+        const rate =
+          todayTasks.length > 0
+            ? (completed.length / todayTasks.length) * 100
+            : 0;
+        setCompletionRate(Math.round(rate));
+      } else {
+        // If no task data, initialize as empty array
+        setCompletedTasks([]);
+        setPendingTasks([]);
+        setCompletionRate(0);
+        // Create initial empty task array and save
+        await storageService.setItem("tasks", JSON.stringify([]));
       }
 
-      // Load pending tasks
-      const pendingTasksJson = await storageService.getItem("tasks");
-      if (pendingTasksJson) {
-        try {
-          const pendingTasksData = JSON.parse(pendingTasksJson);
-          setPendingTasks(pendingTasksData);
-        } catch (parseError) {
-          console.error("Error parsing pending tasks:", parseError);
-          setPendingTasks([]);
-          await storageService.setItem("tasks", JSON.stringify([]));
-        }
+      // Load meditation data (只统计当天的冥想时间)
+      const meditationSessionsJson =
+        await storageService.getItem("meditationHistory");
+      let todayMeditationMinutes = 0;
+      if (meditationSessionsJson) {
+        const meditationSessions = JSON.parse(meditationSessionsJson);
+        // 过滤出当天的冥想会话
+        const todaySessions = meditationSessions.filter(
+          (session) => session.date.split('T')[0] === today
+        );
+        // 只计算当天的冥想时间
+        todayMeditationMinutes = todaySessions.reduce(
+          (total, session) => total + session.duration,
+          0
+        );
+      }
+      setTotalMeditationMinutes(todayMeditationMinutes);
+
+      // Load focus time data (只统计当天的专注时间和番茄钟会话数)
+      const focusHistoryJson = await storageService.getItem("focusHistory");
+      if (focusHistoryJson) {
+        const focusHistory = JSON.parse(focusHistoryJson);
+        // 过滤出今天的专注会话（非休息时间）
+        const todaySessions = focusHistory.filter(
+          (session) => 
+            session.date.split('T')[0] === today && 
+            !session.isBreak
+        );
+        
+        // 计算今天的专注总时间（分钟）
+        const todayMinutes = todaySessions.reduce(
+          (total, session) => total + session.duration,
+          0
+        );
+        setTotalFocusMinutes(todayMinutes);
+        
+        // 计算今天的番茄钟会话数量
+        setPomodoroCount(todaySessions.length);
+      } else {
+        setTotalFocusMinutes(0);
+        setPomodoroCount(0);
       }
 
       // Load tomorrow's tasks
       const tomorrowTasksJson = await storageService.getItem("tomorrowTasks");
       if (tomorrowTasksJson) {
-        try {
-          const tomorrowTasksData = JSON.parse(tomorrowTasksJson);
-          setTomorrowTasks(tomorrowTasksData);
-        } catch (parseError) {
-          console.error("Error parsing tomorrow tasks:", parseError);
-          setTomorrowTasks([]);
-          await storageService.setItem("tomorrowTasks", JSON.stringify([]));
-        }
-      }
-
-      // Calculate completion rate
-      const totalTasks = completedTasks.length + pendingTasks.length;
-      if (totalTasks > 0) {
-        setCompletionRate(Math.round((completedTasks.length / totalTasks) * 100));
+        setTomorrowTasks(JSON.parse(tomorrowTasksJson));
       } else {
-        setCompletionRate(0);
-      }
-
-      // Load meditation data
-      const meditationHistoryJson = await storageService.getItem("meditationHistory");
-      if (meditationHistoryJson) {
-        try {
-          const meditationHistory = JSON.parse(meditationHistoryJson);
-          
-          // Calculate total meditation minutes for today
-          const today = new Date().toISOString().split("T")[0];
-          const todayMeditations = meditationHistory.filter(
-            (session) => session.date.split("T")[0] === today
-          );
-          
-          let totalMinutes = 0;
-          for (const session of todayMeditations) {
-            totalMinutes += session.duration;
-          }
-          
-          setTotalMeditationMinutes(totalMinutes);
-        } catch (parseError) {
-          console.error("Error parsing meditation history:", parseError);
-          setTotalMeditationMinutes(0);
-          await storageService.setItem("meditationHistory", JSON.stringify([]));
-        }
-      }
-
-      // Load focus data
-      const focusHistoryJson = await storageService.getItem("focusHistory");
-      if (focusHistoryJson) {
-        try {
-          const focusHistory = JSON.parse(focusHistoryJson);
-          
-          // Calculate total focus minutes for today
-          const today = new Date().toISOString().split("T")[0];
-          const todayFocusSessions = focusHistory.filter(
-            (session) => 
-              session.date.split("T")[0] === today && 
-              !session.isBreak
-          );
-          
-          let totalMinutes = 0;
-          for (const session of todayFocusSessions) {
-            totalMinutes += session.duration;
-          }
-          
-          setTotalFocusMinutes(totalMinutes);
-          setPomodoroCount(todayFocusSessions.length);
-        } catch (parseError) {
-          console.error("Error parsing focus history:", parseError);
-          setTotalFocusMinutes(0);
-          setPomodoroCount(0);
-          await storageService.setItem("focusHistory", JSON.stringify([]));
-        }
+        // If no tomorrow task data, initialize as empty array
+        setTomorrowTasks([]);
+        await storageService.setItem("tomorrowTasks", JSON.stringify([]));
       }
     } catch (error) {
       console.error("Error loading data:", error);
+      // Show friendly error message and provide retry option
+      Alert.alert("Data Loading Error", "Unable to load summary data.", [
+        {
+          text: "Retry",
+          onPress: () => loadData(),
+        },
+        {
+          text: "OK",
+          style: "cancel",
+        },
+      ]);
     }
   };
 

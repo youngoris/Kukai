@@ -145,5 +145,33 @@ describe('defaultSettings', () => {
       // Verify that the error was logged
       expect(console.error).toHaveBeenCalledWith('Error getting settings:', mockError);
     });
+
+    // Test when stored settings are returned as an object (SQLite format)
+    test('should handle settings returned as an object (SQLite format)', async () => {
+      // Mock settings to return from storageService as an object (not a JSON string)
+      const mockStoredSettings = { 
+        darkMode: false, 
+        focusDuration: 30,
+        appTheme: 'light' 
+      };
+      
+      // Setup the mock to return an object directly (as SQLite would do)
+      storageService.getItem.mockResolvedValue(mockStoredSettings);
+      
+      // Call the function
+      const result = await getSettingsWithDefaults();
+      
+      // Verify that getItem was called with the correct key
+      expect(storageService.getItem).toHaveBeenCalledWith('userSettings');
+      
+      // Verify that the result has our mock data (merged with defaults)
+      expect(result).toEqual({
+        ...defaultSettings,
+        ...mockStoredSettings
+      });
+      
+      // Verify that setItem was not called (since settings already exist)
+      expect(storageService.setItem).not.toHaveBeenCalled();
+    });
   });
 }); 

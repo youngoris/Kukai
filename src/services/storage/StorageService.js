@@ -155,9 +155,7 @@ class StorageService {
         try {
           existingObject = JSON.parse(existingItem);
         } catch (e) {
-          console.error(`Error parsing existing item for key ${key}:`, e);
-          // If parsing fails, treat it as corrupted and reset it
-          existingObject = {};
+          existingObject = { value: existingItem };
         }
       } else {
         existingObject = existingItem;
@@ -169,7 +167,6 @@ class StorageService {
         try {
           newValue = JSON.parse(value);
         } catch (e) {
-          console.error(`Error parsing new value for key ${key}:`, e);
           newValue = { value };
         }
       } else {

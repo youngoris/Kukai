@@ -63,19 +63,7 @@ class ConfigService {
         case 'number': 
           return Number(config.value);
         case 'json': 
-          try {
-            return JSON.parse(config.value);
-          } catch (jsonError) {
-            console.error(`Failed to parse JSON for key: ${config.key}`, jsonError);
-            // For corrupted JSON data, return an empty array or object as appropriate
-            // This helps the application continue functioning rather than crashing
-            if (config.value.startsWith('[')) {
-              return [];
-            } else if (config.value.startsWith('{')) {
-              return {};
-            }
-            return null;
-          }
+          return JSON.parse(config.value);
         default: 
           return config.value;
       }

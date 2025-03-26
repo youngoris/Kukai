@@ -282,23 +282,16 @@ export default function FocusScreen({ navigation }) {
       const historyString = await storageService.getItem("focusHistory");
       
       if (historyString) {
-        try {
-          const history = JSON.parse(historyString);
-          // Filter today's sessions (non-break sessions)
-          const todaySessions = history.filter(
-            (session) => 
-              session.date.split('T')[0] === today && 
-              !session.isBreak
-          );
-          
-          // Update pomodoro count with today's sessions count
-          setPomodoroCount(todaySessions.length);
-        } catch (parseError) {
-          console.error("Error parsing focus history JSON:", parseError);
-          // Reset the corrupt data
-          await storageService.setItem("focusHistory", JSON.stringify([]));
-          setPomodoroCount(0);
-        }
+        const history = JSON.parse(historyString);
+        // Filter today's sessions (non-break sessions)
+        const todaySessions = history.filter(
+          (session) => 
+            session.date.split('T')[0] === today && 
+            !session.isBreak
+        );
+        
+        // Update pomodoro count with today's sessions count
+        setPomodoroCount(todaySessions.length);
       } else {
         setPomodoroCount(0);
       }
