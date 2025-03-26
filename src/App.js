@@ -23,15 +23,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 // Import services
 import googleDriveService from "./services/GoogleDriveService";
 import notificationService from "./services/NotificationService";
-import { 
-  databaseService, 
-  databaseBackupService, 
-  databaseQueryOptimizer,
-  TaskDAO,
-  MeditationDAO,
-  JournalDAO,
-  FocusDAO
-} from "./services";
+
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -51,73 +43,73 @@ export default function App() {
   // Create navigation reference
   const navigationRef = useRef(null);
 
-  // Initialize database
-  useEffect(() => {
-    const initializeDatabase = async () => {
-      try {
-        console.log("Initializing database...");
+  // // Initialize database
+  // useEffect(() => {
+  //   const initializeDatabase = async () => {
+  //     try {
+  //       console.log("Initializing database...");
         
-        // Make sure database service is properly instantiated
-        if (!databaseService) {
-          console.error("Database service is undefined");
-          return;
-        }
+  //       // Make sure database service is properly instantiated
+  //       if (!databaseService) {
+  //         console.error("Database service is undefined");
+  //         return;
+  //       }
         
-        // Initialize database
-        const dbResult = await databaseService.initialize();
+  //       // Initialize database
+  //       const dbResult = await databaseService.initialize();
         
-        if (dbResult.success) {
-          console.log("Database initialized successfully");
-          console.log(`Database schema version: ${dbResult.dbVersion || 'unknown'}`);
+  //       if (dbResult.success) {
+  //         console.log("Database initialized successfully");
+  //         console.log(`Database schema version: ${dbResult.dbVersion || 'unknown'}`);
           
-          // Initialize backup service
-          await databaseBackupService.initialize();
+  //         // Initialize backup service
+  //         await databaseBackupService.initialize();
           
-          // Initialize database indexes for query optimization
-          await databaseQueryOptimizer.ensureIndexes();
+  //         // Initialize database indexes for query optimization
+  //         await databaseQueryOptimizer.ensureIndexes();
           
-          // Check for automatic backup
-          const backupResult = await databaseBackupService.checkAutomaticBackup();
-          if (backupResult.performed) {
-            console.log("Automatic backup completed:", backupResult.result.name);
-          }
+  //         // Check for automatic backup
+  //         const backupResult = await databaseBackupService.checkAutomaticBackup();
+  //         if (backupResult.performed) {
+  //           console.log("Automatic backup completed:", backupResult.result.name);
+  //         }
           
-          // Initialize DAOs
-          console.log("Testing DAO services...");
+  //         // Initialize DAOs
+  //         console.log("Testing DAO services...");
           
-          // Test TaskDAO
-          const taskStats = await TaskDAO.getTaskStats();
-          console.log("Task statistics:", taskStats);
+  //         // Test TaskDAO
+  //         const taskStats = await TaskDAO.getTaskStats();
+  //         console.log("Task statistics:", taskStats);
           
-          // Test MeditationDAO
-          const meditationCount = await MeditationDAO.count();
-          console.log("Meditation sessions count:", meditationCount);
+  //         // Test MeditationDAO
+  //         const meditationCount = await MeditationDAO.count();
+  //         console.log("Meditation sessions count:", meditationCount);
           
-          // Test JournalDAO
-          const journalCount = await JournalDAO.count();
-          console.log("Journal entries count:", journalCount);
+  //         // Test JournalDAO
+  //         const journalCount = await JournalDAO.count();
+  //         console.log("Journal entries count:", journalCount);
           
-          // Test FocusDAO
-          const focusCount = await FocusDAO.count();
-          console.log("Focus sessions count:", focusCount);
-        } else {
-          console.error("Database initialization failed:", dbResult.error);
+  //         // Test FocusDAO
+  //         const focusCount = await FocusDAO.count();
+  //         console.log("Focus sessions count:", focusCount);
+  //       } else {
+  //         console.error("Database initialization failed:", dbResult.error);
           
-          // Attempt to recover from initialization failure
-          // This might happen if a migration failed
-          if (dbResult.error && dbResult.error.includes('migration')) {
-            console.log("Attempting to recover from migration failure...");
-            // In a production app, you might want to show a dialog to the user here
-            // For now, we'll just log the error
-          }
-        }
-      } catch (error) {
-        console.error("Failed to initialize database:", error);
-      }
-    };
+  //         // Attempt to recover from initialization failure
+  //         // This might happen if a migration failed
+  //         if (dbResult.error && dbResult.error.includes('migration')) {
+  //           console.log("Attempting to recover from migration failure...");
+  //           // In a production app, you might want to show a dialog to the user here
+  //           // For now, we'll just log the error
+  //         }
+  //       }
+  //     } catch (error) {
+  //       console.error("Failed to initialize database:", error);
+  //     }
+  //   };
 
-    initializeDatabase();
-  }, []);
+  //   initializeDatabase();
+  // }, []);
 
   // Hide splash screen when fonts are loaded
   useEffect(() => {
