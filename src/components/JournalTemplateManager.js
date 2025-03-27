@@ -21,7 +21,7 @@ import {
   Platform,
 } from "react-native";
 import { MaterialIcons, Feather } from "@expo/vector-icons";
-import storageService from "../services/storage/StorageService";
+import storageService from "../services/StorageService";
 import Markdown from "react-native-markdown-display";
 import {
   AVAILABLE_TEMPLATES,

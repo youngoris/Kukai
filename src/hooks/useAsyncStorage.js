@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from "react";
-import storageService from "../services/storage/StorageService";
+import storageService from "../services/StorageService";
 
 /**
  * Custom hook for storage operations with error handling

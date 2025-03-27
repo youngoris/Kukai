@@ -14,7 +14,7 @@ import {
   Platform,
   StatusBar as RNStatusBar,
 } from "react-native";
-import storageService from "../services/storage/StorageService";
+import storageService from "../services/StorageService";
 import { useFocusEffect } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { MaterialIcons } from "@expo/vector-icons";

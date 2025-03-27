@@ -26,7 +26,7 @@ import {
   Feather,
   Octicons,
 } from "@expo/vector-icons";
-import storageService from "../services/storage/StorageService";
+import storageService from "../services/StorageService";
 import FrogIcon from "../../assets/frog.svg";
 import CustomDateTimePicker from "../components/CustomDateTimePicker";
 import CustomHeader from "../components/CustomHeader";

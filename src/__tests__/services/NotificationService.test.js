@@ -8,7 +8,7 @@ import './NotificationService.mock';
 
 // Import dependencies
 import * as Notifications from 'expo-notifications';
-import storageService from "../../services/storage/StorageService";
+import storageService from "../../services/StorageService";
 import notificationService from '../../services/NotificationService';
 
 // Mock Date.now() to return a consistent timestamp for testing

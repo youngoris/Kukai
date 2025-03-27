@@ -24,7 +24,7 @@ import {
   Ionicons,
   MaterialCommunityIcons,
 } from "@expo/vector-icons";
-import storageService from "../services/storage/StorageService";
+import storageService from "../services/StorageService";
 import * as Location from "expo-location";
 import Markdown from "react-native-markdown-display"; // Import Markdown component
 import useWeather from "../utils/useWeather"; // Import weather Hook

@@ -12,7 +12,7 @@ import NetInfo from '@react-native-community/netinfo';
 import Constants from 'expo-constants';
 import * as FileSystem from 'expo-file-system';
 import { Buffer } from 'buffer'; // For base64 encoding fallback
-import storageService from '../services/storage/StorageService';
+import storageService from './StorageService';
 
 // Default voice settings
 const DEFAULT_VOICE = 'en-US-JennyMultilingualNeural';

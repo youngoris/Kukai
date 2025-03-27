@@ -3,7 +3,7 @@
  * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
  */
 import * as Notifications from "expo-notifications";
-import storageService from "./storage/StorageService";
+import storageService from "./StorageService.js";
 import { Platform } from "react-native";
 
 // Add isWeb check

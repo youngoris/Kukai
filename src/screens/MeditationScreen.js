@@ -34,7 +34,7 @@ import {
   LAYOUT,
   SHADOWS,
 } from "../constants/DesignSystem";
-import storageService from "../services/storage/StorageService";
+import storageService from "../services/StorageService";
 import { goBackToHome } from "../navigation/NavigationUtils";
 import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";

@@ -5,7 +5,7 @@
  */
 
 import React, { createContext, useContext, useReducer, useEffect, useMemo, useCallback } from 'react';
-import storageService from '../services/storage/StorageService';
+import storageService from '../services/StorageService';
 import { getSettingsWithDefaults } from '../utils/defaultSettings';
 
 // Action types

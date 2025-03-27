@@ -1,8 +1,8 @@
 import defaultSettings, { getSettingsWithDefaults } from '../../utils/defaultSettings';
-import storageService from '../../services/storage/StorageService';
+import storageService from '../../services/StorageService';
 
 // Mock StorageService
-jest.mock('../../services/storage/StorageService', () => ({
+jest.mock('../../services/StorageService', () => ({
   __esModule: true,
   default: {
     getItem: jest.fn(),

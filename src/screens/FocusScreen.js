@@ -20,7 +20,7 @@ import {
 } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Progress from "react-native-progress";
-import storageService from "../services/storage/StorageService";
+import storageService from "../services/StorageService";
 import { useFocusEffect } from "@react-navigation/native";
 import notificationService from "../services/NotificationService";
 import CustomHeader from "../components/CustomHeader";

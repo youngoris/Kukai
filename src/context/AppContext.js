@@ -3,7 +3,7 @@
  * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
  */
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import storageService from '../services/storage/StorageService';
+import storageService from '../services/StorageService';
 
 // Create the context
 const AppContext = createContext();

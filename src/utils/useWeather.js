@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import * as Location from "expo-location";
-import storageService from "../services/storage/StorageService";
+import storageService from "../services/StorageService";
 import {
   WEATHER_API,
   CACHE,

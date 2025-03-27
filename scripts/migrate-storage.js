@@ -55,11 +55,11 @@ async function processFile(filePath) {
   }
   
   // Replace import statement
-  let newContent = content.replace(importRegex, 'import storageService from "../services/storage/StorageService"');
+  let newContent = content.replace(importRegex, 'import storageService from "../services/StorageService"');
   
   // Fix relative path based on file's directory depth
   const relativePath = path.relative(path.dirname(filePath), path.join(srcDir, 'services/storage/StorageService')).replace(/\\/g, '/');
-  newContent = newContent.replace('from "../services/storage/StorageService"', `from "${relativePath}"`);
+  newContent = newContent.replace('from "../services/StorageService"', `from "${relativePath}"`);
   
   // Replace AsyncStorage method calls
   newContent = newContent.replace(asyncStorageRegex, 'storageService.$1(');

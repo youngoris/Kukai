@@ -15,7 +15,7 @@ import {
   Platform,
 } from "react-native";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
-import storageService from "../services/storage/StorageService";
+import storageService from "../services/StorageService";
 import { useFocusEffect } from "@react-navigation/native";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 import CustomHeader from "../components/CustomHeader";

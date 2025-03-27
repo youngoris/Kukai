@@ -2,7 +2,7 @@
  * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
  * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
  */
-import storageService from '../services/storage/StorageService';
+import storageService from './StorageService';
 
 const ERROR_LOG_KEY = '@kukai/error_logs';
 

@@ -2,7 +2,7 @@
  * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
  * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
  */
-import storageService from "./storage/StorageService";
+import storageService from "./StorageService.js";
 import * as FileSystem from "expo-file-system";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";

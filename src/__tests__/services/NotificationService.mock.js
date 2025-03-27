@@ -20,7 +20,7 @@ jest.mock('expo-notifications', () => ({
 }));
 
 // Mock for StorageService
-jest.mock('../../services/storage/StorageService', () => ({
+jest.mock('../../services/StorageService', () => ({
   __esModule: true,
   default: {
     getItem: jest.fn(),

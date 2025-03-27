@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, act } from '@testing-library/react-native';
 import SummaryScreen from '../../../app/screens/SummaryScreen';
-import storageService from '../../services/storage/StorageService';
+import storageService from '../../services/StorageService';
 
 // Mock navigation
 const mockNavigation = {
@@ -9,7 +9,7 @@ const mockNavigation = {
 };
 
 // Mock required modules
-jest.mock('../../services/storage/StorageService', () => ({
+jest.mock('../../services/StorageService', () => ({
   __esModule: true,
   default: {
     getItem: jest.fn(),

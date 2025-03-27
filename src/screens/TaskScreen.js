@@ -21,7 +21,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
 } from "react-native";
-import storageService from "../services/storage/StorageService";
+import storageService from "../services/StorageService";
 import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
 import FrogIcon from "../../assets/frog.svg";
 import CustomDateTimePicker from "../components/CustomDateTimePicker";

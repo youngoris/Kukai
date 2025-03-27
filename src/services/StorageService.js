@@ -3,7 +3,7 @@
  * Provides the same API as AsyncStorage but uses ConfigService (SQLite) under the hood
  */
 
-import configService from '../ConfigService';
+import configService from './ConfigService';
 
 class StorageService {
   /**

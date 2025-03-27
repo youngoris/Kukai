@@ -21,7 +21,7 @@ import {
 } from "react-native";
 import Slider from "@react-native-community/slider";
 import { MaterialIcons } from "@expo/vector-icons";
-import storageService from "../services/storage/StorageService";
+import storageService from "../services/StorageService";
 import * as FileSystem from "expo-file-system";
 import * as DocumentPicker from "expo-document-picker";
 import * as Notifications from "expo-notifications";
