@@ -6,8 +6,8 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "jsEngine": "hermes",
+    "newArchEnabled": false,
+    "jsEngine": "jsc",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -19,9 +19,9 @@
       "infoPlist": {
         "NSHealthShareUsageDescription": "This app requires access to save your meditation sessions as mindfulness data",
         "NSHealthUpdateUsageDescription": "This app requires access to save your meditation sessions as mindfulness data",
-        "NSLocationWhenInUseUsageDescription": "此应用需要访问您的位置以提供天气信息和地理位置相关服务",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "此应用需要访问您的位置以提供天气信息和地理位置相关功能",
-        "NSLocationAlwaysUsageDescription": "此应用需要访问您的位置以提供天气信息和地理位置相关功能"
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to provide weather information and location-based services",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to provide weather information and location-based features",
+        "NSLocationAlwaysUsageDescription": "This app needs access to your location to provide weather information and location-based features"
       }
     },
     "android": {
@@ -30,16 +30,22 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.andre.kukai",
-      "softwareKeyboardLayoutMode": "pan",
-      "allowsNotchDisplay": true
+      "softwareKeyboardLayoutMode": "resize",
+      "allowsNotchDisplay": false,
+      "navigationBarColor": "#000000",
+      "statusBar": {
+        "backgroundColor": "#000000",
+        "translucent": false
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "androidStatusBar": {
-      "hidden": true,
-      "translucent": true,
-      "barStyle": "light-content"
+      "hidden": false,
+      "translucent": false,
+      "barStyle": "light-content",
+      "backgroundColor": "#000000"
     },
     "plugins": [
       "expo-asset",

@@ -441,6 +441,21 @@ const HomeScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
+      {/* White circle button between menu and settings */}
+      <View style={[styles.circleButtonContainer, {
+        bottom: insets.bottom > 0 ? insets.bottom + 110 : 100,
+        left: insets.left,
+        right: insets.right,
+        zIndex: 20,
+      }]}>
+        <TouchableOpacity
+          style={styles.circleButton}
+          onPress={() => console.log('Circle button pressed - functionality reserved')}
+          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+        >
+        </TouchableOpacity>
+      </View>
+
       {/* Settings button - Bottom center */}
       <View style={[styles.settingsContainer, {
         bottom: insets.bottom > 0 ? insets.bottom + 10 : 30,
@@ -561,6 +576,25 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontWeight: "500",
     letterSpacing: 1,
+  },
+  circleButtonContainer: {
+    position: "absolute",
+    bottom: 100,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  circleButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#888",
+    // Add a subtle ethereal glow effect
+    shadowColor: "#fff",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 5, // for Android
   },
 });
 
