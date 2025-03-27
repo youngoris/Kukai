@@ -9,12 +9,6 @@ import { DatabaseMigrationService } from './DatabaseMigrationService';
 import databaseBackupService from './DatabaseBackupService';
 import databaseQueryOptimizer from './DatabaseQueryOptimizer';
 
-// Data Access Objects
-import BaseDAO from './dao/BaseDAO';
-import TaskDAO from './dao/TaskDAO';
-import MeditationDAO from './dao/MeditationDAO';
-import JournalDAO from './dao/JournalDAO';
-import FocusDAO from './dao/FocusDAO';
 
 // Validation and Error Services
 import validationService from './validation/ValidationService';
@@ -33,12 +27,6 @@ export {
   databaseBackupService,
   databaseQueryOptimizer,
   
-  // Data Access Objects
-  BaseDAO,
-  TaskDAO,
-  MeditationDAO,
-  JournalDAO,
-  FocusDAO,
   
   // Validation and errors
   validationService,
