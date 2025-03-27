@@ -13,6 +13,15 @@ import { MaterialIcons } from '@expo/vector-icons';
  * @param {Function} props.rightButton.onPress - Function to call when right button is pressed
  * @param {boolean} props.hideBackButton - Whether to hide the back button
  * @param {boolean} props.showBottomBorder - Whether to show the bottom border (default: false)
+ * @param {Object} props.leftButton - Optional left button configuration
+ * @param {string} props.leftButton.icon - Icon for the left button
+ * @param {Function} props.leftButton.onPress - Function to call when left button is pressed
+ * @param {Object} props.rightSecondaryButton - Optional secondary right button configuration
+ * @param {string} props.rightSecondaryButton.icon - Icon for the secondary right button
+ * @param {Function} props.rightSecondaryButton.onPress - Function to call when secondary right button is pressed
+ * @param {Object} props.extraButton - Optional extra button configuration
+ * @param {string} props.extraButton.icon - Icon for the extra button
+ * @param {Function} props.extraButton.onPress - Function to call when extra button is pressed
  * @returns {JSX.Element} The CustomHeader component
  */
 const CustomHeader = ({ 
@@ -21,15 +30,25 @@ const CustomHeader = ({
   rightButton, 
   hideBackButton = false,
   extraButton = null,
-  showBottomBorder = false
+  rightSecondaryButton = null,
+  showBottomBorder = false,
+  leftButton = null
 }) => {
   return (
     <View style={[
       styles.customHeader,
       showBottomBorder && styles.headerWithBorder
     ]}>
-      {/* Left button (back button) */}
-      {!hideBackButton ? (
+      {/* Left button (back button or custom left button) */}
+      {leftButton ? (
+        <TouchableOpacity 
+          style={styles.headerBackButton}
+          onPress={leftButton.onPress}
+          hitSlop={{top: 15, bottom: 15, left: 15, right: 15}}
+        >
+          {leftButton.icon}
+        </TouchableOpacity>
+      ) : !hideBackButton ? (
         <TouchableOpacity 
           style={styles.headerBackButton}
           onPress={onBackPress}
@@ -48,8 +67,27 @@ const CustomHeader = ({
       
       {/* Right buttons container */}
       <View style={styles.headerRightContainer}>
+        {/* Secondary right button if provided */}
+        {rightSecondaryButton && (
+          <TouchableOpacity
+            style={[styles.headerActionButton, styles.secondaryActionButton]}
+            onPress={rightSecondaryButton.onPress}
+            hitSlop={{top: 15, bottom: 15, left: 15, right: 15}}
+          >
+            {rightSecondaryButton.icon}
+          </TouchableOpacity>
+        )}
+        
         {/* Extra button if provided */}
-        {extraButton}
+        {extraButton && (
+          <TouchableOpacity
+            style={[styles.headerActionButton, styles.extraActionButton]}
+            onPress={extraButton.onPress}
+            hitSlop={{top: 15, bottom: 15, left: 15, right: 15}}
+          >
+            {extraButton.icon}
+          </TouchableOpacity>
+        )}
         
         {/* Right button */}
         {rightButton && (
@@ -58,11 +96,15 @@ const CustomHeader = ({
             onPress={rightButton.onPress}
             hitSlop={{top: 15, bottom: 15, left: 15, right: 15}}
           >
-            <MaterialIcons 
-              name={rightButton.icon} 
-              size={24} 
-              color="#FFFFFF" 
-            />
+            {typeof rightButton.icon === 'string' ? (
+              <MaterialIcons 
+                name={rightButton.icon} 
+                size={24} 
+                color="#FFFFFF" 
+              />
+            ) : (
+              rightButton.icon
+            )}
           </TouchableOpacity>
         )}
       </View>
@@ -117,6 +159,13 @@ const styles = StyleSheet.create({
     width: 44,
     justifyContent: "center",
     alignItems: "center",
+  },
+  secondaryActionButton: {
+    marginRight: 4,
+  },
+  extraActionButton: {
+    opacity: 0.6,
+    marginRight: 4,
   },
 });
 

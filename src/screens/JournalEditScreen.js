@@ -17,6 +17,7 @@ import {
   ScrollView,
   Image,
   TouchableWithoutFeedback,
+  ActivityIndicator,
 } from "react-native";
 import {
   MaterialIcons,
@@ -32,17 +33,28 @@ import { getTemplateContent } from "../constants/JournalTemplates"; // Import te
 import { getSettingsWithDefaults } from "../utils/defaultSettings"; // Import settings utility
 import CustomHeader from "../components/CustomHeader"; // Import custom header component
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useJournalContext } from "../context/JournalContext";
 
 const JournalEditScreen = ({ navigation, route }) => {
   const {
+    entries,
+    templates,
+    loading: journalLoading,
+    error: journalError,
+    createEntry,
+    updateEntry,
+    getEntryByDate
+  } = useJournalContext();
+
+  const {
     savedJournal,
-    date,
+    date = new Date().toISOString().split("T")[0],
     viewOnly = false,
     location: routeLocation,
     weather: routeWeather,
     temperature: routeTemperature,
     mood: routeMood,
-  } = route.params;
+  } = route.params || {};
   const [journalText, setJournalText] = useState(savedJournal || "");
   const [location, setLocation] = useState(routeLocation || "");
   const [weather, setWeather] = useState(routeWeather || "");
@@ -55,6 +67,15 @@ const JournalEditScreen = ({ navigation, route }) => {
   const [showTemplateMenu, setShowTemplateMenu] = useState(false); // Add template menu state
   const [currentTemplate, setCurrentTemplate] = useState("default"); // Add current template state
   const [appTheme, setAppTheme] = useState('dark'); // 添加主题状态
+  const [entryId, setEntryId] = useState(null);
+  
+  // Add state for user settings
+  const [settings, setSettings] = useState({
+    includeWeather: true,
+    includeLocation: true,
+    markdownSupport: true,
+    selectedJournalTemplate: "default"
+  });
 
   // Get safe area insets
   const insets = useSafeAreaInsets();
@@ -67,37 +88,40 @@ const JournalEditScreen = ({ navigation, route }) => {
     autoFetch: false,
   });
 
-  // Keyboard listener
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      "keyboardDidShow",
-      (event) => {
-        setKeyboardVisible(true);
-        setKeyboardHeight(event.endCoordinates.height);
-      },
-    );
-
-    const keyboardDidHideListener = Keyboard.addListener(
-      "keyboardDidHide",
-      () => {
-        setKeyboardVisible(false);
-        setKeyboardHeight(0);
-      },
-    );
-
-    return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
-    };
-  }, []);
+  // Load user settings
+  const loadUserSettings = async () => {
+    try {
+      const userSettings = await getSettingsWithDefaults();
+      
+      // Update local settings state
+      setSettings({
+        includeWeather: userSettings.includeWeather !== false,
+        includeLocation: userSettings.includeLocation !== false,
+        markdownSupport: userSettings.markdownSupport !== false,
+        selectedJournalTemplate: userSettings.selectedJournalTemplate || "default"
+      });
+      
+      // Set app theme
+      if (userSettings.appTheme) {
+        setAppTheme(userSettings.appTheme);
+      }
+      
+      return userSettings;
+    } catch (error) {
+      console.error('Error loading user settings:', error);
+      return {
+        includeWeather: true,
+        includeLocation: true,
+        markdownSupport: true,
+        selectedJournalTemplate: "default",
+        appTheme: "dark"
+      };
+    }
+  };
 
   // Get location and weather data
   const getLocationAndWeather = async (forceRefresh = false) => {
-    setLoading(true);
     try {
-      // Get user settings to check if weather and location should be included
-      const settings = await getSettingsWithDefaults();
-      
       // Only fetch weather if user has enabled it in settings
       if (settings.includeWeather) {
         // Use useWeather Hook to get weather data
@@ -128,102 +152,149 @@ const JournalEditScreen = ({ navigation, route }) => {
     }
   };
 
-  // Modify useEffect, prioritize passed parameters
-  useEffect(() => {
-    const loadJournalMeta = async () => {
-      try {
-        const journalData = await storageService.getItem("journal");
-        if (journalData) {
-          const journals = JSON.parse(journalData);
-          const todayJournal = journals.find((j) => j.date === date);
-
-          if (todayJournal) {
-            if (todayJournal.location) setLocation(todayJournal.location);
-            if (todayJournal.weather) setWeather(todayJournal.weather);
-            if (todayJournal.temperature)
-              setTemperature(todayJournal.temperature);
-            if (todayJournal.mood) setMood(todayJournal.mood);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to load journal metadata:", error);
-      }
-    };
-
-    const initialize = async () => {
-      if (viewOnly) {
-        // If in view mode, use passed data
-        setLocation(routeLocation || "");
-        setWeather(routeWeather || "");
-        setTemperature(routeTemperature || null);
-        setMood(routeMood || null);
-        setLoading(false);
-        return;
-      }
-
-      // Otherwise, try to load or get new data from AsyncStorage
-      await loadJournalMeta();
-
-      // If it's a new journal (no existing content), check if a template needs to be applied
-      if (!savedJournal || savedJournal.trim() === "") {
-        try {
-          const settings = await getSettingsWithDefaults();
-          
-          // Always load default template content first
-          const defaultTemplateContent = getTemplateContent("default");
-          setJournalText(defaultTemplateContent);
-
-          // Then check if we need to apply a different template
-          if (
-            settings.selectedJournalTemplate &&
-            settings.selectedJournalTemplate !== "default"
-          ) {
-            // Check if it's a deleted template
-            if (settings.selectedJournalTemplate === "morning") {
-              setCurrentTemplate("default");
-            } else {
-              // Apply selected template
-              const templateContent = getTemplateContent(
-                settings.selectedJournalTemplate,
-              );
-              if (templateContent) {
-                setJournalText(templateContent);
-                setCurrentTemplate(settings.selectedJournalTemplate);
-              }
-            }
-          } else if (settings.selectedJournalTemplate === "custom") {
-            // Apply custom template
-            const customTemplate = await storageService.getItem(
-              "customJournalTemplate",
-            );
-            if (customTemplate) {
-              setJournalText(customTemplate);
-              setCurrentTemplate("custom");
-            }
-          } else {
-            setCurrentTemplate("default");
-          }
-        } catch (error) {
-          console.error("Error loading settings:", error);
-          // If error loading settings, still apply default template
-          const defaultTemplateContent = getTemplateContent("default");
-          setJournalText(defaultTemplateContent);
-          setCurrentTemplate("default");
-        }
-      }
-
-      // Modify: Even if there's location or weather data, try to get latest data
-      // But don't force refresh, use cache if valid
-      await getLocationAndWeather(false);
-    };
-
-    initialize();
-  }, []);
-
   // Add function to refresh weather data
   const refreshWeatherData = async () => {
     if (viewOnly) return; // Don't refresh in view mode
     await getLocationAndWeather(true); // Force refresh
+  };
+
+  // Function to check if entry exists and load it
+  const loadJournalEntry = async () => {
+    try {
+      setLoading(true);
+      console.log(`Attempting to load journal for date: ${date}`);
+      
+      // Try to get the entry directly from the database
+      const entry = await getEntryByDate(date);
+      
+      if (entry && entry.id) {
+        console.log(`Successfully loaded journal entry: ${entry.id}`);
+        // Update UI with entry data
+        setJournalText(entry.text || '');
+        setLocation(entry.location || '');
+        setWeather(entry.weather || '');
+        setTemperature(entry.temperature || null);
+        setMood(entry.mood || '');
+        setCurrentTemplate(entry.templateId || 'default');
+        setEntryId(entry.id);
+        return true;
+      } else {
+        console.log(`No journal entry found for date: ${date}`);
+        return false;
+      }
+    } catch (error) {
+      console.error(`Error loading journal entry: ${error.message}`);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Modify useEffect, prioritize passed parameters
+  useEffect(() => {
+    const initialize = async () => {
+      try {
+        setLoading(true);
+        
+        // First load user settings to ensure we respect their preferences
+        const userSettings = await loadUserSettings();
+        
+        if (viewOnly) {
+          // If in view mode, use passed data
+          setLocation(routeLocation || "");
+          setWeather(routeWeather || "");
+          setTemperature(routeTemperature || null);
+          setMood(routeMood || null);
+          
+          // For view mode, we still need to load the entry text if not provided
+          if (!savedJournal) {
+            await loadJournalEntry();
+          } else {
+            setJournalText(savedJournal);
+          }
+          
+          setLoading(false);
+          return;
+        }
+
+        // If we already have journal content passed through parameters, don't load from database
+        if (!savedJournal) {
+          // Attempt to retrieve entry from database using date
+          const entryLoaded = await loadJournalEntry();
+          
+          if (!entryLoaded) {
+            // If no existing entry, check if we need to apply a template
+            console.log("No existing journal entry for date:", date);
+            await applyTemplateIfNeeded(userSettings);
+          }
+        } else {
+          setJournalText(savedJournal);
+        }
+        
+        // Get location and weather data if not provided and settings allow
+        if (userSettings.includeWeather && (!routeLocation || !routeWeather)) {
+          await getLocationAndWeather(false);
+        }
+      } catch (error) {
+        console.error("Error initializing journal:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initialize();
+  }, [date]);
+
+  // Apply template (if needed)
+  const applyTemplateIfNeeded = async (userSettings) => {
+    try {
+      const settingsToUse = userSettings || settings;
+      
+      // Load default template content first
+      const defaultTemplateContent = getTemplateContent("default");
+      setJournalText(defaultTemplateContent);
+      setCurrentTemplate("default");
+
+      // Check if we need to apply a different template
+      if (settingsToUse.selectedJournalTemplate && 
+          settingsToUse.selectedJournalTemplate !== "default") {
+        
+        if (settingsToUse.selectedJournalTemplate === "morning") {
+          // Special handling for morning template
+          const hourNow = new Date().getHours();
+          const templateToUse = hourNow < 12 ? "morning" : "evening";
+          const templateContent = getTemplateContent(templateToUse);
+          if (templateContent) {
+            setJournalText(templateContent);
+            setCurrentTemplate(templateToUse);
+          }
+        } else if (settingsToUse.selectedJournalTemplate === "custom") {
+          // Handle custom template
+          try {
+            const customTemplate = await storageService.getItem("customJournalTemplate");
+            if (customTemplate) {
+              setJournalText(customTemplate);
+              setCurrentTemplate("custom");
+            }
+          } catch (templateError) {
+            console.error("Error loading custom template:", templateError);
+          }
+        } else {
+          // Use specified template
+          const templateContent = getTemplateContent(settingsToUse.selectedJournalTemplate);
+          if (templateContent) {
+            setJournalText(templateContent);
+            setCurrentTemplate(settingsToUse.selectedJournalTemplate);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error applying template:", error);
+      // If error, still apply default template
+      const defaultTemplateContent = getTemplateContent("default");
+      setJournalText(defaultTemplateContent);
+      setCurrentTemplate("default");
+    }
   };
 
   // Save journal
@@ -234,54 +305,96 @@ const JournalEditScreen = ({ navigation, route }) => {
     }
 
     try {
-      const dateObj = new Date(date);
-      const formattedDate = dateObj.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-
-      const previewText =
-        journalText.length > 20
-          ? journalText.substring(0, 20) + "..."
-          : journalText;
-
-      const title = `${formattedDate}: ${previewText}`;
-
-      const journalEntry = {
-        title: title,
+      setLoading(true);
+      
+      // Prepare entry data in the format expected by the database
+      const entryData = {
+        // Let JournalDAO handle title generation based on text content
         text: journalText.trim(),
         date: date,
-        location: location,
-        weather: weather,
-        temperature: temperature,
+        location: settings.includeLocation ? location : null,
+        weather: settings.includeWeather ? weather : null,
+        temperature: settings.includeWeather ? temperature : null,
         mood: mood,
-        timestamp: new Date().toISOString(),
+        templateId: currentTemplate, // Changed from template_id to templateId for consistency
       };
 
-      const journalData = await storageService.getItem("journal");
-      let journals = [];
+      console.log("Saving journal entry:", {
+        id: entryId || 'new entry',
+        date: entryData.date,
+        textLength: entryData.text?.length,
+        template: entryData.templateId
+      });
 
-      if (journalData) {
-        journals = JSON.parse(journalData);
-        journals = journals.filter((entry) => entry.date !== date);
+      let savedEntry = null;
+      
+      if (entryId) {
+        // If we have an ID, update existing entry
+        console.log(`Updating journal entry with ID: ${entryId}`);
+        const updatedEntry = await updateEntry(entryId, entryData);
+        
+        if (updatedEntry) {
+          console.log(`Successfully updated journal entry with ID: ${updatedEntry.id}`);
+          savedEntry = updatedEntry;
+        } else {
+          throw new Error('Failed to update journal entry');
+        }
+      } else {
+        // Creating a new entry
+        console.log("Creating new journal entry");
+        const createdEntry = await createEntry(entryData);
+        
+        if (createdEntry && createdEntry.id) {
+          console.log("Created new journal entry with ID:", createdEntry.id);
+          savedEntry = createdEntry;
+          setEntryId(createdEntry.id);
+        } else {
+          throw new Error('Failed to create journal entry');
+        }
       }
-
-      journals.push(journalEntry);
-
-      await storageService.setItem("journal", JSON.stringify(journals));
-      await storageService.setItem(`journal_${date}`, journalText.trim());
 
       // After saving, go to preview mode
       navigation.setParams({
         viewOnly: true,
         fromSave: true, // Mark as coming from save operation
+        savedEntryId: savedEntry?.id // Pass the ID explicitly to ensure it's available
       });
     } catch (error) {
       console.error("Failed to save journal:", error);
-      Alert.alert("Error", "Failed to save. Please try again.");
+      Alert.alert("Error", `Failed to save journal: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
+
+  // Remove the duplicate loadUserSettings function in useEffect since we now have a standalone function
+  useEffect(() => {
+    loadUserSettings();
+  }, []);
+
+  // Keyboard listener
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      (event) => {
+        setKeyboardVisible(true);
+        setKeyboardHeight(event.endCoordinates.height);
+      },
+    );
+
+    const keyboardDidHideListener = Keyboard.addListener(
+      "keyboardDidHide",
+      () => {
+        setKeyboardVisible(false);
+        setKeyboardHeight(0);
+      },
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
 
   // Get mood icon
   const getMoodIcon = (moodType) => {
@@ -836,21 +949,28 @@ const JournalEditScreen = ({ navigation, route }) => {
     );
   };
 
-  // 加载用户设置
-  useEffect(() => {
-    const loadUserSettings = async () => {
-      try {
-        const settings = await getSettingsWithDefaults();
-        if (settings.appTheme) {
-          setAppTheme(settings.appTheme);
-        }
-      } catch (error) {
-        console.error('Error loading user settings:', error);
-      }
-    };
-    
-    loadUserSettings();
-  }, []);
+  if (loading || journalLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FFFFFF" />
+        <Text style={styles.loadingText}>加载日志...</Text>
+      </View>
+    );
+  }
+
+  if (journalError) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>错误: {journalError}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton} 
+          onPress={() => loadJournalEntry()}
+        >
+          <Text style={styles.retryButtonText}>重试</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={[
@@ -1254,6 +1374,34 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+    padding: 20,
+  },
+  errorText: {
+    color: '#FF0000',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    padding: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

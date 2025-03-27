@@ -2,8 +2,8 @@
 // This file contains the default settings for the app when no user settings are found
 
 /**
- * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
- * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ * STORAGE MIGRATION: This file has been updated to use StorageService.
+ * Settings are now stored in AsyncStorage for better reliability.
  */
 import storageService from '../services/storage/StorageService';
 
@@ -80,7 +80,8 @@ export const getSettingsWithDefaults = async () => {
     } else {
       // If no settings exist, save and return defaults
       console.log("No settings found, using defaults");
-      await storageService.setItem("userSettings", defaultSettings);
+      // Make sure we save as a JSON string for AsyncStorage
+      await storageService.setItem("userSettings", JSON.stringify(defaultSettings));
       return defaultSettings;
     }
   } catch (error) {

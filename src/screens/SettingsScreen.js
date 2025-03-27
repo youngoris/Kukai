@@ -18,6 +18,8 @@ import {
   TouchableWithoutFeedback,
   Platform,
   StatusBar as RNStatusBar,
+  ActivityIndicator,
+  DeviceEventEmitter,
 } from "react-native";
 import Slider from "@react-native-community/slider";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -34,6 +36,7 @@ import { AVAILABLE_TEMPLATES } from "../constants/JournalTemplates";
 import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 import VoiceGuidanceModal from "../components/VoiceGuidanceModal";
+import { resetDatabase, verifyDatabase, forceRecreateSchema } from '../utils/DatabaseResetUtil';
 
 const SettingsScreen = ({ navigation }) => {
   // Get safe area insets
@@ -106,6 +109,9 @@ const SettingsScreen = ({ navigation }) => {
 
   // Add a debounce timer reference
   const saveTimeoutRef = useRef(null);
+
+  // Add a loading state at the top of the component with the other states:
+  const [loading, setLoading] = useState(false);
 
   // Sound theme options
   const soundThemes = [
@@ -1089,6 +1095,52 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
 
+  // Update the verifyDatabaseHealth function:
+  const verifyDatabaseHealth = async () => {
+    try {
+      // Show loading indicator
+      setLoading(true);
+      
+      const result = await verifyDatabase();
+      
+      // Hide loading indicator
+      setLoading(false);
+      
+      if (result.success) {
+        // Show success message
+        Alert.alert(
+          'Database Verification',
+          'Database is healthy and working properly.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        // Show failure message with option to reset
+        Alert.alert(
+          'Database Issues Found',
+          `The database has issues: ${result.error}. Would you like to reset the database to fix these issues?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Reset Database', 
+              style: 'destructive',
+              onPress: resetDatabase
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      // Hide loading indicator
+      setLoading(false);
+      
+      // Show error message
+      Alert.alert(
+        'Verification Error',
+        `An error occurred during database verification: ${error.message}`,
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
   // Handle quiet hours start time change
   const handleQuietHoursStartChange = (event, selectedTime) => {
     setShowQuietHoursStartPicker(false);
@@ -1165,6 +1217,58 @@ const SettingsScreen = ({ navigation }) => {
           </Text>
         </View>
       </TouchableOpacity>
+    );
+  };
+
+  // Add this function to handle schema recreation
+  const handleForceRecreateSchema = async () => {
+    // Show confirmation dialog
+    Alert.alert(
+      'Force Recreate Database Schema',
+      'This will drop and recreate all tables with the correct schema. This is useful if you have issues creating tasks or journal entries. All data will be lost. Continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Recreate Schema',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Show loading
+              setLoading(true);
+              
+              // Force recreate schema
+              const success = await forceRecreateSchema();
+              
+              // Hide loading
+              setLoading(false);
+              
+              if (success) {
+                Alert.alert(
+                  'Schema Recreated',
+                  'Database schema has been recreated successfully. The app will now restart.',
+                  [{ text: 'OK', onPress: () => DeviceEventEmitter.emit('hardReload') }]
+                );
+              } else {
+                Alert.alert(
+                  'Schema Recreation Failed',
+                  'Failed to recreate database schema. Please try again or contact support.'
+                );
+              }
+            } catch (error) {
+              // Hide loading
+              setLoading(false);
+              
+              Alert.alert(
+                'Error',
+                `Failed to recreate schema: ${error.message}`
+              );
+            }
+          }
+        }
+      ]
     );
   };
 
@@ -1646,6 +1750,73 @@ const SettingsScreen = ({ navigation }) => {
 
           {renderActionButton(sendFeedback, "Send Feedback", "feedback")}
         </View>
+
+        {/* Database Management Section */}
+        <View style={styles.settingSection}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              appTheme === "light" && styles.lightSectionTitle,
+            ]}
+          >
+            DATABASE MANAGEMENT
+          </Text>
+          
+          <TouchableOpacity 
+            style={[
+              styles.settingRow,
+              appTheme === "light" && styles.lightSettingRow,
+            ]} 
+            onPress={verifyDatabaseHealth}
+          >
+            <View style={styles.settingLabelContainer}>
+              <Text style={[styles.settingLabel, appTheme === "light" && styles.lightText]}>
+                Verify Database
+              </Text>
+              <Text style={[styles.settingDescription, appTheme === "light" && styles.lightSettingDescription]}>
+                Check database health and fix minor issues
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[
+              styles.settingRow,
+              appTheme === "light" && styles.lightSettingRow,
+              styles.warningRow
+            ]} 
+            onPress={handleForceRecreateSchema}
+          >
+            <View style={styles.settingLabelContainer}>
+              <Text style={[styles.settingLabel, styles.warningText]}>
+                Force Recreate Schema
+              </Text>
+              <Text style={[styles.settingDescription, appTheme === "light" && styles.lightSettingDescription]}>
+                Use this if you can't create tasks or journal entries. This will recreate all database tables.
+                WARNING: All data will be lost!
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[
+              styles.settingRow,
+              appTheme === "light" && styles.lightSettingRow,
+              styles.dangerRow
+            ]} 
+            onPress={resetDatabase}
+          >
+            <View style={styles.settingLabelContainer}>
+              <Text style={[styles.settingLabel, styles.dangerText]}>
+                Reset Database
+              </Text>
+              <Text style={[styles.settingDescription, appTheme === "light" && styles.lightSettingDescription]}>
+                Completely reset the database. Use this if you encounter data corruption issues.
+                WARNING: This will delete all your data!
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* Options Modal */}
@@ -1933,6 +2104,14 @@ const SettingsScreen = ({ navigation }) => {
         onClose={() => setShowTemplateManager(false)}
         onTemplateSelect={handleTemplateSelect}
       />
+
+      {/* Loading Overlay */}
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
+          <Text style={styles.loadingText}>Verifying database...</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -2283,6 +2462,61 @@ const styles = StyleSheet.create({
   },
   settingContent: {
     flex: 1,
+  },
+  section: {
+    marginBottom: 30,
+  },
+  setting: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 15,
+  },
+  settingText: {
+    color: "#CCC",
+    fontSize: 16,
+  },
+  settingDescription: {
+    color: "#888",
+    fontSize: 12,
+    marginTop: 4,
+  },
+  dangerSetting: {
+    borderColor: '#ff6347',
+  },
+  dangerText: {
+    color: '#ff6347',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 999,
+  },
+  loadingText: {
+    color: "#FFF",
+    fontSize: 18,
+    fontWeight: "600",
+    marginTop: 10,
+  },
+  warningSetting: {
+    borderColor: '#FFA500',
+  },
+  warningText: {
+    color: '#FFA500',
+  },
+  warningRow: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFA500',
+  },
+  dangerRow: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff6347',
   },
 });
 

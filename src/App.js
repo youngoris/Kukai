@@ -1,9 +1,9 @@
 /**
- * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
- * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
+ * STORAGE MIGRATION: This file has been updated to use SQLite instead of AsyncStorage.
+ * SQLite provides better performance and more capabilities than AsyncStorage.
  */
-import React, { useEffect, useRef } from "react";
-import { StatusBar, Platform } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { StatusBar, Platform, DeviceEventEmitter } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -16,14 +16,13 @@ import {
   Roboto_700Bold,
 } from "@expo-google-fonts/roboto";
 import * as SplashScreen from "expo-splash-screen";
-import { AppProvider } from './context/AppContext';
 import AppNavigator from './navigation/AppNavigator';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import AppProviders from './context/AppProviders';
 
 // Import services
 import googleDriveService from "./services/GoogleDriveService";
 import notificationService from "./services/NotificationService";
-
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -32,6 +31,9 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 
 // Main application component
 export default function App() {
+  // State to force remount on reload
+  const [appKey, setAppKey] = useState(0);
+
   // Load fonts
   const [fontsLoaded] = useFonts({
     Roboto_300Light,
@@ -42,6 +44,18 @@ export default function App() {
 
   // Create navigation reference
   const navigationRef = useRef(null);
+
+  // Listen for hard reload events
+  useEffect(() => {
+    const reloadSubscription = DeviceEventEmitter.addListener('hardReload', () => {
+      console.log('Hard reload requested, restarting app...');
+      setAppKey(prevKey => prevKey + 1);
+    });
+    
+    return () => {
+      reloadSubscription.remove();
+    };
+  }, []);
 
   // // Initialize database
   // useEffect(() => {
@@ -198,14 +212,16 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <SafeAreaProvider>
-        <AppProvider>
-          <NavigationContainer ref={navigationRef}>
-            <StatusBar style="auto" />
-            <AppNavigator />
-          </NavigationContainer>
-        </AppProvider>
-      </SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }} key={`app-container-${appKey}`}>
+        <SafeAreaProvider>
+          <AppProviders>
+            <NavigationContainer ref={navigationRef}>
+              <StatusBar style="auto" />
+              <AppNavigator />
+            </NavigationContainer>
+          </AppProviders>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     </ErrorBoundary>
   );
 }

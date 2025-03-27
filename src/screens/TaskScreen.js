@@ -29,9 +29,20 @@ import notificationService from "../services/NotificationService";
 import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTaskContext } from "../context/TaskContext";
 
 const TaskScreen = ({ navigation }) => {
-  const [tasks, setTasks] = useState([]);
+  const {
+    tasks,
+    loading: tasksLoading,
+    error: tasksError,
+    addTask: addTaskToContext,
+    updateTask: updateTaskInContext,
+    deleteTask: deleteTaskFromContext,
+    toggleTaskCompletion,
+    refreshTasks
+  } = useTaskContext();
+
   const [newTaskText, setNewTaskText] = useState("");
   const [editingTask, setEditingTask] = useState(null);
   const [editText, setEditText] = useState("");
@@ -45,9 +56,9 @@ const TaskScreen = ({ navigation }) => {
   const [reminderTime, setReminderTime] = useState(15); // Advance notification time (minutes), default 15 minutes
   const [showReminderOptions, setShowReminderOptions] = useState(false); // Whether to show reminder options
   const [taskTime, setTaskTime] = useState(() => {
-    const defaultTime = new Date();
-    defaultTime.setMinutes(30, 0, 0); // Set default minutes to 30
-    return defaultTime;
+    const now = new Date();
+    now.setMinutes(Math.ceil(now.getMinutes() / 15) * 15);
+    return now;
   }); // Task time
   const [showTimePicker, setShowTimePicker] = useState(false); // Whether to show time picker
   const [appTheme, setAppTheme] = useState('dark');
@@ -93,27 +104,14 @@ const TaskScreen = ({ navigation }) => {
 
   // Load tasks and fade-in animation
   useEffect(() => {
-    loadTasks();
+    refreshTasks();
 
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 500,
       useNativeDriver: true,
     }).start();
-  }, []);
-
-  // Load tasks from storage
-  const loadTasks = async () => {
-    try {
-      const savedTasks = await storageService.getItem("tasks");
-      if (savedTasks) {
-        const parsedTasks = JSON.parse(savedTasks);
-        setTasks(sortTasksByPriority(parsedTasks));
-      }
-    } catch (error) {
-      console.error("Error loading tasks:", error);
-    }
-  };
+  }, [refreshTasks]);
 
   // Sort tasks by tag priority: frog > urgent > important > no tag
   const sortTasksByPriority = (tasksToSort) => {
@@ -183,87 +181,76 @@ const TaskScreen = ({ navigation }) => {
       notifyAtDeadline: true, // Notify when deadline is reached
     };
 
-    const updatedTasks = [...tasks, newTask];
-    const sortedTasks = sortTasksByPriority(updatedTasks);
-    setTasks(sortedTasks);
-    await saveTasks(sortedTasks);
-
-    // If task has reminder, schedule notification
-    if (newTask.isTimeTagged && newTask.taskTime) {
-      try {
-        console.log(
-          `Preparing notifications for task "${newTask.text}" (ID: ${newTask.id})`,
-        );
-        console.log(
-          `Task time: ${new Date(newTask.taskTime).toLocaleString()}`,
-        );
-        console.log(
-          `Has reminder: ${newTask.hasReminder}, Reminder minutes: ${newTask.reminderTime}`,
-        );
-
-        const notificationId =
-          await notificationService.scheduleTaskNotification(newTask);
-        if (notificationId) {
+    try {
+      // 使用Context添加任务
+      const createdTask = await addTaskToContext(newTask);
+      
+      // 如果任务有提醒，设置通知
+      if (createdTask.isTimeTagged && createdTask.taskTime) {
+        try {
           console.log(
-            `Task notification(s) scheduled successfully, IDs:`,
-            notificationId,
+            `Preparing notifications for task "${createdTask.text}" (ID: ${createdTask.id})`,
           );
-        } else {
           console.log(
-            `No notifications were scheduled (possibly due to time constraints)`,
+            `Task time: ${new Date(createdTask.taskTime).toLocaleString()}`,
           );
+          console.log(
+            `Has reminder: ${createdTask.hasReminder}, Reminder minutes: ${createdTask.reminderTime}`,
+          );
+
+          const notificationId =
+            await notificationService.scheduleTaskNotification(createdTask);
+          if (notificationId) {
+            console.log(
+              `Task notification(s) scheduled successfully, IDs:`,
+              notificationId,
+            );
+          } else {
+            console.log(
+              `No notifications were scheduled (possibly due to time constraints)`,
+            );
+          }
+        } catch (error) {
+          console.error("Failed to schedule task notification:", error);
         }
-      } catch (error) {
-        console.error("Failed to schedule task notification:", error);
+      } else {
+        console.log(
+          `Task "${createdTask.text}" has no time set, skipping notifications`,
+        );
       }
-    } else {
-      console.log(
-        `Task "${newTask.text}" has no time set, skipping notifications`,
-      );
-    }
 
-    setNewTaskText("");
-    setIsFrogTask(false);
-    setIsImportant(false);
-    setIsUrgent(false);
-    setIsTimeTagged(false);
-    setShowTimePicker(false);
-    setHasReminder(false);
-    setReminderTime(15);
-    setShowReminderOptions(false);
-    setTaskTime(new Date());
-    setModalVisible(false);
+      // 重置输入状态
+      setNewTaskText("");
+      setIsFrogTask(false);
+      setIsImportant(false);
+      setIsUrgent(false);
+      setIsTimeTagged(false);
+      setShowTimePicker(false);
+      setHasReminder(false);
+      setReminderTime(15);
+      setShowReminderOptions(false);
+      setTaskTime(new Date());
+      setModalVisible(false);
+    } catch (error) {
+      console.error("添加任务时出错:", error);
+      Alert.alert("错误", "无法添加任务。请稍后再试。");
+    }
   };
 
   // Toggle task completion status
   const toggleComplete = async (id) => {
-    const taskToToggle = tasks.find((task) => task.id === id);
-    const isCompleting = !taskToToggle.completed;
-
-    const updatedTasks = tasks.map((task) =>
-      task.id === id
-        ? {
-            ...task,
-            completed: !task.completed,
-            // If task is marked as completed, add completion timestamp; if not completed, remove completion timestamp
-            completedAt: !task.completed ? new Date().toISOString() : null,
-          }
-        : task,
-    );
-
-    const sortedTasks = sortTasksByPriority(updatedTasks);
-    setTasks(sortedTasks);
-    await saveTasks(sortedTasks);
-
-    // If task is marked as completed, cancel its notification
-    if (
-      isCompleting &&
-      taskToToggle.hasReminder &&
-      taskToToggle.isTimeTagged &&
-      taskToToggle.taskTime
-    ) {
-      await notificationService.cancelTaskNotification(id);
-      console.log("Task completed, notification cancelled");
+    try {
+      // 使用Context切换任务完成状态
+      const updatedTask = await toggleTaskCompletion(id);
+      
+      // 如果任务标记为已完成，取消其通知
+      if (updatedTask.completed && updatedTask.hasReminder && updatedTask.isTimeTagged && updatedTask.taskTime) {
+        await notificationService.cancelTaskNotification(id);
+        console.log("任务已完成，通知已取消");
+      }
+    } catch (error) {
+      console.error("切换任务完成状态时出错:", error);
+      Alert.alert("错误", "无法更新任务。请稍后再试。");
     }
   };
 
@@ -304,69 +291,71 @@ const TaskScreen = ({ navigation }) => {
       return;
     }
 
-    // Cancel original task notification (if any)
-    if (
-      editingTask.hasReminder &&
-      editingTask.isTimeTagged &&
-      editingTask.taskTime
-    ) {
-      await notificationService.cancelTaskNotification(editingTask.id);
-    }
-
-    const updatedTask = {
-      ...editingTask,
-      text: editText.trim(),
-      isFrog: isFrogTask,
-      isImportant: isImportant,
-      isUrgent: isUrgent,
-      isTimeTagged: isTimeTagged,
-      taskTime: isTimeTagged ? taskTime.toISOString() : null,
-      hasReminder: hasReminder,
-      reminderTime: reminderTime,
-    };
-
-    const updatedTasks = tasks.map((task) =>
-      task.id === editingTask.id ? updatedTask : task,
-    );
-
-    const sortedTasks = sortTasksByPriority(updatedTasks);
-    setTasks(sortedTasks);
-    await saveTasks(sortedTasks);
-
-    // If updated task has reminder, reschedule notification
-    if (
-      updatedTask.hasReminder &&
-      updatedTask.isTimeTagged &&
-      updatedTask.taskTime
-    ) {
-      try {
-        const notificationId =
-          await notificationService.scheduleTaskNotification(updatedTask);
-        console.log("Task notification updated, ID:", notificationId);
-      } catch (error) {
-        console.error("Failed to update task notification:", error);
+    try {
+      // 取消原任务通知（如果有）
+      if (
+        editingTask.hasReminder &&
+        editingTask.isTimeTagged &&
+        editingTask.taskTime
+      ) {
+        await notificationService.cancelTaskNotification(editingTask.id);
       }
-    }
 
-    setEditModalVisible(false);
+      // 准备更新数据
+      const updates = {
+        text: editText.trim(),
+        isFrog: isFrogTask,
+        isImportant: isImportant,
+        isUrgent: isUrgent,
+        isTimeTagged: isTimeTagged,
+        taskTime: isTimeTagged ? taskTime.toISOString() : null,
+        hasReminder: hasReminder,
+        reminderTime: reminderTime,
+      };
+
+      // 使用Context更新任务
+      const updatedTask = await updateTaskInContext(editingTask.id, updates);
+
+      // 如果更新后的任务有提醒，重新安排通知
+      if (
+        updatedTask.hasReminder &&
+        updatedTask.isTimeTagged &&
+        updatedTask.taskTime
+      ) {
+        try {
+          const notificationId =
+            await notificationService.scheduleTaskNotification(updatedTask);
+          console.log("Task notification updated, ID:", notificationId);
+        } catch (error) {
+          console.error("Failed to update task notification:", error);
+        }
+      }
+
+      // 关闭编辑模态框
+      setEditModalVisible(false);
+    } catch (error) {
+      console.error("保存编辑任务时出错:", error);
+      Alert.alert("错误", "无法更新任务。请稍后再试。");
+    }
   };
 
   // Delete task
   const deleteTask = async (id) => {
-    // Cancel task notification (if any)
-    const taskToDelete = tasks.find((task) => task.id === id);
-    if (
-      taskToDelete &&
-      taskToDelete.hasReminder &&
-      taskToDelete.isTimeTagged &&
-      taskToDelete.taskTime
-    ) {
-      await notificationService.cancelTaskNotification(id);
+    try {
+      // 获取任务以检查通知
+      const taskToDelete = tasks.find(task => task.id === id);
+      
+      // 取消任务相关通知
+      if (taskToDelete && taskToDelete.hasReminder && taskToDelete.isTimeTagged) {
+        await notificationService.cancelTaskNotification(id);
+      }
+      
+      // 使用Context删除任务
+      await deleteTaskFromContext(id);
+    } catch (error) {
+      console.error("删除任务时出错:", error);
+      Alert.alert("错误", "无法删除任务。请稍后再试。");
     }
-
-    const filteredTasks = tasks.filter((task) => task.id !== id);
-    setTasks(filteredTasks);
-    await saveTasks(filteredTasks);
   };
 
   // Open create task modal
@@ -740,6 +729,30 @@ const TaskScreen = ({ navigation }) => {
   // Completed task count
   const completedCount = tasks.filter((task) => task.completed).length;
 
+  // 如果任务加载中，显示加载指示器
+  if (tasksLoading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <Text style={styles.loadingText}>正在加载任务...</Text>
+      </View>
+    );
+  }
+
+  // 如果加载出错，显示错误消息
+  if (tasksError) {
+    return (
+      <View style={[styles.container, styles.errorContainer]}>
+        <Text style={styles.errorText}>错误: {tasksError}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={refreshTasks}>
+          <Text style={styles.retryButtonText}>重试</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // 使用sortedTasks来渲染任务列表
+  const sortedTasks = sortTasksByPriority(tasks);
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -764,7 +777,7 @@ const TaskScreen = ({ navigation }) => {
         />
 
         <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-          {tasks.length === 0 ? (
+          {sortedTasks.length === 0 ? (
             <View style={[styles.emptyContainer, isLightTheme && styles.lightEmptyContainer]}>
               <Text style={[styles.emptyText, isLightTheme && styles.lightText]}>No tasks yet</Text>
               <Text style={[styles.emptySubtext, isLightTheme && styles.lightSubtext]}>
@@ -773,7 +786,7 @@ const TaskScreen = ({ navigation }) => {
             </View>
           ) : (
             <FlatList
-              data={tasks}
+              data={sortedTasks}
               renderItem={renderTaskItem}
               keyExtractor={(item) => item.id}
               contentContainerStyle={[styles.listContent, isLightTheme && styles.lightListContent]}
@@ -781,10 +794,10 @@ const TaskScreen = ({ navigation }) => {
           )}
         </Animated.View>
 
-        {tasks.length > 0 && (
+        {sortedTasks.length > 0 && (
           <View style={styles.footer}>
             <Text style={styles.statsText}>
-              {completedCount}/{tasks.length} tasks completed
+              {completedCount}/{sortedTasks.length} tasks completed
             </Text>
           </View>
         )}
@@ -1384,6 +1397,37 @@ const styles = StyleSheet.create({
   lightListContent: {
     paddingBottom: 80,
     paddingHorizontal: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "500",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  errorText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "500",
+    marginBottom: 20,
+  },
+  retryButton: {
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: "#000000",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
 
