@@ -22,7 +22,7 @@ import {
   ScrollView,
 } from "react-native";
 import storageService from "../services/storage/StorageService";
-import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
+import { MaterialIcons, Ionicons, Feather, AntDesign } from "@expo/vector-icons";
 import FrogIcon from "../../assets/frog.svg";
 import CustomDateTimePicker from "../components/CustomDateTimePicker";
 import notificationService from "../services/NotificationService";
@@ -51,6 +51,7 @@ const TaskScreen = ({ navigation }) => {
   }); // Task time
   const [showTimePicker, setShowTimePicker] = useState(false); // Whether to show time picker
   const [appTheme, setAppTheme] = useState('dark');
+  const [isRecurring, setIsRecurring] = useState(false); // Added isRecurring state
 
   const inputRef = useRef(null);
   const editInputRef = useRef(null);
@@ -180,6 +181,7 @@ const TaskScreen = ({ navigation }) => {
       taskTime: isTimeTagged || showTimePicker ? taskTime.toISOString() : null,
       hasReminder: hasReminder,
       reminderTime: reminderTime, // Advance notification time (minutes)
+      isRecurring: isRecurring, // Add recurring task property
       notifyAtDeadline: true, // Notify when deadline is reached
     };
 
@@ -199,6 +201,9 @@ const TaskScreen = ({ navigation }) => {
         );
         console.log(
           `Has reminder: ${newTask.hasReminder}, Reminder minutes: ${newTask.reminderTime}`,
+        );
+        console.log(
+          `Is recurring: ${newTask.isRecurring}`
         );
 
         const notificationId =
@@ -229,6 +234,7 @@ const TaskScreen = ({ navigation }) => {
     setIsTimeTagged(false);
     setShowTimePicker(false);
     setHasReminder(false);
+    setIsRecurring(false);
     setReminderTime(15);
     setShowReminderOptions(false);
     setTaskTime(new Date());
@@ -276,6 +282,7 @@ const TaskScreen = ({ navigation }) => {
     setIsUrgent(task.isUrgent || false);
     setIsTimeTagged(task.isTimeTagged || false);
     setHasReminder(task.hasReminder || false);
+    setIsRecurring(task.isRecurring || false);
     setReminderTime(task.reminderTime || 15);
     setShowReminderOptions(false); // Ensure initial not to show reminder options
     if (task.isTimeTagged && task.taskTime) {
@@ -322,6 +329,7 @@ const TaskScreen = ({ navigation }) => {
       isTimeTagged: isTimeTagged,
       taskTime: isTimeTagged ? taskTime.toISOString() : null,
       hasReminder: hasReminder,
+      isRecurring: isRecurring,
       reminderTime: reminderTime,
     };
 
@@ -381,6 +389,7 @@ const TaskScreen = ({ navigation }) => {
     setShowTimePicker(false);
     setShowReminderOptions(false);
     setHasReminder(false);
+    setIsRecurring(false);
     setReminderTime(15); // Set default value to 15 minutes, but only enable when user selects it
 
     // Show modal
@@ -427,6 +436,7 @@ const TaskScreen = ({ navigation }) => {
       setShowTimePicker(false);
       setShowReminderOptions(false);
       setHasReminder(false);
+      setIsRecurring(false);
       setReminderTime(0);
     });
   };
@@ -443,6 +453,7 @@ const TaskScreen = ({ navigation }) => {
     setShowTimePicker(false);
     setShowReminderOptions(false);
     setHasReminder(false);
+    setIsRecurring(false);
     setReminderTime(0);
   };
 
@@ -664,6 +675,29 @@ const TaskScreen = ({ navigation }) => {
               </Text>
             </View>
           )}
+          {item.isRecurring && (
+            <View
+              style={[
+                styles.taskTag,
+                styles.recurringTag,
+                item.completed && styles.completedTaskTag,
+              ]}
+            >
+              <AntDesign
+                name="reload1"
+                size={14}
+                color={item.completed ? "#888888" : "#FFFFFF"}
+              />
+              <Text
+                style={[
+                  styles.taskTagText,
+                  item.completed && styles.completedTaskTagText,
+                ]}
+              >
+                Everyday
+              </Text>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     </View>
@@ -732,6 +766,18 @@ const TaskScreen = ({ navigation }) => {
           name="notifications"
           size={20}
           color={hasReminder ? "#000000" : "#FFFFFF"}
+        />
+      </TouchableOpacity>
+
+      {/* Recurring button */}
+      <TouchableOpacity
+        style={[styles.tagButton, isRecurring && styles.tagButtonActive]}
+        onPress={() => setIsRecurring(!isRecurring)}
+      >
+        <AntDesign
+          name="reload1"
+          size={20}
+          color={isRecurring ? "#000000" : "#FFFFFF"}
         />
       </TouchableOpacity>
     </View>
@@ -1384,6 +1430,9 @@ const styles = StyleSheet.create({
   lightListContent: {
     paddingBottom: 80,
     paddingHorizontal: 20,
+  },
+  recurringTag: {
+    backgroundColor: "#3E4095", // Blue background for recurring "Everyday" tag
   },
 });
 

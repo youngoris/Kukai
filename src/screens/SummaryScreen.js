@@ -54,6 +54,7 @@ const SummaryScreen = ({ navigation }) => {
   const [isUrgent, setIsUrgent] = useState(false);
   const [isTimeTagged, setIsTimeTagged] = useState(false);
   const [hasReminder, setHasReminder] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(false);
   const [reminderTime, setReminderTime] = useState(15);
   const [showReminderOptions, setShowReminderOptions] = useState(false);
   const [taskTime, setTaskTime] = useState(() => {
@@ -392,6 +393,7 @@ const SummaryScreen = ({ navigation }) => {
           isTimeTagged || showTimePicker ? taskTime.toISOString() : null,
         hasReminder: hasReminder,
         reminderTime: reminderTime, // Advance notification time (minutes)
+        isRecurring: isRecurring, // Add recurring property
         notifyAtDeadline: true, // Notify at deadline
       };
       const updatedTasks = [...tomorrowTasks, newTask];
@@ -404,6 +406,7 @@ const SummaryScreen = ({ navigation }) => {
       setIsTimeTagged(false);
       setShowTimePicker(false);
       setHasReminder(false);
+      setIsRecurring(false);
       setReminderTime(15);
       setShowReminderOptions(false);
       setTaskTime(new Date());
@@ -595,6 +598,17 @@ const SummaryScreen = ({ navigation }) => {
           color={hasReminder ? "#000000" : "#FFFFFF"}
         />
       </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.tagButton, isRecurring && styles.tagButtonActive]}
+        onPress={() => setIsRecurring(!isRecurring)}
+      >
+        <AntDesign
+          name="reload1"
+          size={18}
+          color={isRecurring ? "#000000" : "#FFFFFF"}
+        />
+      </TouchableOpacity>
     </View>
   );
 
@@ -626,6 +640,64 @@ const SummaryScreen = ({ navigation }) => {
       }
     }, 300);
   };
+
+  // Render tomorrow task
+  const renderTomorrowTask = ({ item }) => (
+    <View style={styles.tomorrowTask}>
+      <View style={styles.tomorrowTaskTextContainer}>
+        <Text style={styles.tomorrowTaskText}>{item.text}</Text>
+        <View style={styles.taskTagsContainer}>
+          {item.isFrog && (
+            <View style={[styles.taskTag, styles.frogTag]}>
+              <FrogIcon width={12} height={12} fill="#FFFFFF" />
+              <Text style={styles.taskTagText}>Priority</Text>
+            </View>
+          )}
+          {item.isImportant && (
+            <View style={[styles.taskTag, styles.importantTag]}>
+              <MaterialIcons name="star" size={12} color="#FFFFFF" />
+              <Text style={styles.taskTagText}>Important</Text>
+            </View>
+          )}
+          {item.isUrgent && (
+            <View style={[styles.taskTag, styles.urgentTag]}>
+              <Feather name="alert-circle" size={12} color="#FFFFFF" />
+              <Text style={styles.taskTagText}>Urgent</Text>
+            </View>
+          )}
+          {item.isTimeTagged && item.taskTime && (
+            <View style={[styles.taskTag, styles.timeTag]}>
+              <Ionicons name="time-outline" size={12} color="#FFFFFF" />
+              <Text style={styles.taskTagText}>
+                {new Date(item.taskTime).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </Text>
+            </View>
+          )}
+          {item.hasReminder && (
+            <View style={[styles.taskTag, styles.reminderTag]}>
+              <MaterialIcons name="notifications" size={12} color="#FFFFFF" />
+              <Text style={styles.taskTagText}>{item.reminderTime} min</Text>
+            </View>
+          )}
+          {item.isRecurring && (
+            <View style={[styles.taskTag, styles.recurringTag]}>
+              <AntDesign name="reload1" size={12} color="#FFFFFF" />
+              <Text style={styles.taskTagText}>Everyday</Text>
+            </View>
+          )}
+        </View>
+      </View>
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={() => deleteTomorrowTask(item.id)}
+      >
+        <AntDesign name="close" size={16} color="#666666" />
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <View
@@ -936,68 +1008,7 @@ const SummaryScreen = ({ navigation }) => {
             <>
               <FlatList
                 data={tomorrowTasks}
-                renderItem={({ item }) => (
-                  <View style={styles.tomorrowTaskItem}>
-                    <View style={styles.tomorrowTaskContent}>
-                      <Text style={styles.tomorrowTaskText}>{item.text}</Text>
-                      <View style={styles.taskTagsContainer}>
-                        {item.isFrog && (
-                          <View style={[styles.taskTag, styles.frogTag]}>
-                            <FrogIcon width={14} height={14} fill="#FFFFFF" />
-                          </View>
-                        )}
-                        {item.isImportant && (
-                          <View style={[styles.taskTag, styles.importantTag]}>
-                            <MaterialIcons
-                              name="star"
-                              size={14}
-                              color="#FFFFFF"
-                            />
-                          </View>
-                        )}
-                        {item.isUrgent && (
-                          <View style={[styles.taskTag, styles.urgentTag]}>
-                            <Feather
-                              name="alert-circle"
-                              size={14}
-                              color="#FFFFFF"
-                            />
-                          </View>
-                        )}
-                        {item.isTimeTagged && item.taskTime && (
-                          <View style={[styles.taskTag, styles.timeTag]}>
-                            <Ionicons
-                              name="time-outline"
-                              size={14}
-                              color="#FFFFFF"
-                            />
-                            <Text style={styles.taskTagText}>
-                              {new Date(item.taskTime).toLocaleTimeString(
-                                [],
-                                { hour: "2-digit", minute: "2-digit" }
-                              )}
-                            </Text>
-                          </View>
-                        )}
-                        {item.hasReminder && (
-                          <View style={[styles.taskTag, styles.reminderTag]}>
-                            <MaterialIcons
-                              name="notifications"
-                              size={14}
-                              color="#FFFFFF"
-                            />
-                            <Text style={styles.taskTagText}>
-                              {item.reminderTime} min
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                    <TouchableOpacity onPress={() => deleteTomorrowTask(item.id)}>
-                      <AntDesign name="close" size={18} color="#666666" />
-                    </TouchableOpacity>
-                  </View>
-                )}
+                renderItem={renderTomorrowTask}
                 keyExtractor={(item) => item.id}
                 scrollEnabled={false}
               />
@@ -1161,31 +1172,32 @@ const styles = StyleSheet.create({
   },
   taskTagsContainer: {
     flexDirection: "row",
-    alignItems: "center",
+    flexWrap: "wrap",
+    marginTop: 5,
   },
   taskTag: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#333333",
-    paddingVertical: 3,
-    paddingHorizontal: 8,
+    backgroundColor: "#333",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
     borderRadius: 12,
     marginRight: 6,
     marginBottom: 4,
   },
-  frogTag: {
-    backgroundColor: "#2E8B57", // Green background for frog tag
-  },
-  importantTag: {
-    backgroundColor: "#3D2645", // Purple background for important tag
-  },
-  urgentTag: {
-    backgroundColor: "#832232", // Red background for urgent tag
-  },
   taskTagText: {
-    color: "#fff",
+    color: "#FFFFFF",
     fontSize: 12,
     marginLeft: 4,
+  },
+  frogTag: {
+    backgroundColor: "#2E8B57",
+  },
+  importantTag: {
+    backgroundColor: "#3D2645",
+  },
+  urgentTag: {
+    backgroundColor: "#832232",
   },
   emptyText: {
     color: "#999999",
@@ -1229,8 +1241,8 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
   },
   tagButton: {
-    width: 36,
-    height: 36,
+    width: 30,
+    height: 30,
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
@@ -1277,7 +1289,7 @@ const styles = StyleSheet.create({
   saveButton: {
     backgroundColor: "#FFFFFF",
   },
-  tomorrowTaskItem: {
+  tomorrowTask: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -1286,13 +1298,16 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 15,
   },
-  tomorrowTaskContent: {
+  tomorrowTaskTextContainer: {
     flex: 1,
   },
   tomorrowTaskText: {
     color: "#fff",
     fontSize: 16,
     marginBottom: 8,
+  },
+  deleteButton: {
+    padding: 5,
   },
   transferButton: {
     flexDirection: "row",
@@ -1341,6 +1356,9 @@ const styles = StyleSheet.create({
   },
   reminderTag: {
     backgroundColor: "#9C27B0",
+  },
+  recurringTag: {
+    backgroundColor: "#3E4095", // Blue background for recurring "Everyday" tag
   },
   reminderOptionsContainer: {
     marginTop: 15,

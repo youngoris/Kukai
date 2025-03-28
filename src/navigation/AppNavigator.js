@@ -14,6 +14,17 @@ import JournalScreen from "../screens/JournalScreen";
 import JournalEditScreen from "../screens/JournalEditScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 
+// Debug screen components
+console.log("OnboardingScreen:", !!OnboardingScreen);
+console.log("HomeScreen:", !!HomeScreen);
+console.log("MeditationScreen:", !!MeditationScreen);
+console.log("TaskScreen:", !!TaskScreen);
+console.log("FocusScreen:", !!FocusScreen);
+console.log("SummaryScreen:", !!SummaryScreen);
+console.log("JournalScreen:", !!JournalScreen);
+console.log("JournalEditScreen:", !!JournalEditScreen);
+console.log("SettingsScreen:", !!SettingsScreen);
+
 const { width } = Dimensions.get("window");
 const Stack = createNativeStackNavigator();
 
