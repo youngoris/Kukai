@@ -106,15 +106,16 @@ const CameraScreen = ({ navigation, route }) => {
       setIsProcessing(true); // Prevent multiple captures
       pressAnimation(scaleAnim);
       
-      // Take the photo with 1:1 aspect ratio
+      // Take the photo with 1:1 aspect ratio, 添加exif选项获取EXIF数据
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.75,
         skipProcessing: true,
-        exif: false,
+        exif: true, // 获取EXIF数据
       });
 
       // Log photo dimensions for debugging
       console.log(`Original photo dimensions: ${photo.width}x${photo.height}`);
+      console.log('EXIF data:', photo.exif); // 打印EXIF数据用于调试
       
       const photoDir = `${FileSystem.documentDirectory}selfies/`;
       const dirInfo = await FileSystem.getInfoAsync(photoDir);
@@ -134,15 +135,26 @@ const CameraScreen = ({ navigation, route }) => {
         await FileSystem.deleteAsync(`${photoDir}${file}`);
       }
 
-      const fileName = `${format(new Date(), 'yyyy-MM-dd')}_${Date.now()}.jpg`;
+      // 使用实际拍摄时间（如果有）或当前时间作为文件名
+      const timestamp = photo.exif?.DateTime 
+        ? new Date(photo.exif.DateTime.replace(/:/g, '-').replace(' ', 'T'))
+        : new Date();
+      
+      const fileName = `${format(new Date(), 'yyyy-MM-dd')}_${Date.now()}_exif.jpg`;
       const newPhotoUri = `${photoDir}${fileName}`;
+      
+      // 保存EXIF数据到一个附加文件，以便后续读取
+      if (photo.exif) {
+        const exifFilePath = `${photoDir}${fileName.replace('.jpg', '.exif.json')}`;
+        await FileSystem.writeAsStringAsync(exifFilePath, JSON.stringify(photo.exif));
+      }
       
       // Crop to square if not already square
       const minSize = Math.min(photo.width, photo.height);
       const offsetX = (photo.width - minSize) / 2;
       const offsetY = (photo.height - minSize) / 2;
       
-      // Apply crop and black and white effect
+      // Apply crop and black and white effect - 确保应用强烈的黑白效果
       const processedPhoto = await ImageManipulator.manipulateAsync(
         photo.uri,
         [
@@ -316,7 +328,7 @@ const styles = StyleSheet.create({
   },
   cameraContainer: {
     width: screenWidth,
-    height: screenWidth, // 正方形区域
+    height: screenWidth, 
     overflow: 'hidden',
   },
   camera: {

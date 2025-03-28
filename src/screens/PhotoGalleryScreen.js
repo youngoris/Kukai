@@ -12,14 +12,16 @@ import {
   Alert,
   ActivityIndicator,
   SafeAreaView,
+  SectionList,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { format, isToday } from 'date-fns';
+import { format, isToday, parseISO } from 'date-fns';
 import { COLORS, SPACING, FONT_SIZE } from '../constants/DesignSystem';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as Device from 'expo-device';
 
 const { width, height } = Dimensions.get('window');
 const DEFAULT_COLUMN_COUNT = 5;
@@ -27,6 +29,7 @@ const GRID_SPACING = SPACING.s;
 
 const PhotoGalleryScreen = ({ navigation }) => {
   const [photos, setPhotos] = useState([]);
+  const [photosGrouped, setPhotosGrouped] = useState([]);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [viewingColorVersion, setViewingColorVersion] = useState(false);
   const [colorVersionUri, setColorVersionUri] = useState(null);
@@ -34,6 +37,7 @@ const PhotoGalleryScreen = ({ navigation }) => {
   const [columnCount, setColumnCount] = useState(DEFAULT_COLUMN_COUNT);
   const [showSettings, setShowSettings] = useState(false);
   const [hasTodaySelfie, setHasTodaySelfie] = useState(false);
+  const [showPhotoInfo, setShowPhotoInfo] = useState(false);
   
   // Photo size calculation considering safe margins
   const containerPadding = SPACING.s * 2; // Container padding
@@ -55,6 +59,35 @@ const PhotoGalleryScreen = ({ navigation }) => {
     loadPhotos();
   }, []);
 
+  // 将照片按月份分组
+  const groupPhotosByMonth = (photosList) => {
+    // 创建一个按月份分组的对象
+    const groupedByMonth = {};
+    
+    photosList.forEach(photo => {
+      const monthYear = format(photo.date, 'MMMM yyyy');
+      if (!groupedByMonth[monthYear]) {
+        groupedByMonth[monthYear] = [];
+      }
+      groupedByMonth[monthYear].push(photo);
+    });
+    
+    // 转换为SectionList需要的格式
+    const groupedData = Object.keys(groupedByMonth).map(month => ({
+      title: month,
+      data: groupedByMonth[month]
+    }));
+    
+    // 按日期倒序排列
+    groupedData.sort((a, b) => {
+      const dateA = new Date(a.data[0].date);
+      const dateB = new Date(b.data[0].date);
+      return dateB - dateA;
+    });
+    
+    return groupedData;
+  };
+
   const loadPhotos = async () => {
     try {
       const photoDir = `${FileSystem.documentDirectory}selfies/`;
@@ -63,10 +96,13 @@ const PhotoGalleryScreen = ({ navigation }) => {
       if (!dirInfo.exists) {
         await FileSystem.makeDirectoryAsync(photoDir);
         setHasTodaySelfie(false);
+        setPhotos([]);
+        setPhotosGrouped([]);
         return;
       }
 
       const files = await FileSystem.readDirectoryAsync(photoDir);
+      // 筛选jpg文件，并按日期倒序排序
       const sortedFiles = files
         .filter(file => file.endsWith('.jpg'))
         .sort((a, b) => {
@@ -75,17 +111,54 @@ const PhotoGalleryScreen = ({ navigation }) => {
           return dateB - dateA;
         });
 
-      const photoList = sortedFiles.map(file => ({
-        uri: `${photoDir}${file}`,
-        date: new Date(file.split('_')[0]),
-        filename: file,
-      }));
-
-      setPhotos(photoList);
+      // 创建照片列表，尝试加载每张照片的EXIF数据
+      const photosList = [];
       
-      // Check if today's selfie exists
-      const todaySelfie = photoList.find(photo => isToday(photo.date));
+      for (const file of sortedFiles) {
+        const photoUri = `${photoDir}${file}`;
+        const exifFilePath = `${photoDir}${file.replace('.jpg', '.exif.json')}`;
+        
+        // 默认使用文件名中的日期
+        let photoDate = new Date(file.split('_')[0]);
+        let exifData = null;
+        
+        // 检查是否有对应的EXIF数据文件
+        const exifInfo = await FileSystem.getInfoAsync(exifFilePath);
+        if (exifInfo.exists) {
+          try {
+            const exifString = await FileSystem.readAsStringAsync(exifFilePath);
+            exifData = JSON.parse(exifString);
+            
+            // 如果有DateTime字段，使用它作为照片日期
+            if (exifData.DateTime) {
+              // 将EXIF日期时间字符串转换为Date对象 (格式: 2023:06:15 14:30:25)
+              const exifDate = exifData.DateTime.replace(/:/g, '-').replace(' ', 'T');
+              photoDate = new Date(exifDate);
+            }
+          } catch (e) {
+            console.error('Failed to parse EXIF data:', e);
+          }
+        }
+        
+        photosList.push({
+          uri: photoUri,
+          date: photoDate,
+          filename: file,
+          exif: exifData
+        });
+      }
+      
+      // 检查今日自拍
+      const todaySelfie = photosList.find(photo => isToday(photo.date));
       setHasTodaySelfie(!!todaySelfie);
+      console.log('Today selfie exists:', !!todaySelfie);
+      
+      // 设置照片列表
+      setPhotos(photosList);
+      
+      // 分组照片
+      const groupedPhotos = groupPhotosByMonth(photosList);
+      setPhotosGrouped(groupedPhotos);
     } catch (error) {
       console.error('Error loading photos:', error);
       setHasTodaySelfie(false);
@@ -174,11 +247,21 @@ const PhotoGalleryScreen = ({ navigation }) => {
     try {
       // Delete current photo
       await FileSystem.deleteAsync(selectedPhoto.uri);
+      
+      // 删除对应的EXIF数据文件（如果存在）
+      const exifFilePath = selectedPhoto.uri.replace('.jpg', '.exif.json');
+      const exifInfo = await FileSystem.getInfoAsync(exifFilePath);
+      if (exifInfo.exists) {
+        await FileSystem.deleteAsync(exifFilePath);
+      }
+      
       // Close preview
       closePhotoPreview();
-      // Refresh photo list
+      
+      // Refresh photo list to update hasTodaySelfie state
       await loadPhotos();
-      // Navigate to camera screen without animation,附带标记表示这是retake操作
+      
+      // Navigate to camera screen without animation
       navigation.navigate('Camera', { fromRetake: true }, { animation: 'none' });
     } catch (error) {
       console.error('Error during retake:', error);
@@ -186,7 +269,10 @@ const PhotoGalleryScreen = ({ navigation }) => {
     }
   };
 
-  const handleTakeNewPicture = () => {
+  const handleTakeNewPicture = async () => {
+    // 每次调用时都重新检查今日自拍状态
+    await loadPhotos();
+    
     if (hasTodaySelfie) {
       Alert.alert(
         'Daily Selfie Complete',
@@ -195,21 +281,33 @@ const PhotoGalleryScreen = ({ navigation }) => {
           { text: 'Cancel', style: 'cancel' },
           { 
             text: 'Retake', 
-            onPress: () => {
-              // If they want to retake, find today's selfie and delete it
+            onPress: async () => {
+              // 如果要重拍，找到今日自拍并删除
               const todaySelfie = photos.find(photo => isToday(photo.date));
               if (todaySelfie) {
-                FileSystem.deleteAsync(todaySelfie.uri)
-                  .then(() => {
-                    loadPhotos();
-                    navigation.navigate('Camera', {}, { animation: 'none' });
-                  })
-                  .catch(error => {
-                    console.error('Error deleting today\'s selfie:', error);
-                    Alert.alert('Error', 'Failed to prepare for retake.');
-                  });
+                try {
+                  // 删除图片文件
+                  await FileSystem.deleteAsync(todaySelfie.uri);
+                  
+                  // 删除对应的EXIF数据文件（如果存在）
+                  const exifFilePath = todaySelfie.uri.replace('.jpg', '.exif.json');
+                  const exifInfo = await FileSystem.getInfoAsync(exifFilePath);
+                  if (exifInfo.exists) {
+                    await FileSystem.deleteAsync(exifFilePath);
+                  }
+                  
+                  // 重新加载照片以更新状态
+                  await loadPhotos();
+                  
+                  // 导航到相机
+                  navigation.navigate('Camera', { fromRetake: true }, { animation: 'none' });
+                } catch (error) {
+                  console.error('Error deleting today\'s selfie:', error);
+                  Alert.alert('Error', 'Failed to prepare for retake.');
+                }
               } else {
-                navigation.navigate('Camera', {}, { animation: 'none' });
+                // 重新检查后发现没有今日自拍，直接导航到相机
+                navigation.navigate('Camera', { fromRetake: true }, { animation: 'none' });
               }
             }
           }
@@ -221,14 +319,14 @@ const PhotoGalleryScreen = ({ navigation }) => {
     }
   };
 
-  const renderItem = ({ item, index }) => (
+  const renderItem = ({ item }) => (
     <TouchableOpacity 
       style={[
         styles.photoItem, 
         { 
           width: itemSize, 
           height: itemSize,
-          marginLeft: index % columnCount === 0 ? 0 : GRID_SPACING / columnCount,
+          margin: GRID_SPACING/2,
         }
       ]}
       onPress={() => openPhotoPreview(item)}
@@ -242,6 +340,12 @@ const PhotoGalleryScreen = ({ navigation }) => {
         {format(item.date, 'MMM d')}
       </Text>
     </TouchableOpacity>
+  );
+
+  const renderSectionHeader = ({ section: { title } }) => (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionHeaderText}>{title}</Text>
+    </View>
   );
 
   const renderColumnOption = (count) => (
@@ -265,21 +369,137 @@ const PhotoGalleryScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
+  // 获取照片信息
+  const getPhotoInfo = (photo) => {
+    if (!photo) return null;
+    
+    const exif = photo.exif;
+    let dateTime = format(photo.date, 'HH:mm'); 
+    
+    // 从EXIF中获取相机信息
+    let deviceInfo = Device.modelName || 'Unknown Device';
+    if (exif?.LensModel) {
+      deviceInfo = exif.LensModel;
+    } else if (exif?.Make) {
+      deviceInfo = `${exif.Make} ${exif.Model || ''}`;
+    }
+    
+    // 获取拍摄参数 (ISO, 快门速度, 光圈)
+    let shotInfo = '';
+    if (exif?.ISOSpeedRatings) {
+      shotInfo += `ISO ${exif.ISOSpeedRatings[0]} `;
+    }
+    if (exif?.ExposureTime) {
+      // 将曝光时间转换为分数形式 (例如 0.0666... → 1/15s)
+      const exposureTime = exif.ExposureTime;
+      if (exposureTime < 1) {
+        const denominator = Math.round(1 / exposureTime);
+        shotInfo += `1/${denominator}s `;
+      } else {
+        shotInfo += `${exposureTime}s `;
+      }
+    }
+    if (exif?.FNumber) {
+      shotInfo += `f/${exif.FNumber}`;
+    }
+    
+    // 获取照片分辨率
+    let resolution = 'Unknown';
+    if (exif?.PixelXDimension && exif?.PixelYDimension) {
+      resolution = `${exif.PixelXDimension} × ${exif.PixelYDimension}`;
+    }
+    
+    // 尝试获取位置信息
+    let location = 'Location data not available';
+    if (exif?.GPSLatitude && exif?.GPSLongitude) {
+      location = `${exif.GPSLatitude}, ${exif.GPSLongitude}`;
+    }
+    
+    // 使用EXIF中的实际拍摄时间 - 尝试多个字段
+    try {
+      // 首先尝试DateTimeDigitized
+      if (exif?.DateTimeDigitized) {
+        const exifDateStr = exif.DateTimeDigitized;
+        // 标准EXIF日期格式：YYYY:MM:DD HH:MM:SS
+        const [datePart, timePart] = exifDateStr.split(' ');
+        if (datePart && timePart) {
+          const [year, month, day] = datePart.split(':').map(Number);
+          const [hour, minute, second] = timePart.split(':').map(Number);
+          
+          // 检查日期值是否有效
+          if (year > 0 && month > 0 && month <= 12 && day > 0 && day <= 31 &&
+              hour >= 0 && hour < 24 && minute >= 0 && minute < 60 && second >= 0 && second < 60) {
+            const jsDate = new Date(year, month - 1, day, hour, minute, second);
+            if (!isNaN(jsDate.getTime())) {
+              dateTime = format(jsDate, 'yyyy-MM-dd HH:mm:ss');
+            }
+          }
+        }
+      }
+      // 备选：尝试DateTimeOriginal
+      else if (exif?.DateTimeOriginal) {
+        const exifDateStr = exif.DateTimeOriginal;
+        const [datePart, timePart] = exifDateStr.split(' ');
+        if (datePart && timePart) {
+          const [year, month, day] = datePart.split(':').map(Number);
+          const [hour, minute, second] = timePart.split(':').map(Number);
+          
+          if (year > 0 && month > 0 && month <= 12 && day > 0 && day <= 31 &&
+              hour >= 0 && hour < 24 && minute >= 0 && minute < 60 && second >= 0 && second < 60) {
+            const jsDate = new Date(year, month - 1, day, hour, minute, second);
+            if (!isNaN(jsDate.getTime())) {
+              dateTime = format(jsDate, 'yyyy-MM-dd HH:mm:ss');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to format EXIF date:', e);
+      // 出错时使用文件名中的日期时间
+    }
+    
+    return {
+      dateTime,
+      deviceInfo,
+      shotInfo,
+      resolution,
+      location
+    };
+  };
+
+  // 获取照片标题（月日年）
+  const getPhotoTitle = (photo) => {
+    if (!photo) return '';
+    
+    return format(photo.date, 'MMMM d, yyyy'); // 月日年格式
+  };
+
+  // 切换照片信息显示状态
+  const togglePhotoInfo = () => {
+    setShowPhotoInfo(!showPhotoInfo);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Daily Selfies</Text>
       </View>
       
-      {photos.length > 0 ? (
-        <FlatList
-          data={photos}
+      {photosGrouped.length > 0 ? (
+        <SectionList
+          sections={photosGrouped}
+          keyExtractor={(item) => item.uri}
           renderItem={renderItem}
-          keyExtractor={item => item.uri}
-          numColumns={columnCount}
-          key={`columns-${columnCount}`}
+          renderSectionHeader={renderSectionHeader}
+          stickySectionHeadersEnabled={true}
           contentContainerStyle={styles.gridContainer}
           showsVerticalScrollIndicator={false}
+          numColumns={columnCount}
+          columnWrapperStyle={{
+            justifyContent: 'flex-start',
+            flexDirection: 'row',
+            flexWrap: 'wrap'
+          }}
         />
       ) : (
         <View style={styles.emptyContainer}>
@@ -298,7 +518,7 @@ const PhotoGalleryScreen = ({ navigation }) => {
       <View style={styles.footer}>
         <TouchableOpacity 
           style={styles.footerButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => navigation.navigate('Home', {}, { animation: 'none' })}
         >
           <MaterialIcons name="arrow-back" size={24} color={COLORS.text.primary} />
         </TouchableOpacity>
@@ -330,7 +550,15 @@ const PhotoGalleryScreen = ({ navigation }) => {
         animationType="fade"
         onRequestClose={closePhotoPreview}
       >
-        <View style={styles.modalContainer}>
+        <SafeAreaView style={styles.modalContainer}>
+          {/* 标题 */}
+          {selectedPhoto && (
+            <Text style={styles.previewTitle}>
+              {getPhotoTitle(selectedPhoto)}
+            </Text>
+          )}
+          
+          {/* 照片预览区域 */}
           <View style={styles.previewContainer}>
             {isLoading ? (
               <ActivityIndicator size="large" color={COLORS.text.primary} />
@@ -343,51 +571,97 @@ const PhotoGalleryScreen = ({ navigation }) => {
                 resizeMode="contain"
               />
             )}
-            
-            <View style={styles.previewControls}>
-              <TouchableOpacity 
-                style={styles.previewButton} 
-                onPress={toggleColorView}
-                disabled={isLoading}
-              >
-                <MaterialIcons 
-                  name={viewingColorVersion ? "filter-b-and-w" : "color-lens"} 
-                  size={24} 
-                  color={COLORS.text.primary} 
-                />
-                <Text style={styles.previewButtonText}>
-                  {viewingColorVersion ? "B&W" : "Color"}
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.previewButton} 
-                onPress={saveToGallery}
-                disabled={isLoading}
-              >
-                <MaterialIcons name="save-alt" size={24} color={COLORS.text.primary} />
-                <Text style={styles.previewButtonText}>Save</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.previewButton} 
-                onPress={retakePhoto}
-                disabled={isLoading}
-              >
-                <MaterialIcons name="camera-alt" size={24} color={COLORS.text.primary} />
-                <Text style={styles.previewButtonText}>Retake</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.previewButton} 
-                onPress={closePhotoPreview}
-              >
-                <MaterialIcons name="close" size={24} color={COLORS.text.primary} />
-                <Text style={styles.previewButtonText}>Close</Text>
-              </TouchableOpacity>
-            </View>
           </View>
-        </View>
+          
+          {/* 照片信息显示 */}
+          {showPhotoInfo && selectedPhoto && (
+            <View style={styles.photoInfoContainer}>
+              <View style={styles.photoInfoRow}>
+                <View style={styles.photoInfoItem}>
+                  <MaterialIcons name="access-time" size={16} color={COLORS.text.secondary} />
+                  <Text style={styles.photoInfoText}>
+                    {getPhotoInfo(selectedPhoto).dateTime}
+                  </Text>
+                </View>
+                
+                <View style={styles.photoInfoItem}>
+                  <MaterialIcons name="high-quality" size={16} color={COLORS.text.secondary} />
+                  <Text style={styles.photoInfoText}>
+                    {getPhotoInfo(selectedPhoto).resolution}
+                  </Text>
+                </View>
+              </View>
+              
+              <View style={styles.photoInfoRow}>
+                <View style={styles.photoInfoItem}>
+                  <MaterialIcons name="phone-android" size={16} color={COLORS.text.secondary} />
+                  <Text style={styles.photoInfoText}>
+                    {getPhotoInfo(selectedPhoto).deviceInfo}
+                  </Text>
+                </View>
+              </View>
+              
+              {getPhotoInfo(selectedPhoto).shotInfo && (
+                <View style={styles.photoInfoRow}>
+                  <View style={styles.photoInfoItem}>
+                    <MaterialIcons name="camera" size={16} color={COLORS.text.secondary} />
+                    <Text style={styles.photoInfoText}>
+                      {getPhotoInfo(selectedPhoto).shotInfo}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              
+              <View style={styles.photoInfoRow}>
+                <View style={styles.photoInfoItem}>
+                  <MaterialIcons name="location-on" size={16} color={COLORS.text.secondary} />
+                  <Text style={styles.photoInfoText}>
+                    {getPhotoInfo(selectedPhoto).location}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+          
+          {/* 底部控制栏 */}
+          <View style={styles.previewControls}>
+            <TouchableOpacity 
+              style={styles.previewButton} 
+              onPress={togglePhotoInfo}
+              disabled={isLoading}
+            >
+              <MaterialIcons 
+                name={showPhotoInfo ? "info-outline" : "info"} 
+                size={26} 
+                color={showPhotoInfo ? COLORS.text.primary : COLORS.text.secondary} 
+              />
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.previewButton} 
+              onPress={saveToGallery}
+              disabled={isLoading}
+            >
+              <MaterialIcons name="save-alt" size={26} color={COLORS.text.secondary} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.previewButton} 
+              onPress={retakePhoto}
+              disabled={isLoading}
+            >
+              <MaterialIcons name="camera-alt" size={26} color={COLORS.text.secondary} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.previewButton} 
+              onPress={closePhotoPreview}
+              disabled={isLoading}
+            >
+              <MaterialIcons name="close" size={26} color={COLORS.text.secondary} />
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -414,7 +688,6 @@ const styles = StyleSheet.create({
     paddingBottom: 100, // Space for footer
   },
   photoItem: {
-    margin: GRID_SPACING/2,
     borderRadius: 5,
     overflow: 'hidden',
     backgroundColor: COLORS.card,
@@ -427,7 +700,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: SPACING.xs,
     left: SPACING.xs,
-    color: COLORS.text.primary,
+    color: COLORS.text.secondary,
     fontSize: FONT_SIZE.xs,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     paddingHorizontal: SPACING.xs,
@@ -488,34 +761,74 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  previewTitle: {
+    position: 'absolute',
+    top: 110,
+    color: COLORS.text.primary,
+    fontSize: FONT_SIZE.l,
+    fontWeight: '600',
+    textAlign: 'center',
+    width: '100%',
   },
   previewContainer: {
     width: '100%',
-    height: '100%',
+    height: width,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: -130, // 微调照片位置
   },
   previewImage: {
-    width: width * 0.9,
-    height: height * 0.7,
+    width: width * 0.85,
+    height: width * 0.85, 
+    maxHeight: height * 0.6,
+    borderRadius: 8,
+  },
+  photoInfoContainer: {
+    width: '85%',
+    backgroundColor: 'rgba(30, 30, 30, 0.8)',
+    padding: SPACING.m,
+    borderRadius: 12,
+    position: 'absolute',
+    bottom: 180, // 增加与底部控制栏的距离
+  },
+  photoInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.xs, // 减小行间距
+  },
+  photoInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    marginRight: SPACING.s,
+  },
+  photoInfoText: {
+    color: COLORS.text.secondary,
+    fontSize: FONT_SIZE.s,
+    marginLeft: SPACING.xs, // 减小图标和文本间距
+    flexShrink: 1,
   },
   previewControls: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 40 : 20,
-    left: 0,
-    right: 0,
+    bottom: 40, // 提高底部位置
+    width: '85%',
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingHorizontal: SPACING.m,
-    paddingVertical: SPACING.l,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    alignItems: 'center',
+    paddingVertical: SPACING.s,
+    backgroundColor: 'rgba(30, 30, 30, 0.8)',
+    borderRadius: 30,
   },
   previewButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SPACING.s,
   },
   previewButtonText: {
     color: COLORS.text.primary,
@@ -561,6 +874,20 @@ const styles = StyleSheet.create({
   },
   columnOptionTextSelected: {
     color: COLORS.background,
+  },
+  sectionHeader: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: SPACING.s,
+    // paddingHorizontal: SPACING.m,
+    // marginVertical: SPACING.xs,
+    borderRadius: 4,
+    alignItems: 'flex-start',
+  },
+  sectionHeaderText: {
+    color: COLORS.text.secondary,
+    fontSize: FONT_SIZE.s,
+    fontWeight: '600',
+    textAlign: 'left',
   },
 });
 
