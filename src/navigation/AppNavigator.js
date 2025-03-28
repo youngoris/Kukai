@@ -13,6 +13,8 @@ import SummaryScreen from "../screens/SummaryScreen";
 import JournalScreen from "../screens/JournalScreen";
 import JournalEditScreen from "../screens/JournalEditScreen";
 import SettingsScreen from "../screens/SettingsScreen";
+import CameraScreen from "../screens/CameraScreen";
+import PhotoGalleryScreen from "../screens/PhotoGalleryScreen";
 
 // Debug screen components
 console.log("OnboardingScreen:", !!OnboardingScreen);
@@ -24,6 +26,8 @@ console.log("SummaryScreen:", !!SummaryScreen);
 console.log("JournalScreen:", !!JournalScreen);
 console.log("JournalEditScreen:", !!JournalEditScreen);
 console.log("SettingsScreen:", !!SettingsScreen);
+console.log("CameraScreen:", !!CameraScreen);
+console.log("PhotoGalleryScreen:", !!PhotoGalleryScreen);
 
 const { width } = Dimensions.get("window");
 const Stack = createNativeStackNavigator();
@@ -124,6 +128,21 @@ const AppNavigator = () => {
       <Stack.Screen 
         name="Settings" 
         component={SettingsScreen} 
+      />
+      <Stack.Screen 
+        name="Camera" 
+        component={CameraScreen}
+        options={{
+          animation: 'fade',
+          gestureEnabled: false
+        }}
+      />
+      <Stack.Screen 
+        name="PhotoGallery" 
+        component={PhotoGalleryScreen}
+        options={{
+          animation: 'fade'
+        }}
       />
     </Stack.Navigator>
   );

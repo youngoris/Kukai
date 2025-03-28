@@ -27,7 +27,6 @@ import {
   databaseService, 
   databaseBackupService, 
   databaseQueryOptimizer,
-
 } from "./services";
 
 // Prevent splash screen from auto-hiding
@@ -183,16 +182,22 @@ export default function App() {
     }
   }, []);
 
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
     <ErrorBoundary>
-      <SafeAreaProvider>
-        <AppProvider>
-          <NavigationContainer ref={navigationRef}>
-            <StatusBar style="auto" />
-            <AppNavigator />
-          </NavigationContainer>
-        </AppProvider>
-      </SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <AppProvider>
+            <NavigationContainer ref={navigationRef}>
+              <StatusBar style="auto" />
+              <AppNavigator />
+            </NavigationContainer>
+          </AppProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     </ErrorBoundary>
   );
 }

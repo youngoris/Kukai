@@ -24,6 +24,8 @@ import useWeather from "../utils/useWeather";
 import { navigateWithDirection } from "../navigation/NavigationUtils";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 import { ERROR_TYPES } from "../constants/Config";
+import * as FileSystem from 'expo-file-system';
+import { format } from 'date-fns';
 
 // Quote database
 const quotes = {
@@ -63,6 +65,8 @@ const HomeScreen = ({ navigation }) => {
     summary: false,
     journal: false,
   });
+  const [hasTakenPhotoToday, setHasTakenPhotoToday] = useState(false);
+  const circleScaleAnim = useRef(new Animated.Value(1)).current;
 
   // Add a flag to track if it's first load or return
   const isFirstLoad = useRef(true);
@@ -333,6 +337,50 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
+  useEffect(() => {
+    checkTodayPhoto();
+  }, []);
+
+  const checkTodayPhoto = async () => {
+    try {
+      const photoDir = `${FileSystem.documentDirectory}selfies/`;
+      const dirInfo = await FileSystem.getInfoAsync(photoDir);
+      
+      if (!dirInfo.exists) {
+        await FileSystem.makeDirectoryAsync(photoDir);
+        setHasTakenPhotoToday(false);
+        return;
+      }
+
+      const files = await FileSystem.readDirectoryAsync(photoDir);
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const hasTodayPhoto = files.some(file => file.startsWith(today));
+      setHasTakenPhotoToday(hasTodayPhoto);
+    } catch (error) {
+      console.error('Error checking today photo:', error);
+    }
+  };
+
+  const handleCirclePress = () => {
+    Animated.sequence([
+      Animated.timing(circleScaleAnim, {
+        toValue: 20,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.inOut(Easing.ease),
+      }),
+    ]).start(() => {
+      navigateWithDirection(
+        navigation,
+        hasTakenPhotoToday ? 'PhotoGallery' : 'Camera',
+        {},
+        false
+      );
+      // Reset scale after navigation
+      circleScaleAnim.setValue(1);
+    });
+  };
+
   return (
     <View style={[
       styles.container, 
@@ -448,12 +496,18 @@ const HomeScreen = ({ navigation }) => {
         right: insets.right,
         zIndex: 20,
       }]}>
-        <TouchableOpacity
-          style={styles.circleButton}
-          onPress={() => console.log('Circle button pressed - functionality reserved')}
-          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-        >
-        </TouchableOpacity>
+        <Animated.View style={[{
+          transform: [{ scale: circleScaleAnim }],
+        }]}>
+          <TouchableOpacity
+            style={[
+              styles.circleButton,
+              hasTakenPhotoToday && styles.circleButtonTaken
+            ]}
+            onPress={handleCirclePress}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+          />
+        </Animated.View>
       </View>
 
       {/* Settings button - Bottom center */}
@@ -588,13 +642,15 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: "#888",
-    // Add a subtle ethereal glow effect
-    shadowColor: "#fff",
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#fff',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 8,
-    elevation: 5, // for Android
+    elevation: 5,
+  },
+  circleButtonTaken: {
+    backgroundColor: '#888',
   },
 });
 

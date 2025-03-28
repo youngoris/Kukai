@@ -22,6 +22,8 @@
         "NSLocationWhenInUseUsageDescription": "This app needs access to your location to provide weather information and location-based services",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to provide weather information and location-based features",
         "NSLocationAlwaysUsageDescription": "This app needs access to your location to provide weather information and location-based features",
+        "NSCameraUsageDescription": "This app needs access to your camera to take daily selfies",
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to save daily selfies",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -39,6 +41,11 @@
       "package": "com.andre.kukai",
       "softwareKeyboardLayoutMode": "pan",
       "allowsNotchDisplay": true,
+      "permissions": [
+        "CAMERA",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_EXTERNAL_STORAGE"
+      ],
       "intentFilters": [
         {
           "action": "VIEW",
@@ -63,7 +70,13 @@
     },
     "plugins": [
       "expo-asset",
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to take daily selfies."
+        }
+      ]
     ],
     "scheme": "com.andre.kukai",
     "extra": {
