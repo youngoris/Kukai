@@ -1611,7 +1611,7 @@ const SettingsScreen = ({ navigation }) => {
             exportData,
             "Local Backup",
             "save-alt",
-            "Backup data to local file (Recommended for users without an Apple developer account)",
+            "Backup data to local file",
           )}
 
           {renderActionButton(

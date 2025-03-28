@@ -21,7 +21,14 @@
         "NSHealthUpdateUsageDescription": "This app requires access to save your meditation sessions as mindfulness data",
         "NSLocationWhenInUseUsageDescription": "This app needs access to your location to provide weather information and location-based services",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to provide weather information and location-based features",
-        "NSLocationAlwaysUsageDescription": "This app needs access to your location to provide weather information and location-based features"
+        "NSLocationAlwaysUsageDescription": "This app needs access to your location to provide weather information and location-based features",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.andre.kukai"
+            ]
+          }
+        ]
       }
     },
     "android": {
@@ -31,7 +38,20 @@
       },
       "package": "com.andre.kukai",
       "softwareKeyboardLayoutMode": "pan",
-      "allowsNotchDisplay": true
+      "allowsNotchDisplay": true,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "com.andre.kukai",
+              "host": "oauth2redirect"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -45,7 +65,7 @@
       "expo-asset",
       "expo-sqlite"
     ],
-    "scheme": "kukai",
+    "scheme": "com.andre.kukai",
     "extra": {
       "eas": {
         "projectId": "8ee33501-ec7b-4c56-a239-e273a87a6f87"
