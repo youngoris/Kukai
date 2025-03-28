@@ -341,6 +341,15 @@ const HomeScreen = ({ navigation }) => {
     checkTodayPhoto();
   }, []);
 
+  // 添加页面焦点检测，确保每次返回主页时都更新照片状态
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('HomeScreen focused - checking today photo');
+      checkTodayPhoto();
+      return () => {};
+    }, [])
+  );
+
   const checkTodayPhoto = async () => {
     try {
       const photoDir = `${FileSystem.documentDirectory}selfies/`;
@@ -362,23 +371,25 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const handleCirclePress = () => {
-    Animated.sequence([
-      Animated.timing(circleScaleAnim, {
-        toValue: 20,
-        duration: 300,
-        useNativeDriver: true,
-        easing: Easing.inOut(Easing.ease),
-      }),
-    ]).start(() => {
-      navigateWithDirection(
-        navigation,
-        hasTakenPhotoToday ? 'PhotoGallery' : 'Camera',
-        {},
-        false
-      );
-      // Reset scale after navigation
-      circleScaleAnim.setValue(1);
-    });
+    // 如果今天已拍照，点击直接进入相册；否则进入相机页面
+    if (hasTakenPhotoToday) {
+      // 已拍照，直接进入相册页面，不需要动画
+      navigation.navigate('PhotoGallery', {}, { animation: 'none' });
+    } else {
+      // 未拍照，使用动画进入相机页面
+      Animated.sequence([
+        Animated.timing(circleScaleAnim, {
+          toValue: 20,
+          duration: 300,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+      ]).start(() => {
+        navigation.navigate('Camera', {}, { animation: 'none' });
+        // Reset scale after navigation
+        circleScaleAnim.setValue(1);
+      });
+    }
   };
 
   return (
@@ -502,7 +513,7 @@ const HomeScreen = ({ navigation }) => {
           <TouchableOpacity
             style={[
               styles.circleButton,
-              hasTakenPhotoToday && styles.circleButtonTaken
+              !hasTakenPhotoToday && styles.circleButtonHighlight
             ]}
             onPress={handleCirclePress}
             hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
@@ -639,18 +650,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   circleButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#FFFFFF',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#555', // 已拍照时为灰色
+    justifyContent: 'center',
+    alignItems: 'center',
     shadowColor: '#fff',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 8,
-    elevation: 5,
+    elevation: 10,
   },
-  circleButtonTaken: {
-    backgroundColor: '#888',
+  circleButtonHighlight: {
+    backgroundColor: '#fff', // 未拍照时使用白色高亮
+    shadowColor: '#fff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 15,
+    elevation: 15,
   },
 });
 

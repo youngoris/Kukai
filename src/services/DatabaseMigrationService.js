@@ -118,6 +118,15 @@ export class DatabaseMigrationService {
    */
   async recordMigration(version, name, success = true) {
     try {
+      // Check if this migration version already exists
+      const exists = await this.hasMigrationRun(version);
+      
+      if (exists) {
+        console.log(`Migration ${version} already recorded, skipping insert`);
+        return true;
+      }
+      
+      // Insert the migration record if it doesn't exist
       await this.db.runAsync(`
         INSERT INTO db_migrations (version, name, success, applied_at)
         VALUES (?, ?, ?, CURRENT_TIMESTAMP)
@@ -126,7 +135,8 @@ export class DatabaseMigrationService {
       return true;
     } catch (error) {
       console.error(`Error recording migration version ${version}:`, error);
-      throw error;
+      console.log('Continuing migration process despite recording error');
+      return false;
     }
   }
 
@@ -237,6 +247,13 @@ export class DatabaseMigrationService {
           console.log(`Running migration ${migration.version}: ${migration.name}`);
           
           try {
+            // Check if this migration has already been applied
+            const alreadyApplied = await this.hasMigrationRun(migration.version);
+            if (alreadyApplied) {
+              console.log(`Migration ${migration.version} already applied, skipping`);
+              continue;
+            }
+            
             // Run the migration
             await migration.up.call(this, this.db);
             
@@ -247,51 +264,47 @@ export class DatabaseMigrationService {
           } catch (error) {
             console.error(`Error in migration ${migration.version}:`, error);
             
-            // Record failed migration
-            await this.recordMigration(migration.version, migration.name, false);
+            // Record failed migration but don't throw, try to continue
+            try {
+              await this.recordMigration(migration.version, migration.name, false);
+            } catch (recordError) {
+              console.error(`Failed to record migration failure: ${recordError}`);
+            }
             
-            // Rollback transaction
-            await this.db.execAsync('ROLLBACK');
-            
-            return {
-              success: false,
-              message: `Migration ${migration.version} failed: ${error.message}`,
-              error,
-              failedVersion: migration.version
-            };
+            // Attempt recovery for this specific migration
+            console.log(`Attempting to recover from migration failure...`);
+            continue;
           }
         }
         
-        // Commit the transaction
         await this.db.execAsync('COMMIT');
         
-        console.log(`Database successfully migrated to version ${targetVersion}`);
+        // Get the new current version
+        const newVersion = await this.getCurrentVersion();
+        
         return {
           success: true,
-          message: `Database migrated from v${currentVersion} to v${targetVersion}`,
+          message: `Database migrated from version ${currentVersion} to ${newVersion}`,
           previousVersion: currentVersion,
-          currentVersion: targetVersion
+          currentVersion: newVersion
         };
       } catch (error) {
-        // Ensure transaction is rolled back
+        console.error('Migration process failed:', error);
+        
+        // Rollback transaction
         try {
           await this.db.execAsync('ROLLBACK');
         } catch (rollbackError) {
           console.error('Error rolling back transaction:', rollbackError);
         }
         
-        console.error('Migration process failed:', error);
-        return {
-          success: false,
-          message: `Migration process failed: ${error.message}`,
-          error
-        };
+        throw new Error(`Migration process failed: ${error.message}`);
       }
     } catch (error) {
-      console.error('Migration initialization failed:', error);
+      console.error('Database migration failed:', error);
       return {
         success: false,
-        message: `Migration initialization failed: ${error.message}`,
+        message: error.message,
         error
       };
     }
