@@ -152,9 +152,8 @@ const OnboardingScreen = ({ navigation }) => {
       // Save user settings before completing onboarding
       await saveUserSettings();
       await markOnboardingComplete();
-      // Navigate to Home with slide from right animation
-      console.log("Onboarding completed - navigating to Home");
-      navigation.replace('Home', { fromRight: true });
+      // Use navigate instead of replace for better stability
+      navigation.navigate('Home', { fromRight: true });
     }
   };
 
@@ -162,9 +161,8 @@ const OnboardingScreen = ({ navigation }) => {
     // Save default user settings
     await saveUserSettings();
     await markOnboardingComplete();
-    // Navigate to Home with slide from right animation
-    console.log("Onboarding skipped - navigating to Home");
-    navigation.replace('Home', { fromRight: true });
+    // Use navigate instead of replace for better stability
+    navigation.navigate('Home', { fromRight: true });
   };
 
   const renderIcon = (iconName) => {

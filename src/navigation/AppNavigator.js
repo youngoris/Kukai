@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Dimensions } from "react-native";
+import { Dimensions, Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import storageService from '../services/storage/StorageService';
 
@@ -69,23 +69,16 @@ const AppNavigator = () => {
         const fromBack = params.fromBack === true;
         const fromRight = params.fromRight === true;
         
-        // Determine animation direction
-        let animation = "slide_from_right"; // Default slide from right
-        
-        if (fromBack) {
-          animation = "slide_from_left";
-        } else if (fromRight) {
-          animation = "slide_from_right";
-        }
-        
         return {
           headerShown: false,
           contentStyle: { backgroundColor: "#000" },
-          // Use animation based on parameters
-          animation: animation,
-          gestureEnabled: route.name !== "Home" && route.name !== "Settings" && route.name !== "Onboarding",
-          // This helps with the animation when replacing screens
-          animationTypeForReplace: "push",
+          // Use default animation on Android for better stability
+          animation: Platform.OS === 'android' ? undefined : (fromBack ? "slide_from_left" : "slide_from_right"),
+          gestureEnabled: Platform.OS === 'ios' && route.name !== "Home" && route.name !== "Settings" && route.name !== "Onboarding",
+          // Use default animation type on Android
+          animationTypeForReplace: Platform.OS === 'android' ? 'pop' : 'push',
+          // Add detachPreviousScreen option for Android
+          detachPreviousScreen: Platform.OS === 'android' ? false : true,
         };
       }}
     >
