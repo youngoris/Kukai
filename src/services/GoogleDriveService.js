@@ -14,7 +14,6 @@ import {
   GOOGLE_WEB_CLIENT_ID,
 } from "@env";
 import Constants from "expo-constants";
-import { Platform } from "react-native";
 
 // Ensure WebBrowser can complete the authentication session
 WebBrowser.maybeCompleteAuthSession();
@@ -151,172 +150,226 @@ class GoogleDriveService {
   // Perform Google authentication
   async authenticate() {
     try {
-      console.log("GoogleDriveService.authenticate: Starting authentication process");
+      console.log(
+        "GoogleDriveService.authenticate: Starting authentication process",
+      );
 
-      // Enhanced environment variable check
-      const missingConfigs = [];
-      if (!GOOGLE_API_CONFIG.expoClientId) missingConfigs.push('GOOGLE_EXPO_CLIENT_ID');
-      if (!GOOGLE_API_CONFIG.iosClientId) missingConfigs.push('GOOGLE_IOS_CLIENT_ID');
-      if (!GOOGLE_API_CONFIG.androidClientId) missingConfigs.push('GOOGLE_ANDROID_CLIENT_ID');
-      if (!GOOGLE_API_CONFIG.webClientId) missingConfigs.push('GOOGLE_WEB_CLIENT_ID');
-
-      if (missingConfigs.length > 0) {
-        const errorMsg = `Missing required Google API configurations: ${missingConfigs.join(', ')}`;
-        console.error("GoogleDriveService.authenticate:", errorMsg);
-        throw new Error(errorMsg);
+      // Verify environment variables are set
+      if (!GOOGLE_API_CONFIG.webClientId) {
+        console.error(
+          "GoogleDriveService.authenticate: Missing required clientId",
+        );
+        throw new Error("Missing Google API client ID");
       }
-
-      // Log platform-specific client ID being used
-      const platform = Platform.OS;
-      const clientId = platform === 'ios' 
-        ? GOOGLE_API_CONFIG.iosClientId 
-        : platform === 'android'
-          ? GOOGLE_API_CONFIG.androidClientId
-          : GOOGLE_API_CONFIG.webClientId;
-      
-      console.log(`GoogleDriveService.authenticate: Using ${platform} client ID:`, clientId.substring(0, 10) + '...');
 
       // Super simplified approach for Expo Go
-      if (useSimplifiedAuth) {
-        console.log("GoogleDriveService.authenticate: Using simplified auth for Expo Go");
-        return await this.authenticateSimplified();
-      }
+      if (isExpoGo) {
+        console.log(
+          "GoogleDriveService.authenticate: Running in Expo Go, using simpler method",
+        );
+        try {
+          // Use basic WebBrowser to open authorization page
+          const clientId = GOOGLE_API_CONFIG.webClientId;
+          const redirectUri = encodeURIComponent(
+            "https://auth.expo.io/@anonymous/kukai",
+          );
+          const scope = encodeURIComponent(GOOGLE_API_CONFIG.scopes.join(" "));
 
-      // Regular authentication flow
-      return await this.authenticateStandard();
+          const authUrl =
+            `https://accounts.google.com/o/oauth2/v2/auth?` +
+            `client_id=${clientId}` +
+            `&redirect_uri=${redirectUri}` +
+            `&response_type=token` +
+            `&scope=${scope}`;
 
-    } catch (error) {
-      console.error("GoogleDriveService.authenticate: Authentication failed:", error);
-      throw error;
-    }
-  }
+          console.log(
+            "Using simplified Auth URL:",
+            authUrl.substring(0, 100) + "...",
+          );
 
-  // Simplified authentication for Expo Go
-  async authenticateSimplified() {
-    try {
-      const clientId = GOOGLE_API_CONFIG.webClientId;
-      const redirectUri = encodeURIComponent("https://auth.expo.io/@anonymous/kukai");
-      const scope = encodeURIComponent(GOOGLE_API_CONFIG.scopes.join(" "));
+          // Open OAuth page with WebBrowser
+          const result = await WebBrowser.openAuthSessionAsync(
+            authUrl,
+            "com.andre.kukai://",
+          );
 
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${clientId}` +
-        `&redirect_uri=${redirectUri}` +
-        `&response_type=token` +
-        `&scope=${scope}`;
+          console.log("WebBrowser result:", result.type);
 
-      console.log("GoogleDriveService.authenticateSimplified: Opening auth URL");
+          if (result.type === "success") {
+            const { url } = result;
+            console.log("Redirect URL:", url.substring(0, 50) + "...");
 
-      const result = await WebBrowser.openAuthSessionAsync(
-        authUrl,
-        "com.andre.kukai://"
-      );
+            // Parse access token from URL
+            const accessToken = url.match(/access_token=([^&]*)/)?.[1];
+            if (accessToken) {
+              this.accessToken = accessToken;
+              this.expiresAt = Date.now() + 3600 * 1000; // 假设1小时过期
 
-      console.log("GoogleDriveService.authenticateSimplified: Auth result type:", result.type);
+              await this.saveAuthState();
+              return true;
+            }
+          }
 
-      if (result.type === "success" && result.url) {
-        console.log("GoogleDriveService.authenticateSimplified: Successful redirect");
-        
-        // Parse the URL to get the access token
-        const { url } = result;
-        const params = new URLSearchParams(url.split("#")[1]);
-        const accessToken = params.get("access_token");
-        
-        if (!accessToken) {
-          throw new Error("No access token received in redirect URL");
+          return false;
+        } catch (expoError) {
+          console.error(
+            "GoogleDriveService.authenticate (Expo Go): Simplified authentication failed:",
+            expoError,
+          );
+
+          // If simplified method fails, try standard method
+          try {
+            console.log("Trying alternate authentication method...");
+
+            // 这里采用原来的isExpoGo部分的代码...
+            const clientId =
+              GOOGLE_API_CONFIG.expoClientId || GOOGLE_API_CONFIG.webClientId;
+
+            const state = await Crypto.digestStringAsync(
+              Crypto.CryptoDigestAlgorithm.SHA256,
+              Math.random().toString(),
+            );
+
+            const redirectUri = AuthSession.makeRedirectUri({
+              useProxy: true,
+            });
+            console.log("Redirect URI:", redirectUri);
+
+            const authRequest = new AuthSession.AuthRequest({
+              clientId: clientId,
+              scopes: GOOGLE_API_CONFIG.scopes,
+              redirectUri: redirectUri,
+              state,
+            });
+
+            // Use lower timeout
+            const result = await Promise.race([
+              authRequest.promptAsync({
+                authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+                tokenUrl: "https://oauth2.googleapis.com/token",
+                returnUrl: redirectUri,
+              }),
+              new Promise((_, reject) =>
+                setTimeout(
+                  () => reject(new Error("Authentication timeout")),
+                  30000,
+                ),
+              ),
+            ]);
+
+            if (result.type === "success") {
+              this.accessToken = result.params.access_token;
+              this.refreshToken = result.params.refresh_token;
+
+              const expiresIn = result.params.expires_in
+                ? parseInt(result.params.expires_in)
+                : 3600;
+              this.expiresAt = Date.now() + expiresIn * 1000;
+
+              await this.saveAuthState();
+              return true;
+            }
+
+            return false;
+          } catch (backupError) {
+            console.error(
+              "Alternate authentication method also failed:",
+              backupError,
+            );
+            throw new Error(
+              "Authentication cannot be completed in Expo Go, please try using local backup feature",
+            );
+          }
+        }
+      } else {
+        // 保持原有的标准流程代码不变...
+        // Generate random state to prevent CSRF attacks
+        const state = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          Math.random().toString(),
+        );
+
+        console.log(
+          "GoogleDriveService.authenticate: Creating authentication request",
+        );
+        console.log(
+          "Using client ID:",
+          GOOGLE_API_CONFIG.webClientId.substring(0, 10) + "...",
+        );
+
+        // Create authentication request
+        const redirectUri = AuthSession.makeRedirectUri({ useProxy: true });
+        console.log("Redirect URI:", redirectUri);
+
+        const authRequest = new AuthSession.AuthRequest({
+          clientId: GOOGLE_API_CONFIG.webClientId,
+          scopes: GOOGLE_API_CONFIG.scopes,
+          redirectUri: redirectUri,
+          state,
+        });
+
+        console.log(
+          "GoogleDriveService.authenticate: Starting authentication process",
+        );
+        // Start authentication flow
+        const result = await authRequest.promptAsync({
+          authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+          tokenUrl: "https://oauth2.googleapis.com/token",
+          returnUrl: redirectUri,
+        });
+
+        console.log(
+          "GoogleDriveService.authenticate: Authentication result type:",
+          result.type,
+        );
+
+        if (result.type === "success") {
+          console.log(
+            "GoogleDriveService.authenticate: Authentication successful",
+          );
+
+          // Set authentication information
+          this.accessToken = result.params.access_token;
+          this.refreshToken = result.params.refresh_token;
+
+          // Calculate expiration time (usually 1 hour)
+          const expiresIn = result.params.expires_in
+            ? parseInt(result.params.expires_in)
+            : 3600;
+          this.expiresAt = Date.now() + expiresIn * 1000;
+
+          console.log(
+            "GoogleDriveService.authenticate: Saving authentication state",
+          );
+          // Save authentication state
+          await this.saveAuthState();
+
+          console.log(
+            "GoogleDriveService.authenticate: Ensuring backup folder exists",
+          );
+          // Ensure backup folder exists
+          await this.ensureBackupFolderExists();
+
+          return true;
+        } else if (result.type === "error") {
+          console.error(
+            "GoogleDriveService.authenticate: Authentication error:",
+            result.error,
+          );
+        } else if (result.type === "dismiss") {
+          console.log(
+            "GoogleDriveService.authenticate: User cancelled authentication",
+          );
         }
 
-        // Set the token and expiration
-        this.accessToken = accessToken;
-        this.expiresAt = Date.now() + (3600 * 1000); // 1 hour from now
-        
-        // Save the auth state
-        await this.saveAuthState();
-        
-        return true;
+        return false;
       }
-      
-      throw new Error(`Authentication failed: ${result.type}`);
-
     } catch (error) {
-      console.error("GoogleDriveService.authenticateSimplified: Failed:", error);
-      throw error;
-    }
-  }
-
-  // Standard authentication flow
-  async authenticateStandard() {
-    try {
-      // Generate random state to prevent CSRF attacks
-      const state = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        Math.random().toString()
+      console.error(
+        "GoogleDriveService.authenticate: Authentication failed:",
+        error,
       );
-
-      // Create redirect URI
-      const redirectUri = AuthSession.makeRedirectUri({ 
-        useProxy: false,
-        scheme: "com.andre.kukai"
-      });
-      
-      console.log("GoogleDriveService.authenticateStandard: Using redirect URI:", redirectUri);
-
-      // Create authentication request
-      const authRequest = new AuthSession.AuthRequest({
-        clientId: Platform.OS === 'ios' 
-          ? GOOGLE_API_CONFIG.iosClientId 
-          : GOOGLE_API_CONFIG.androidClientId,
-        scopes: GOOGLE_API_CONFIG.scopes,
-        redirectUri,
-        state,
-        responseType: "code",
-        usePKCE: true
-      });
-
-      console.log("GoogleDriveService.authenticateStandard: Starting OAuth flow");
-      
-      // Start authentication flow with timeout
-      const result = await Promise.race([
-        authRequest.promptAsync({
-          authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
-          tokenUrl: "https://oauth2.googleapis.com/token"
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Authentication timeout")), 30000)
-        )
-      ]);
-
-      console.log("GoogleDriveService.authenticateStandard: Auth result type:", result.type);
-
-      if (result.type === "success" && result.params) {
-        console.log("GoogleDriveService.authenticateStandard: Authentication successful");
-
-        // Set authentication information
-        this.accessToken = result.params.access_token;
-        this.refreshToken = result.params.refresh_token;
-
-        // Calculate expiration time
-        const expiresIn = result.params.expires_in 
-          ? parseInt(result.params.expires_in) 
-          : 3600;
-        this.expiresAt = Date.now() + expiresIn * 1000;
-
-        // Save authentication state
-        await this.saveAuthState();
-
-        // Ensure backup folder exists
-        await this.ensureBackupFolderExists();
-
-        return true;
-      } else if (result.type === "error") {
-        throw new Error(`Authentication error: ${result.error?.description || 'Unknown error'}`);
-      } else if (result.type === "dismiss") {
-        throw new Error("Authentication cancelled by user");
-      }
-
-      return false;
-    } catch (error) {
-      console.error("GoogleDriveService.authenticateStandard: Failed:", error);
-      throw error;
+      throw error; // Re-throw so caller can display appropriate error message
     }
   }
 

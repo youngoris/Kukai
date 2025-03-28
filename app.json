@@ -6,8 +6,8 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
-    "jsEngine": "jsc",
+    "newArchEnabled": true,
+    "jsEngine": "hermes",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -30,22 +30,16 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.andre.kukai",
-      "softwareKeyboardLayoutMode": "resize",
-      "allowsNotchDisplay": false,
-      "navigationBarColor": "#000000",
-      "statusBar": {
-        "backgroundColor": "#000000",
-        "translucent": false
-      }
+      "softwareKeyboardLayoutMode": "pan",
+      "allowsNotchDisplay": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "androidStatusBar": {
-      "hidden": false,
-      "translucent": false,
-      "barStyle": "light-content",
-      "backgroundColor": "#000000"
+      "hidden": true,
+      "translucent": true,
+      "barStyle": "light-content"
     },
     "plugins": [
       "expo-asset",
