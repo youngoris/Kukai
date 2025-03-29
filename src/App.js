@@ -20,6 +20,8 @@ import { AppProvider } from './context/AppContext';
 import AppNavigator from './navigation/AppNavigator';
 import { ErrorBoundary, setupGlobalErrorHandler } from './components/ErrorBoundary';
 import { errorLogger } from './services/errorLogger';
+import { ErrorProvider } from './context/ErrorContext';
+import { withErrorHandling } from './utils/errorHandlingUtils';
 
 // Import services
 import googleDriveService from "./services/GoogleDriveService";
@@ -61,7 +63,7 @@ export default function App() {
   // Initialize database with error handling
   useEffect(() => {
     const initializeDatabase = async () => {
-      try {
+      const result = await withErrorHandling(async () => {
         console.log("Initializing database...");
         
         // Make sure database service is properly instantiated
@@ -91,12 +93,11 @@ export default function App() {
         } else {
           throw new Error(`Database initialization failed: ${dbResult.error || 'Unknown error'}`);
         }
-      } catch (error) {
-        console.error("Failed to initialize database:", error);
-        // Log to error tracking system
-        errorLogger.logError(error, { componentStack: 'Database initialization' });
-        
-        // Continue app execution - we'll handle database errors at the component level
+      }, { operation: 'Database initialization' });
+      
+      if (!result.success) {
+        console.error("Database initialization error:", result.error);
+        // App can continue - we'll handle database errors at the component level
       }
     };
 
@@ -106,14 +107,13 @@ export default function App() {
   // Hide splash screen when fonts are loaded
   useEffect(() => {
     const hideSplash = async () => {
-      try {
+      const result = await withErrorHandling(async () => {
         if (fontsLoaded) {
           await SplashScreen.hideAsync();
         }
-      } catch (error) {
-        console.error("Error hiding splash screen:", error);
-        // Non-critical error, can continue
-      }
+      }, { operation: 'Hide splash screen', silent: true });
+      
+      // Non-critical error, can continue
     };
 
     hideSplash();
@@ -122,7 +122,7 @@ export default function App() {
   // Initialize Google Drive service with error handling
   useEffect(() => {
     const initializeGoogleDrive = async () => {
-      try {
+      const result = await withErrorHandling(async () => {
         console.log("Initializing Google Drive service...");
 
         // Print environment variables for debugging
@@ -151,11 +151,11 @@ export default function App() {
             await googleDriveService.checkAndPerformAutoSync();
           console.log("Auto sync check performed:", syncPerformed);
         }
-      } catch (error) {
-        console.error("Failed to initialize Google Drive service:", error);
-        // Log to error tracking system
-        errorLogger.logError(error, { componentStack: 'Google Drive initialization' });
+      }, { operation: 'Google Drive initialization' });
+      
+      if (!result.success) {
         // Continue without Google Drive integration
+        console.log("Continuing without Google Drive integration");
       }
     };
 
@@ -165,7 +165,7 @@ export default function App() {
   // Initialize notification service with error handling
   useEffect(() => {
     const initializeNotifications = async () => {
-      try {
+      const result = await withErrorHandling(async () => {
         const initialized = await notificationService.initialize();
         if (initialized) {
           console.log("Notification system initialized successfully");
@@ -174,11 +174,12 @@ export default function App() {
             "Notification system initialization failed, permissions may have been denied",
           );
         }
-      } catch (error) {
-        console.error("Failed to initialize notifications:", error);
-        // Log to error tracking system
-        errorLogger.logError(error, { componentStack: 'Notification initialization' });
+        return initialized;
+      }, { operation: 'Notification initialization' });
+      
+      if (!result.success) {
         // Continue without notifications
+        console.log("Continuing without notifications");
       }
     };
     
@@ -214,22 +215,24 @@ export default function App() {
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
-          <AppProvider>
-            <NavigationContainer 
-              ref={navigationRef}
-              onStateChange={(state) => {
-                // Track navigation state changes for error context
-                const currentRouteName = navigationRef.current?.getCurrentRoute()?.name;
-                if (currentRouteName) {
-                  // Store current route for error context
-                  global.currentScreen = currentRouteName;
-                }
-              }}
-            >
-              <StatusBar style="auto" />
-              <AppNavigator />
-            </NavigationContainer>
-          </AppProvider>
+          <ErrorProvider>
+            <AppProvider>
+              <NavigationContainer 
+                ref={navigationRef}
+                onStateChange={(state) => {
+                  // Track navigation state changes for error context
+                  const currentRouteName = navigationRef.current?.getCurrentRoute()?.name;
+                  if (currentRouteName) {
+                    // Store current route for error context
+                    global.currentScreen = currentRouteName;
+                  }
+                }}
+              >
+                <StatusBar style="auto" />
+                <AppNavigator />
+              </NavigationContainer>
+            </AppProvider>
+          </ErrorProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>

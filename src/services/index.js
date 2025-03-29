@@ -3,33 +3,63 @@
  * Central export point for all services in the application
  */
 
-// Database Core Services
+// Database services
 import databaseService from './DatabaseService';
-import { DatabaseMigrationService } from './DatabaseMigrationService';
-import databaseBackupService from './DatabaseBackupService';
 import databaseQueryOptimizer from './DatabaseQueryOptimizer';
+import databaseBackupService from './DatabaseBackupService';
+import databaseMigrationService from './DatabaseMigrationService';
 
+// Configuration services
+import configService from './ConfigService';
 
-// Validation and Error Services
-import validationService from './validation/ValidationService';
+// Storage services
+import storageService from './storage/StorageService';
+
+// External services
+import googleDriveService from './GoogleDriveService';
+import notificationService from './NotificationService';
+import speechService from './SpeechService';
+
+// Error handling
+import { errorLogger } from './errorLogger';
 import { 
-  DatabaseError, 
-  DatabaseErrorCodes, 
-  createDatabaseError, 
-  handleDatabaseError 
+  AppError, 
+  AppErrorCodes, 
+  createAppError, 
+  handleAppError 
+} from './errors/AppError';
+import { 
+  DatabaseError,
+  DatabaseErrorCodes,
+  createDatabaseError,
+  handleDatabaseError
 } from './errors/DatabaseError';
 
-// Export all services
+// Export services
 export {
-  // Database core
+  // Database services
   databaseService,
-  DatabaseMigrationService,
-  databaseBackupService,
   databaseQueryOptimizer,
+  databaseBackupService,
+  databaseMigrationService,
   
+  // Configuration services
+  configService,
   
-  // Validation and errors
-  validationService,
+  // Storage services
+  storageService,
+  
+  // External services
+  googleDriveService,
+  notificationService,
+  speechService,
+  
+  // Error handling
+  errorLogger,
+  AppError,
+  AppErrorCodes,
+  createAppError,
+  handleAppError,
   DatabaseError,
   DatabaseErrorCodes,
   createDatabaseError,

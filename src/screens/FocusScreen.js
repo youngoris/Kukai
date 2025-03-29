@@ -17,9 +17,12 @@ import {
   BackHandler,
   Alert,
   StatusBar as RNStatusBar,
+  Animated,
 } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Progress from "react-native-progress";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Audio } from "expo-av";
 import storageService from "../services/storage/StorageService";
 import { useFocusEffect } from "@react-navigation/native";
 import notificationService from "../services/NotificationService";
@@ -27,6 +30,7 @@ import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { withErrorHandling, withRetry } from "../utils/errorHandlingUtils";
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -54,6 +58,8 @@ export default function FocusScreen({ navigation }) {
   const [hasStartedBefore, setHasStartedBefore] = useState(false);
   const [appTheme, setAppTheme] = useState('dark');
   const [keepScreenAwake, setKeepScreenAwake] = useState(true);
+  const [focusSound, setFocusSound] = useState(null);
+  const [breakSound, setBreakSound] = useState(null);
 
   // Focus settings
   const [focusDuration, setFocusDuration] = useState(25);
@@ -70,6 +76,7 @@ export default function FocusScreen({ navigation }) {
   const timer = useRef(null);
   const sessionStartTime = useRef(null);
   const appState = useRef(AppState.currentState);
+  const iconAnimation = useRef(new Animated.Value(1)).current;
 
   // Get safe area insets
   const insets = useSafeAreaInsets();
@@ -96,6 +103,61 @@ export default function FocusScreen({ navigation }) {
     };
     
     loadUserSettings();
+  }, []);
+
+  // Load completion sounds
+  useEffect(() => {
+    // Set audio mode for playing sounds even when device is in silent mode
+    const setupAudio = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: true,
+          shouldDuckAndroid: true,
+        });
+      } catch (error) {
+        console.error('Error setting audio mode:', error);
+      }
+    };
+    
+    const loadSounds = async () => {
+      try {
+        // Load focus completion sound
+        const { sound: completeFocusSound } = await Audio.Sound.createAsync(
+          {
+            uri: "https://assets.mixkit.co/active_storage/sfx/2867/2867-preview.mp3",
+          },
+          { volume: 0.7 }
+        );
+        setFocusSound(completeFocusSound);
+        
+        // Load break completion sound
+        const { sound: completeBreakSound } = await Audio.Sound.createAsync(
+          {
+            uri: "https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3",
+          },
+          { volume: 0.7 }
+        );
+        setBreakSound(completeBreakSound);
+        
+        console.log("Focus and break completion sounds loaded successfully");
+      } catch (error) {
+        console.error("Unable to preload sound effects:", error);
+      }
+    };
+    
+    setupAudio();
+    loadSounds();
+    
+    // Clean up sounds on unmount
+    return () => {
+      if (focusSound) {
+        focusSound.unloadAsync();
+      }
+      if (breakSound) {
+        breakSound.unloadAsync();
+      }
+    };
   }, []);
 
   // Load focus settings when screen gets focus
@@ -151,8 +213,8 @@ export default function FocusScreen({ navigation }) {
       loadFocusSettings();
       
       return () => {
-        // Save session state when screen loses focus
-        saveSessionState();
+        // We no longer automatically save session state when the screen loses focus
+        // Session state is now only saved when the user clicks pause
       };
     }, [hasStartedBefore, hasInitialized])
   );
@@ -166,17 +228,31 @@ export default function FocusScreen({ navigation }) {
     registerForNotifications();
 
     const subscription = AppState.addEventListener("change", (nextAppState) => {
-      if (
-        appState.current.match(/inactive|background/) &&
-        nextAppState === "active" &&
-        isActive
-      ) {
+      // When app goes to background, save the current session state
+      if (appState.current === "active" && nextAppState.match(/inactive|background/)) {
+        saveSessionState();
+        
+        // 如果倒计时即将结束（少于5秒）且应用进入后台，发送通知
+        if (isActive && timeRemaining <= 5 && timeRemaining > 0) {
+          // 安排一个通知在剩余秒数后触发
+          setTimeout(() => {
+            if (AppState.currentState.match(/inactive|background/)) {
+              triggerNotification();
+            }
+          }, timeRemaining * 1000);
+        }
+      }
+      
+      // When app comes to foreground and session is active, update timer
+      if (appState.current.match(/inactive|background/) && 
+          nextAppState === "active" && 
+          isActive) {
         handleAppForeground();
       }
       appState.current = nextAppState;
     });
     return () => subscription.remove();
-  }, [isActive]);
+  }, [isActive, timeRemaining]);
 
   // Handle logic when app returns to foreground
   const handleAppForeground = () => {
@@ -206,9 +282,15 @@ export default function FocusScreen({ navigation }) {
       }, 1000);
     } else if (isActive && timeRemaining <= 0) {
       clearInterval(timer.current);
+      
+      // only trigger notification when app is in background
+      const isAppInBackground = appState.current.match(/inactive|background/);
+      if (isAppInBackground && focusNotifications && notificationPermission) {
+        triggerNotification();
+      }
+      
       if (!isBreak) handleFocusComplete();
       else handleBreakComplete();
-      if (focusNotifications && notificationPermission) triggerNotification();
     }
     return () => clearInterval(timer.current);
   }, [
@@ -239,6 +321,8 @@ export default function FocusScreen({ navigation }) {
     } else {
       setIsActive(false);
       clearInterval(timer.current);
+      // Save session state when user clicks pause button
+      saveSessionState();
     }
   };
 
@@ -316,8 +400,14 @@ export default function FocusScreen({ navigation }) {
     // Update state
     setIsActive(false);
     
+    // Play completion sound if app is in foreground
+    playCompletionSound();
+    
     // Vibrate device
     Vibration.vibrate([0, 500, 200, 500]);
+    
+    // Save session state when focus session completes
+    await saveSessionState();
     
     // Show choice or auto-start break
     if (autoStartNextFocus) {
@@ -353,20 +443,35 @@ export default function FocusScreen({ navigation }) {
 
   // Handle break time completion
   const handleBreakComplete = () => {
+    // Clear timer
+    clearInterval(timer.current);
+    
+    // Update state
     setIsActive(false);
-    setIsBreak(false);
-    setTimeRemaining(focusDuration * 60);
-    setProgress(0);
-    setShowChoice(false);
+    
+    // Keep break state true to show correct completion screen
+    // setIsBreak(false); - 不在这里重置break状态
+    
+    // Play break completion sound if app is in foreground
+    playCompletionSound();
+    
+    // Vibrate device
     Vibration.vibrate(500);
-    setHasStartedBefore(false);
-
-    // Auto-start next focus session if enabled
+    
+    // Show choice or auto-start focus
     if (autoStartNextFocus) {
       setTimeout(() => {
+        // Reset break state before starting next focus
+        setIsBreak(false);
+        setTimeRemaining(focusDuration * 60);
+        setProgress(0);
         setIsActive(true);
         sessionStartTime.current = new Date();
+        setHasStartedBefore(false);
       }, 1500);
+    } else {
+      // Show break complete screen
+      setShowChoice(true);
     }
   };
 
@@ -400,7 +505,12 @@ export default function FocusScreen({ navigation }) {
   // Trigger notification
   const triggerNotification = async () => {
     // Only send notification if user has enabled focus notifications
-    if (!focusNotifications) return;
+    if (!focusNotifications) {
+      console.log('Focus notifications disabled, skipping notification');
+      return;
+    }
+
+    console.log('Triggering notification, app state:', AppState.currentState);
 
     // Check if it's time for a long break
     let isLongBreak = false;
@@ -420,6 +530,8 @@ export default function FocusScreen({ navigation }) {
         : "Work session complete! Take a break or continue?";
 
     // Use notification service to send immediate notification
+    console.log(`Sending notification: ${title} - ${body}`);
+    
     await notificationService.sendImmediateNotification(title, body, {
       screen: "Focus",
       isBreak: isBreak,
@@ -431,9 +543,12 @@ export default function FocusScreen({ navigation }) {
   const renderProgressDots = () => {
     // Create an array with length of longBreakInterval
     const dots = Array.from({ length: longBreakInterval }, (_, index) => {
+      // Calculate session progress within the current circle
+      const sessionPosition = ((pomodoroCount + (isBreak ? 0 : 1) - 1) % longBreakInterval) + 1;
+      
       // Calculate if the current dot is completed, current, or incomplete
-      const isCompleted = index < pomodoroCount % longBreakInterval;
-      const isCurrent = !isBreak && index === pomodoroCount % longBreakInterval;
+      const isCompleted = index < sessionPosition - 1;
+      const isCurrent = index === sessionPosition - 1;
 
       // Return different styled dots based on status
       return (
@@ -456,8 +571,13 @@ export default function FocusScreen({ navigation }) {
   };
 
   // Save the current session state
+  // This is now only called:
+  // 1. When the user manually pauses the timer via toggleTimer
+  // 2. When a focus session naturally completes
+  // 3. When navigating away from the screen via back button
+  // 4. When the app is backgrounded (handled in AppState listener)
   const saveSessionState = async () => {
-    try {
+    const result = await withErrorHandling(async () => {
       // Don't save if session never started
       if (!hasStartedBefore && !isActive) {
         console.log('Session never started, nothing to save');
@@ -495,17 +615,29 @@ export default function FocusScreen({ navigation }) {
         timestamp: new Date().toISOString()
       };
       
-      // Save to AsyncStorage
-      await storageService.setItem('focusSessionState', JSON.stringify(sessionState));
+      // Use withRetry to handle potential storage errors with exponential backoff
+      await withRetry(async () => {
+        // Save to storage
+        await storageService.setItem('focusSessionState', JSON.stringify(sessionState));
+      }, {
+        maxRetries: 3,
+        initialDelay: 100
+      });
+      
       console.log('Focus session state saved successfully');
-    } catch (error) {
-      console.error('Error saving focus session state:', error);
+    }, { 
+      operation: 'Save focus session', 
+      silent: false
+    });
+    
+    if (!result.success) {
+      console.log('Failed to save session state:', result.error.message);
     }
   };
 
   // Restore session state from AsyncStorage
   const restoreSessionState = async () => {
-    try {
+    const result = await withErrorHandling(async () => {
       console.log('Attempting to restore focus session state');
       
       // First load latest user settings
@@ -517,8 +649,14 @@ export default function FocusScreen({ navigation }) {
       setLongBreakDuration(userSettings.longBreakDuration || 15);
       setLongBreakInterval(userSettings.longBreakInterval || 4);
       
-      // Get saved session state
-      const sessionStateJSON = await storageService.getItem('focusSessionState');
+      // Use withRetry to handle potential storage errors with exponential backoff
+      const sessionStateJSON = await withRetry(async () => {
+        return await storageService.getItem('focusSessionState');
+      }, {
+        maxRetries: 3,
+        initialDelay: 100
+      });
+      
       if (!sessionStateJSON) {
         console.log('No saved session state found, initializing with user settings');
         setTimeRemaining(userSettings.focusDuration * 60 || 25 * 60);
@@ -528,7 +666,20 @@ export default function FocusScreen({ navigation }) {
       }
       
       console.log('Found saved session state, checking if settings were changed');
-      const sessionState = JSON.parse(sessionStateJSON);
+      let sessionState;
+      
+      try {
+        sessionState = JSON.parse(sessionStateJSON);
+      } catch (error) {
+        console.error('Error parsing session state JSON:', error);
+        // If we can't parse the JSON, treat it as if there's no saved state
+        setTimeRemaining(userSettings.focusDuration * 60 || 25 * 60);
+        await loadTodayPomodoroCount();
+        
+        // Try to remove the corrupted state
+        await storageService.removeItem('focusSessionState');
+        return;
+      }
       
       // Check if user changed focus settings since last session
       const settingsChanged = 
@@ -580,8 +731,13 @@ export default function FocusScreen({ navigation }) {
       
       // Load today's pomodoro count
       await loadTodayPomodoroCount();
-    } catch (error) {
-      console.error('Error restoring focus session state:', error);
+    }, { 
+      operation: 'Restore focus session', 
+      silent: false
+    });
+    
+    if (!result.success) {
+      console.log('Failed to restore session state:', result.error.message);
       
       // Initialize with default values in case of error
       const settings = await getSettingsWithDefaults();
@@ -595,13 +751,24 @@ export default function FocusScreen({ navigation }) {
 
   // Check if app has been restarted
   const checkAppRestart = async () => {
-    try {
+    const result = await withErrorHandling(async () => {
       // Get the last app launch timestamp
-      const lastLaunchTime = await storageService.getItem('appLastLaunchTime');
+      const lastLaunchTime = await withRetry(async () => {
+        return await storageService.getItem('appLastLaunchTime');
+      }, {
+        maxRetries: 2,
+        initialDelay: 100
+      });
+      
       const currentTime = new Date().toISOString();
       
-      // Save current launch time
-      await storageService.setItem('appLastLaunchTime', currentTime);
+      // Save current launch time with retry mechanism
+      await withRetry(async () => {
+        await storageService.setItem('appLastLaunchTime', currentTime);
+      }, {
+        maxRetries: 2,
+        initialDelay: 100
+      });
       
       // If no last launch time exists, this is first launch
       if (!lastLaunchTime) {
@@ -617,16 +784,24 @@ export default function FocusScreen({ navigation }) {
       
       // If more than 5 minutes have passed, consider it a restart
       return minutesSinceLastLaunch > 5;
-    } catch (error) {
-      console.error('Error checking app restart:', error);
+    }, { 
+      operation: 'Check app restart', 
+      silent: true 
+    });
+    
+    // Default to false (assume not restarted) if there was an error
+    if (!result.success) {
+      console.log('Error in checkAppRestart, assuming not restarted:', result.error.message);
       return false;
     }
+    
+    return result.data;
   };
 
   // Restore session state when component mounts
   useEffect(() => {
     const initializeSession = async () => {
-      try {
+      const result = await withErrorHandling(async () => {
         // Always load latest user settings
         const userSettings = await getSettingsWithDefaults();
         
@@ -651,19 +826,38 @@ export default function FocusScreen({ navigation }) {
           setPomodoroCount(0);
           sessionStartTime.current = null;
           
-          // Clear any saved session state
-          await storageService.removeItem('focusSessionState');
+          // Clear any saved session state with retry for reliability
+          await withRetry(async () => {
+            await storageService.removeItem('focusSessionState');
+          }, {
+            maxRetries: 2,
+            initialDelay: 100,
+            shouldRetry: (error) => {
+              console.log('Retry removing focusSessionState:', error.message);
+              return true;
+            }
+          });
         } else {
           console.log('App resumed, attempting to restore session');
           // App was just backgrounded/foregrounded, restore previous session
           await restoreSessionState();
         }
-      } catch (error) {
-        console.error('Error in initializeSession:', error);
-        // Set safe default values
-        setTimeRemaining(25 * 60);
-        setProgress(0);
-      }
+        
+        return true;
+      }, { 
+        operation: 'Initialize focus session', 
+        silent: false,
+        onError: (error) => {
+          console.log('Error in initializeSession, setting safe defaults:', error.message);
+          // Set safe default values in case of unhandled error
+          setTimeRemaining(25 * 60);
+          setProgress(0);
+          setIsActive(false); 
+          setHasStartedBefore(false);
+        }
+      });
+      
+      // No additional handling needed here since onError in options handles the failure case
     };
     
     initializeSession();
@@ -673,9 +867,9 @@ export default function FocusScreen({ navigation }) {
   useFocusEffect(
     useCallback(() => {
       return () => {
-        saveSessionState();
+        // Only save state when screen is unmounted, not on every state change
       };
-    }, [timeRemaining, isActive, isBreak, pomodoroCount, progress, hasStartedBefore])
+    }, [])
   );
 
   // Handle navigation back button press
@@ -785,31 +979,105 @@ export default function FocusScreen({ navigation }) {
     };
   }, []);
 
+  // 完成图标动画效果
+  useEffect(() => {
+    if (showChoice) {
+      // 创建一个循环动画，使图标略微放大和缩小
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(iconAnimation, {
+            toValue: 1.2,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(iconAnimation, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      // 重置动画
+      iconAnimation.setValue(1);
+    }
+    
+    return () => {
+      iconAnimation.setValue(1);
+    };
+  }, [showChoice, iconAnimation]);
+
+  // Play completion sound based on session type
+  const playCompletionSound = async () => {
+    try {
+      // Don't play sound if app is in foreground and should instead use vibration
+      const isAppInBackground = appState.current.match(/inactive|background/);
+      if (isAppInBackground) {
+        return; // Skip sound if app is in background (notification will be shown instead)
+      }
+      
+      // Select and play the correct sound based on session type
+      const soundToPlay = isBreak ? breakSound : focusSound;
+      
+      if (soundToPlay) {
+        // Make sure the sound is at the beginning
+        await soundToPlay.setPositionAsync(0);
+        await soundToPlay.playAsync();
+        console.log(`${isBreak ? 'Break' : 'Focus'} completion sound played`);
+      }
+    } catch (error) {
+      console.error("Error playing completion sound:", error);
+    }
+  };
+
   // Render interface
   return (
     <View style={[
       styles.container, 
-      isLightTheme && styles.lightContainer,
-      { 
-        paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
-        paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
-      }
+      isLightTheme && styles.lightContainer
     ]}>
-      {/* Header - Hide back button during focus or break */}
-      <CustomHeader 
-        title="FOCUS"
-        onBackPress={handleBackPress}
-        hideBackButton={isActive} // Hide back button when timer is active
-        showBottomBorder={false}
-      />
+      {/* 状态栏空间 */}
+      <View style={{
+        height: Platform.OS === 'android' ? STATUSBAR_HEIGHT : insets.top,
+      }} />
+      
+      {/* Header区域 - 固定高度 */}
+      <View style={styles.headerContainer}>
+        {!isActive && (
+          <CustomHeader 
+            title="FOCUS"
+            onBackPress={handleBackPress}
+            hideBackButton={false}
+            showBottomBorder={false}
+          />
+        )}
+      </View>
 
       {/* Main content area */}
-      <View style={[styles.contentContainer, isLightTheme && styles.lightContentContainer]}>
+      <View style={[
+        styles.contentContainer, 
+        isLightTheme && styles.lightContentContainer
+      ]}>
         {showChoice ? (
           <View style={[styles.choiceContainer, isLightTheme && styles.lightChoiceContainer]}>
-            <Text style={[styles.choiceText, isLightTheme && styles.lightText]}>Work Session Complete!</Text>
+            <Animated.View style={{ 
+              transform: [{ scale: iconAnimation }],
+              marginBottom: 10 
+            }}>
+              <MaterialCommunityIcons 
+                name={isBreak ? "coffee-outline" : "check-circle-outline"} 
+                size={60} 
+                color={isLightTheme ? "#000000" : "#FFFFFF"} 
+              />
+            </Animated.View>
+            <Text style={[styles.choiceText, isLightTheme && styles.lightText]}>
+              {isBreak ? "Break Time Complete!" : "Work Session Complete!"}
+            </Text>
             <Text style={[styles.choiceSubtext, isLightTheme && styles.lightSubtext]}>
-              You've completed {pomodoroCount} pomodoros
+              {isBreak 
+                ? "Ready to get back to work?" 
+                : `You've completed ${pomodoroCount} pomodoros`
+              }
             </Text>
 
             {/* Modify display text based on whether it's long break time */}
@@ -833,9 +1101,9 @@ export default function FocusScreen({ navigation }) {
         ) : (
           <>
             <Text style={[styles.subHeaderText, isLightTheme && styles.lightText]}>
-              {isBreak ? "BREAK" : "SESSION"}{" "}
-              {Math.floor(pomodoroCount / longBreakInterval) + 1}.
-              {(pomodoroCount % longBreakInterval) + 1}
+              {"SESSION"}{" "}
+              {Math.ceil((pomodoroCount + (isBreak ? 0 : 1)) / longBreakInterval)}.
+              {((pomodoroCount + (isBreak ? 0 : 1) - 1) % longBreakInterval) + 1}
             </Text>
             <Text style={[styles.subText, isLightTheme && styles.lightSubtext]}>
               {isActive
@@ -853,8 +1121,8 @@ export default function FocusScreen({ navigation }) {
                 <Progress.Circle
                   size={240}
                   thickness={8}
-                  color="#FFFFFF"
-                  unfilledColor="rgba(255, 255, 255, 0.2)"
+                  color={isLightTheme ? "#000000" : "#FFFFFF"}
+                  unfilledColor={isLightTheme ? "rgba(0, 0, 0, 0.2)" : "rgba(255, 255, 255, 0.2)"}
                   progress={progress}
                 />
                 <Text style={[styles.timerText, isLightTheme && styles.lightText]}>
@@ -878,6 +1146,22 @@ export default function FocusScreen({ navigation }) {
             </View>
           </>
         )}
+      </View>
+
+      {/* 底部安全区域 */}
+      <View style={[
+        styles.footer,
+        { paddingBottom: insets.bottom > 0 ? insets.bottom : 20 }
+      ]}>
+        <View style={styles.statsContainer}>
+          <Text style={styles.statsText}>{pomodoroCount} Pomodoros</Text>
+          <MaterialCommunityIcons 
+            name="timer-outline" 
+            size={16} 
+            color="#666666"
+            style={styles.tomatoIcon} 
+          />
+        </View>
       </View>
 
       {/* Confirmation modal */}
@@ -907,25 +1191,21 @@ export default function FocusScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-
-      {/* Footer */}
-      <View style={styles.footer}>
-        <Text style={styles.statsText}>Pomodoros: {pomodoroCount}</Text>
-      </View>
     </View>
   );
 }
 
 // Style definitions
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000000" },
-  header: {
-    position: "relative",
+  container: { 
+    flex: 1, 
+    backgroundColor: "#000000" 
+  },
+  headerContainer: {
     width: "100%",
-    paddingTop: 10,
-    paddingBottom: 20,
+    height: 60, // fixed height
+    justifyContent: "center",
     alignItems: "center",
-    // marginBottom: 20,
   },
   backButton: {
     position: "absolute",
@@ -1003,12 +1283,18 @@ const styles = StyleSheet.create({
   footer: {
     width: "100%",
     alignItems: "center",
-    paddingBottom: 20,
     marginTop: "auto",
+  },
+  statsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   statsText: {
     color: "#666666",
     fontSize: 14,
+  },
+  tomatoIcon: {
+    marginLeft: 5,
   },
   modalOverlay: {
     flex: 1,
