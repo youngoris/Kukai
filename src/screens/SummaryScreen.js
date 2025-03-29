@@ -116,7 +116,19 @@ const SummaryScreen = ({ navigation }) => {
     loadData();
     generateMonthDates();
 
-    // Animation effects removed as requested
+    // Fade-in animation when the screen loads
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
 
   // Add effect to reload data when selected date changes
@@ -253,18 +265,12 @@ const SummaryScreen = ({ navigation }) => {
   // Generate array of dates for the month with the selected date in the middle
   const generateMonthDates = () => {
     const today = new Date();
+    
+    // Generate 7 dates with today in the middle (3 days before, today, 3 days after)
     const datesArray = [];
-    
-    // Generate dates for the current month
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    
-    // Get last day of month
-    const lastDay = new Date(currentYear, currentMonth + 1, 0);
-    
-    // Generate all dates in the current month
-    for (let i = 1; i <= lastDay.getDate(); i++) {
-      const date = new Date(currentYear, currentMonth, i);
+    for (let i = -3; i <= 3; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
       datesArray.push(date);
     }
     
@@ -277,38 +283,21 @@ const SummaryScreen = ({ navigation }) => {
   // Reference for the dates ScrollView
   const datesScrollViewRef = useRef(null);
   
+  // Function to update visible dates based on selected date
+  const updateVisibleDates = (centralDate) => {
+    const datesArray = [];
+    for (let i = -3; i <= 3; i++) {
+      const date = new Date(centralDate);
+      date.setDate(centralDate.getDate() + i);
+      datesArray.push(date);
+    }
+    setMonthDates(datesArray);
+  };
+  
   // Function to center selected date in the scroll view
   const centerSelectedDate = (date) => {
-    setTimeout(() => {
-      if (datesScrollViewRef.current && monthDates.length > 0) {
-        // Find the index of the date in our monthDates array
-        const dateIndex = monthDates.findIndex(d => 
-          d.getDate() === date.getDate() && 
-          d.getMonth() === date.getMonth() && 
-          d.getFullYear() === date.getFullYear()
-        );
-        
-        if (dateIndex === -1) return; // Date not found in the array
-        
-        // Simple centering approach - calculate item width and approximate center
-        const itemWidth = 44; // Width + margin
-        const scrollViewWidth = 280; // Approximate width of scroll view
-        
-        // Calculate position that would center the item
-        const centerOffset = (scrollViewWidth / 2) - (itemWidth / 2);
-        const scrollToX = dateIndex * itemWidth - centerOffset;
-        
-        // Ensure we don't scroll beyond bounds
-        const maxScroll = monthDates.length * itemWidth - scrollViewWidth;
-        const boundedX = Math.max(0, Math.min(scrollToX, maxScroll > 0 ? maxScroll : 0));
-        
-        // Perform the scroll
-        datesScrollViewRef.current.scrollTo({
-          x: boundedX,
-          animated: true
-        });
-      }
-    }, 50);
+    // No need for complex scrolling logic since we'll always show 7 dates
+    // with selected date in the middle
   };
   
   // Show month selector modal
@@ -326,14 +315,7 @@ const SummaryScreen = ({ navigation }) => {
       newDate.setDate(lastDayOfMonth);
     }
     
-    // Generate dates for the selected month
-    const newMonthDates = [];
-    for (let i = 1; i <= lastDayOfMonth; i++) {
-      const date = new Date(year, month, i);
-      newMonthDates.push(date);
-    }
-    
-    setMonthDates(newMonthDates);
+    // Update selected date and visible dates
     handleDateSelect(newDate);
     // Don't close the picker automatically when selecting month/year
   };
@@ -376,41 +358,23 @@ const SummaryScreen = ({ navigation }) => {
     const isSelectedToday = isToday(date);
     setIsViewingHistory(!isSelectedToday);
     
-    // Center the selected date - needs a slight delay to ensure UI updates first
-    setTimeout(() => centerSelectedDate(date), 10);
+    // Update visible dates with selected date in the middle
+    updateVisibleDates(date);
   };
 
   // Update Today button in month picker modal
   const goToToday = () => {
     const today = new Date();
     
-    // Update the month and dates
-    const month = today.getMonth();
-    const year = today.getFullYear();
-    
-    // Get the last day of the month
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    
-    // Generate dates for current month
-    const newMonthDates = [];
-    for (let i = 1; i <= lastDay; i++) {
-      const date = new Date(year, month, i);
-      newMonthDates.push(date);
-    }
-    
-    setMonthDates(newMonthDates);
-    
     // Update selected date
     setSelectedDate(today);
     setIsViewingHistory(false); // Today is not history
     
+    // Update visible dates with today in the middle
+    updateVisibleDates(today);
+    
     // Close the modal
     setShowMonthPicker(false);
-    
-    // Wait for UI to update, then center the date
-    setTimeout(() => {
-      centerSelectedDate(today);
-    }, 100);
   };
 
   const loadData = async () => {
@@ -878,6 +842,44 @@ const SummaryScreen = ({ navigation }) => {
     }
   }, [monthDates]);
 
+  // Handle previous day navigation
+  const handlePreviousDay = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(selectedDate.getDate() - 1);
+    
+    // Update selected date
+    setSelectedDate(newDate);
+    
+    // Check if selected date is today
+    const isSelectedToday = isToday(newDate);
+    setIsViewingHistory(!isSelectedToday);
+    
+    // Update visible dates with selected date in the middle
+    updateVisibleDates(newDate);
+  };
+  
+  // Handle next day navigation
+  const handleNextDay = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(selectedDate.getDate() + 1);
+    
+    // Only allow selecting up to today
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    
+    if (newDate <= today) {
+      // Update selected date
+      setSelectedDate(newDate);
+      
+      // Check if selected date is today
+      const isSelectedToday = isToday(newDate);
+      setIsViewingHistory(!isSelectedToday);
+      
+      // Update visible dates with selected date in the middle
+      updateVisibleDates(newDate);
+    }
+  };
+
   return (
     <View
       style={[
@@ -939,51 +941,12 @@ const SummaryScreen = ({ navigation }) => {
           <View style={styles.dateSelectionContainer}>
             <TouchableOpacity 
               style={styles.dateNavigationButton}
-              onPress={() => {
-                // Handle previous day navigation
-                const newDate = new Date(selectedDate);
-                newDate.setDate(selectedDate.getDate() - 1);
-                
-                // If moving to previous month, regenerate dates
-                if (newDate.getMonth() !== selectedDate.getMonth()) {
-                  const newMonthDates = [];
-                  const currentMonth = newDate.getMonth();
-                  const currentYear = newDate.getFullYear();
-                  
-                  // Get last day of month
-                  const lastDay = new Date(currentYear, currentMonth + 1, 0);
-                  
-                  // Generate all dates in the current month
-                  for (let i = 1; i <= lastDay.getDate(); i++) {
-                    const date = new Date(currentYear, currentMonth, i);
-                    newMonthDates.push(date);
-                  }
-                  
-                  setMonthDates(newMonthDates);
-                }
-                
-                // Update selected date after any potential month changes
-                setSelectedDate(newDate);
-                
-                // Check if selected date is today
-                const isSelectedToday = isToday(newDate);
-                setIsViewingHistory(!isSelectedToday);
-                
-                // Use a timeout to ensure UI updates before scrolling
-                setTimeout(() => {
-                  centerSelectedDate(newDate);
-                }, 50);
-              }}
+              onPress={handlePreviousDay}
             >
               <AntDesign name="left" size={18} color="#AAAAAA" />
             </TouchableOpacity>
             
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.datesScrollContent}
-              ref={datesScrollViewRef}
-            >
+            <View style={styles.datesContainer}>
               {monthDates.map((date, index) => (
                 <TouchableOpacity
                   key={index}
@@ -992,18 +955,7 @@ const SummaryScreen = ({ navigation }) => {
                     isSelected(date) && styles.selectedDateItem,
                     isToday(date) && !isSelected(date) && styles.todayDateItem
                   ]}
-                  onPress={() => {
-                    setSelectedDate(date);
-                    
-                    // Check if selected date is today
-                    const isSelectedToday = isToday(date);
-                    setIsViewingHistory(!isSelectedToday);
-                    
-                    // Use a timeout to ensure UI updates before scrolling
-                    setTimeout(() => {
-                      centerSelectedDate(date);
-                    }, 50);
-                  }}
+                  onPress={() => handleDateSelect(date)}
                 >
                   <Text style={[
                     styles.dateItemText,
@@ -1019,51 +971,11 @@ const SummaryScreen = ({ navigation }) => {
                   )}
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
             
             <TouchableOpacity 
               style={styles.dateNavigationButton}
-              onPress={() => {
-                // Handle next day navigation
-                const newDate = new Date(selectedDate);
-                newDate.setDate(selectedDate.getDate() + 1);
-                
-                // Only allow selecting up to today
-                const today = new Date();
-                today.setHours(23, 59, 59, 999);
-                
-                if (newDate <= today) {
-                  // If moving to next month, regenerate dates
-                  if (newDate.getMonth() !== selectedDate.getMonth()) {
-                    const newMonthDates = [];
-                    const currentMonth = newDate.getMonth();
-                    const currentYear = newDate.getFullYear();
-                    
-                    // Get last day of month
-                    const lastDay = new Date(currentYear, currentMonth + 1, 0);
-                    
-                    // Generate all dates in the current month
-                    for (let i = 1; i <= lastDay.getDate(); i++) {
-                      const date = new Date(currentYear, currentMonth, i);
-                      newMonthDates.push(date);
-                    }
-                    
-                    setMonthDates(newMonthDates);
-                  }
-                  
-                  // Update selected date after any potential month changes
-                  setSelectedDate(newDate);
-                  
-                  // Check if selected date is today
-                  const isSelectedToday = isToday(newDate);
-                  setIsViewingHistory(!isSelectedToday);
-                  
-                  // Use a timeout to ensure UI updates before scrolling
-                  setTimeout(() => {
-                    centerSelectedDate(newDate);
-                  }, 50);
-                }
-              }}
+              onPress={handleNextDay}
             >
               <AntDesign name="right" size={18} color="#AAAAAA" />
             </TouchableOpacity>
@@ -1877,6 +1789,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 8,
     width: "100%",
+    paddingHorizontal: 0,
   },
   dateNavigationButton: {
     padding: 8,
@@ -1886,19 +1799,23 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: "center",
     justifyContent: "center",
+    marginHorizontal: 0,
   },
-  datesScrollContent: {
-    paddingHorizontal: 5,
-    flexGrow: 0,
+  datesContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flex: 1,
+    paddingHorizontal: 10,
   },
   dateItem: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    marginHorizontal: 4,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
+    marginHorizontal: 0,
   },
   dateItemText: {
     color: "#AAAAAA",
