@@ -519,7 +519,7 @@ const TaskScreen = ({ navigation }) => {
       
       // Show reminder options and hide time picker
       setShowReminderOptions(true);
-      setShowTimePicker(false); // 确保关闭时间选择器
+      setShowTimePicker(false); // Make sure to close the time picker
     }
   };
 

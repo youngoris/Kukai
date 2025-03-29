@@ -1,6 +1,6 @@
 import 'dotenv/config';
 
-// 基础配置，从app.json复制
+// Basic configuration, copied from app.json
 const baseConfig = {
   name: "kukai",
   slug: "kukai",
@@ -21,11 +21,11 @@ const baseConfig = {
     infoPlist: {
       NSHealthShareUsageDescription: "This app requires access to save your meditation sessions as mindfulness data",
       NSHealthUpdateUsageDescription: "This app requires access to save your meditation sessions as mindfulness data",
-      NSLocationWhenInUseUsageDescription: "此应用需要访问您的位置以提供天气信息和地理位置相关服务",
-      NSLocationAlwaysAndWhenInUseUsageDescription: "此应用需要访问您的位置以提供天气信息和地理位置相关功能",
-      NSLocationAlwaysUsageDescription: "此应用需要访问您的位置以提供天气信息和地理位置相关功能",
-      NSMicrophoneUsageDescription: "此应用需要使用麦克风来提供语音功能",
-      NSSpeechRecognitionUsageDescription: "此应用需要使用语音识别功能"
+      NSLocationWhenInUseUsageDescription: "This app needs access to your location to provide weather information and location-related services",
+      NSLocationAlwaysAndWhenInUseUsageDescription: "This app needs access to your location to provide weather information and location-related features",
+      NSLocationAlwaysUsageDescription: "This app needs access to your location to provide weather information and location-related features",
+      NSMicrophoneUsageDescription: "This app needs to use the microphone to provide voice features",
+      NSSpeechRecognitionUsageDescription: "This app needs to use speech recognition features"
     }
   },
   android: {
@@ -59,7 +59,7 @@ const baseConfig = {
     eas: {
       projectId: "8ee33501-ec7b-4c56-a239-e273a87a6f87"
     },
-    // 添加环境变量
+    // Add environment variables
     WEATHER_API_KEY: process.env.WEATHER_API_KEY,
     WEATHER_API_BASE_URL: process.env.WEATHER_API_BASE_URL,
     WEATHER_API_UNITS: process.env.WEATHER_API_UNITS,
@@ -69,7 +69,7 @@ const baseConfig = {
     GOOGLE_IOS_CLIENT_ID: process.env.GOOGLE_IOS_CLIENT_ID,
     GOOGLE_ANDROID_CLIENT_ID: process.env.GOOGLE_ANDROID_CLIENT_ID,
     GOOGLE_WEB_CLIENT_ID: process.env.GOOGLE_WEB_CLIENT_ID,
-    // Azure Speech服务配置
+    // Azure Speech service configuration
     AZURE_SPEECH_KEY: process.env.AZURE_SPEECH_KEY || "3Y8Qt08l6WRPyDvcvOdhS2ykUJoVXENnrHHVWsZfaOoCSXspOIWLJQQJ99BCAC3pKaRXJ3w3AAAYACOGitgl",
     AZURE_SPEECH_REGION: process.env.AZURE_SPEECH_REGION || "eastus",
     AZURE_SPEECH_ENDPOINT: process.env.AZURE_SPEECH_ENDPOINT || "https://eastus.api.cognitive.microsoft.com/"

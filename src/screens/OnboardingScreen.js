@@ -32,25 +32,25 @@ const OnboardingScreen = ({ navigation }) => {
   // Voice guidance setting
   const [voiceGuidanceEnabled, setVoiceGuidanceEnabled] = useState(true);
 
-  // 添加调试日志以确认组件正在渲染
+  // Add debug logs to confirm component is rendering
   console.log("OnboardingScreen rendering");
 
   // Check if onboarding has been completed
   useEffect(() => {
     const checkOnboardingStatus = async () => {
       try {
-        // 尝试注释掉自动导航，先测试屏幕是否显示
+        // Try commenting out auto-navigation to test if screen displays
         const hasCompletedOnboarding = await storageService.getItem('hasCompletedOnboarding');
         console.log("DEBUG - Onboarding status:", hasCompletedOnboarding);
         
-        // 暂时注释掉自动导航逻辑，确保屏幕能显示
+        // Temporarily comment out auto-navigation logic to ensure screen displays
         // if (hasCompletedOnboarding === 'true') {
         //   // Navigate to Home screen immediately to avoid flicker
         //   navigation.replace('Home');
         // }
       } catch (error) {
         console.error('Error checking onboarding status:', error);
-        // 暂时移除错误处理中的导航
+        // Temporarily removed navigation in error handling
         // In case of error, still navigate to Home to prevent UX issues
         // navigation.replace('Home');
       }

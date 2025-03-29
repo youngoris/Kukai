@@ -315,15 +315,15 @@ const HomeScreen = ({ navigation }) => {
   const getWeatherErrorIcon = () => {
     if (!weatherError) return "weather-cloudy";
 
-    // 获取错误图标但不添加"weather-"前缀，因为某些图标可能不在weather类别中
+    // Get error icon without adding "weather-" prefix, as some icons may not be in the weather category
     const errorIcon = getErrorIcon();
     
-    // 检查是否是位置错误，如果是则使用问号图标
+    // Check if it's a location error, if so use question mark icon
     if (weatherError.type === ERROR_TYPES.LOCATION) {
       return "help-circle-outline";
     }
     
-    // 对于其他错误类型，使用适当的图标
+    // For other error types, use appropriate icon
     return errorIcon;
   };
 
@@ -341,7 +341,7 @@ const HomeScreen = ({ navigation }) => {
     checkTodayPhoto();
   }, []);
 
-  // 添加页面焦点检测，确保每次返回主页时都更新照片状态
+  // Add page focus detection to ensure photo status is updated each time returning to the home page
   useFocusEffect(
     React.useCallback(() => {
       console.log('HomeScreen focused - checking today photo');
@@ -379,12 +379,12 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const handleCirclePress = () => {
-    // 如果今天已拍照，点击直接进入相册；否则进入相机页面
+    // if has taken photo today, navigate to photo gallery
     if (hasTakenPhotoToday) {
-      // 已拍照，直接进入相册页面，不需要动画
+      // if has taken photo today, navigate to photo gallery without animation
       navigation.navigate('PhotoGallery', {}, { animation: 'none' });
     } else {
-      // 未拍照，使用动画进入相机页面
+      // if has not taken photo today, navigate to camera page with animation
       Animated.sequence([
         Animated.timing(circleScaleAnim, {
           toValue: 20,
@@ -658,10 +658,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   circleButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderRadius: 20,
-    backgroundColor: '#555', // 已拍照时为灰色
+    backgroundColor: '#555', 
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#fff',
@@ -671,7 +671,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   circleButtonHighlight: {
-    backgroundColor: '#fff', // 未拍照时使用白色高亮
+    backgroundColor: '#fff', 
     shadowColor: '#fff',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,

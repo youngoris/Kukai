@@ -59,7 +59,7 @@ const SummaryScreen = ({ navigation }) => {
   const [showReminderOptions, setShowReminderOptions] = useState(false);
   const [taskTime, setTaskTime] = useState(() => {
     const defaultTime = new Date();
-    defaultTime.setMinutes(30, 0, 0); // 设置默认分钟为30分
+    defaultTime.setMinutes(30, 0, 0); // Set default minutes to 30
     return defaultTime;
   });
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -142,7 +142,7 @@ const SummaryScreen = ({ navigation }) => {
       'keyboardDidShow',
       (event) => {
         setKeyboardVisible(true);
-        // 获取键盘高度
+        // Get keyboard height
         const keyboardHeight = event.endCoordinates.height;
         scrollToInput(keyboardHeight);
       }
@@ -151,7 +151,7 @@ const SummaryScreen = ({ navigation }) => {
       'keyboardDidHide',
       () => {
         setKeyboardVisible(false);
-        // 键盘隐藏时，可以选择滚动到特定位置或不做处理
+        // When keyboard hides, can choose to scroll to a specific position or do nothing
       }
     );
 
@@ -604,37 +604,37 @@ const SummaryScreen = ({ navigation }) => {
 
   // Handle time tag press
   const handleTimeTagPress = () => {
-    // 更新时间为当前小时和30分钟
+    // Update time to current hour and 30 minutes
     const currentTime = new Date();
     currentTime.setMinutes(30, 0, 0);
     setTaskTime(currentTime);
     
     if (showTimePicker) {
-      // 如果时间选择器已经显示，点击后关闭选择器并取消标签
+      // If time picker is already displayed, clicking will close the picker and cancel the tag
       setShowTimePicker(false);
       setIsTimeTagged(false);
-      // 同时关闭提醒功能
+      // Also turn off reminder functionality
       setHasReminder(false);
       setShowReminderOptions(false);
     } else if (isTimeTagged) {
-      // 如果已经有时间标签但选择器未显示，点击后取消标签
+      // If there's already a time tag but picker is not displayed, clicking will cancel the tag
       setIsTimeTagged(false);
       setShowTimePicker(false);
-      // 同时关闭提醒功能
+      // Also turn off reminder functionality
       setHasReminder(false);
       setShowReminderOptions(false);
     } else {
-      // 如果没有时间标签，点击后显示选择器并激活标签
+      // If there's no time tag, clicking will display the picker and activate the tag
       setShowTimePicker(true);
       setIsTimeTagged(true);
-      // 滚动到可见区域
+      // Scroll to visible area
       setTimeout(() => scrollToInput(), 100);
     }
   };
 
   // Handle reminder tag press
   const handleReminderPress = () => {
-    // 如果没有设置时间，先提示设置时间
+    // If time is not set, prompt to set time first
     if (!isTimeTagged && !showTimePicker) {
       Alert.alert(
         "Reminder Setup",
@@ -648,21 +648,21 @@ const SummaryScreen = ({ navigation }) => {
     }
     
     if (showReminderOptions) {
-      // 如果选项已显示，则隐藏选项（但不更改提醒状态）
+      // If options are already displayed, hide them (but don't change reminder status)
       setShowReminderOptions(false);
     } else if (hasReminder) {
-      // 如果已有提醒，则取消提醒
+      // If there's already a reminder, cancel it
       setHasReminder(false);
       setShowReminderOptions(false);
     } else {
-      // 如果没有提醒，则显示选项并激活提醒状态
+      // If there's no reminder, display options and activate reminder status
       setShowReminderOptions(true);
-      // 设置默认提醒时间并激活
+      // Set default reminder time and activate
       setReminderTime(15);
       setHasReminder(true);
-      // 显示提醒选项时关闭时间选择器，避免界面过于拥挤
+      // Close time picker when showing reminder options to avoid cluttered UI
       setShowTimePicker(false);
-      // 滚动到可见区域
+      // Scroll to visible area
       setTimeout(() => scrollToInput(), 100);
     }
   };
@@ -747,28 +747,28 @@ const SummaryScreen = ({ navigation }) => {
 
   // Add automatic scroll to input area function
   const scrollToInput = (keyboardHeight = 300) => {
-    // 给键盘弹出时间，再滚动
+    // Give time for keyboard to appear, then scroll
     setTimeout(() => {
       if (scrollViewRef.current && addTaskContainerRef.current) {
-        // 测量添加任务容器在滚动视图中的位置
+        // Measure the position of the add task container in the scroll view
         addTaskContainerRef.current.measureLayout(
           scrollViewRef.current,
           (x, y, width, height) => {
-            // 计算适当的滚动位置，确保元素与键盘顶部保持10px的距离
-            const scrollPosition = y - 10; // 保持10px的距离
+            // Calculate appropriate scroll position to ensure the element maintains 10px distance from keyboard top
+            const scrollPosition = y - 10; // Maintain 10px distance
             scrollViewRef.current.scrollTo({
               y: scrollPosition,
               animated: true
             });
           },
           (error) => {
-            console.error('测量布局时出错:', error);
-            // 如果测量失败，回退到默认的scrollToEnd方法
+            console.error('Error measuring layout:', error);
+            // If measurement fails, fall back to default scrollToEnd method
             scrollViewRef.current.scrollToEnd({ animated: true });
           }
         );
       } else {
-        // 如果引用不可用，回退到默认的scrollToEnd方法
+        // If references are not available, fall back to default scrollToEnd method
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }
     }, 300);

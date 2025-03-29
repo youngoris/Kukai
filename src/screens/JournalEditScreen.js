@@ -54,7 +54,7 @@ const JournalEditScreen = ({ navigation, route }) => {
   const [locationError, setLocationError] = useState(null);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false); // Add template menu state
   const [currentTemplate, setCurrentTemplate] = useState("default"); // Add current template state
-  const [appTheme, setAppTheme] = useState('dark'); // 添加主题状态
+  const [appTheme, setAppTheme] = useState('dark'); // Add theme state
 
   // Get safe area insets
   const insets = useSafeAreaInsets();
@@ -836,7 +836,7 @@ const JournalEditScreen = ({ navigation, route }) => {
     );
   };
 
-  // 加载用户设置
+  // Load user settings
   useEffect(() => {
     const loadUserSettings = async () => {
       try {

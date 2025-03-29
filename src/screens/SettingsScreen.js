@@ -181,7 +181,7 @@ const SettingsScreen = ({ navigation }) => {
     { value: 5, label: "5 cycles" },
   ];
 
-  // 添加语音引导类型选项
+  // Add voice guidance type options
   const guidanceTypes = [
     { value: "dailyFocus", label: "Daily Focus" },
     { value: "quickFocus", label: "Quick Focus" },
@@ -1221,7 +1221,7 @@ const SettingsScreen = ({ navigation }) => {
           <TouchableOpacity 
             style={[
               styles.settingItem, 
-              appTheme === "light" ? {backgroundColor: "#FFFFFF"} : {backgroundColor: "#1A1A1A"},
+              appTheme === "light" ? {backgroundColor: "#FFFFFF"} : {backgroundColor: "#111111"},
               { borderRadius: 10, marginBottom: 10 }
             ]}
             onPress={() => setShowVoiceGuidanceModal(true)}
@@ -1277,9 +1277,9 @@ const SettingsScreen = ({ navigation }) => {
                   setVoiceSpeed(value);
                   break;
                 case 'guidanceTypeSelector':
-                  // 关闭当前模态窗口
+                  // Close current modal
                   setShowVoiceGuidanceModal(false);
-                  // 打开选项选择器
+                  // Open options selector
                   setTimeout(() => {
                     openOptionModal(
                       guidanceTypes, 
@@ -1293,9 +1293,9 @@ const SettingsScreen = ({ navigation }) => {
                   }, 300);
                   break;
                 case 'voiceSelector':
-                  // 关闭当前模态窗口
+                  // Close current modal
                   setShowVoiceGuidanceModal(false);
-                  // 打开选项选择器
+                  // Open options selector
                   setTimeout(() => {
                     openOptionModal(
                       voiceOptions, 

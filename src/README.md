@@ -1,89 +1,89 @@
-# Kukai App - 项目结构
+# Kukai App - Project Structure
 
-## 目录结构
+## Directory Structure
 
 ```
 /src
-  /components      - 可复用组件
-  /screens         - 屏幕组件
-  /services        - 服务层（如通知、云备份等）
-  /hooks           - 自定义钩子
-  /utils           - 工具函数
-  /constants       - 常量定义
-  /navigation      - 导航相关
-  /store           - 状态管理
-  /assets          - 静态资源
+  /components      - Reusable components
+  /screens         - Screen components
+  /services        - Service layer (such as notifications, cloud backup, etc.)
+  /hooks           - Custom hooks
+  /utils           - Utility functions
+  /constants       - Constant definitions
+  /navigation      - Navigation related
+  /store           - State management
+  /assets          - Static resources
 ```
 
-## 组件说明
+## Component Description
 
-### 核心组件
+### Core Components
 
-- `App.js` - 应用程序入口点
-- `AppNavigator.js` - 导航配置
+- `App.js` - Application entry point
+- `AppNavigator.js` - Navigation configuration
 
-### 屏幕组件
+### Screen Components
 
-- `HomeScreen.js` - 主屏幕
-- `MeditationScreen.js` - 冥想功能
-- `TaskScreen.js` - 任务管理
-- `FocusScreen.js` - 专注模式
-- `SummaryScreen.js` - 日常总结
-- `JournalScreen.js` - 日志列表
-- `JournalEditScreen.js` - 日志编辑
-- `SettingsScreen.js` - 设置页面
+- `HomeScreen.js` - Home screen
+- `MeditationScreen.js` - Meditation function
+- `TaskScreen.js` - Task management
+- `FocusScreen.js` - Focus mode
+- `SummaryScreen.js` - Daily summary
+- `JournalScreen.js` - Journal list
+- `JournalEditScreen.js` - Journal editing
+- `SettingsScreen.js` - Settings page
 
-### 可复用组件
+### Reusable Components
 
-- `MarkdownRenderer.js` - Markdown渲染组件
-- `SettingItem.js` - 设置项组件
-- `SettingSection.js` - 设置分组组件
-- `CustomDateTimePicker.js` - 自定义日期时间选择器
-- `CloudBackupSection.js` - 云备份组件
-- `JournalTemplateManager.js` - 日志模板管理器
+- `MarkdownRenderer.js` - Markdown rendering component
+- `SettingItem.js` - Setting item component
+- `SettingSection.js` - Setting section component
+- `CustomDateTimePicker.js` - Custom date time picker
+- `CloudBackupSection.js` - Cloud backup component
+- `JournalTemplateManager.js` - Journal template manager
 
-### 服务
+### Services
 
-- `GoogleDriveService.js` - Google Drive集成
-- `NotificationService.js` - 通知服务
+- `GoogleDriveService.js` - Google Drive integration
+- `NotificationService.js` - Notification service
 
-### 自定义钩子
+### Custom Hooks
 
-- `useAsyncStorage.js` - AsyncStorage操作钩子
-- `useWeather.js` - 天气数据获取钩子
+- `useAsyncStorage.js` - AsyncStorage operation hook
+- `useWeather.js` - Weather data fetching hook
 
-### 常量
+### Constants
 
-- `Config.js` - 配置常量
-- `DesignSystem.js` - 设计系统常量
-- `JournalTemplates.js` - 日志模板定义
+- `Config.js` - Configuration constants
+- `DesignSystem.js` - Design system constants
+- `JournalTemplates.js` - Journal template definitions
 
-## 开发指南
+## Development Guide
 
-### 添加新屏幕
+### Adding New Screens
 
-1. 在`/src/screens`目录下创建新的屏幕组件
-2. 在`/src/navigation/AppNavigator.js`中注册新屏幕
+1. Create a new screen component in the `/src/screens` directory
+2. Register the new screen in `/src/navigation/AppNavigator.js`
 
-### 添加新组件
+### Adding New Components
 
-1. 在`/src/components`目录下创建新组件
-2. 确保组件是可复用的，并有适当的文档
+1. Create a new component in the `/src/components` directory
+2. Ensure the component is reusable and properly documented
 
-### 添加新服务
+### Adding New Services
 
-1. 在`/src/services`目录下创建新服务
-2. 在`App.js`中初始化服务（如果需要）
+1. Create a new service in the `/src/services` directory
+2. Initialize the service in `App.js` (if needed)
 
-### 添加新钩子
+### Adding New Hooks
 
-1. 在`/src/hooks`目录下创建新钩子
-2. 确保钩子遵循React Hooks规则
+1. Create a new hook in the `/src/hooks` directory
+2. Ensure the hook follows React Hooks rules
 
-## 代码规范
+## Code Standards
 
-- 使用ES6+语法
-- 组件使用函数式组件和React Hooks
-- 使用JSDoc注释记录函数和组件
-- 使用适当的错误处理
-- 避免直接修改状态，使用不可变更新模式
+- Use ES6+ syntax
+- Use functional components and React Hooks
+- Document functions and components with JSDoc comments
+- Use appropriate error handling
+- Avoid direct state mutations, use immutable update patterns

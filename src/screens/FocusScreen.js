@@ -795,11 +795,11 @@ export default function FocusScreen({ navigation }) {
         paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
       }
     ]}>
-      {/* Header - 在专注或休息时隐藏返回按钮 */}
+      {/* Header - Hide back button during focus or break */}
       <CustomHeader 
         title="FOCUS"
         onBackPress={handleBackPress}
-        hideBackButton={isActive} // 当计时器激活时隐藏返回按钮
+        hideBackButton={isActive} // Hide back button when timer is active
         showBottomBorder={false}
       />
 
@@ -847,7 +847,7 @@ export default function FocusScreen({ navigation }) {
                   : "Ready to focus?"}
             </Text>
             
-            {/* 主计时器区域 */}
+            {/* Main timer area */}
             <View style={styles.timerContainer}>
               <View style={styles.progressContainer}>
                 <Progress.Circle
@@ -863,7 +863,7 @@ export default function FocusScreen({ navigation }) {
               </View>
             </View>
             
-            {/* 控制区域 - 分离出来以优化布局 */}
+            {/* Controls area - Separated to optimize layout */}
             <View style={styles.controlsContainer}>
               {renderProgressDots()}
 
@@ -1108,6 +1108,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: 20,
-    gap: 30, // 增加垂直间距
+    gap: 30, // Increase vertical spacing
   },
 });

@@ -118,7 +118,7 @@ const CloudBackupSection = ({
     attemptAuthenticate();
   };
 
-  // 使用模拟Google账号（不需要实际认证）
+  // Use mock Google account (no actual authentication needed)
   const useMockGoogleAccount = () => {
     setIsLoading(true);
     setTimeout(() => {
@@ -135,7 +135,7 @@ const CloudBackupSection = ({
     }, 1500);
   };
 
-  // 实际的认证尝试
+  // Actual authentication attempt
   const attemptAuthenticate = async () => {
     setIsLoading(true);
     try {
