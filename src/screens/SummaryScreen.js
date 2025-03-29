@@ -259,9 +259,6 @@ const SummaryScreen = ({ navigation }) => {
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
     
-    // Get first day of month
-    const firstDay = new Date(currentYear, currentMonth, 1);
-    
     // Get last day of month
     const lastDay = new Date(currentYear, currentMonth + 1, 0);
     
@@ -275,20 +272,80 @@ const SummaryScreen = ({ navigation }) => {
     
     // Set initial selected date to today
     setSelectedDate(today);
-    
-    // Calculate scroll position to show today in the middle
-    // This will be used in a useEffect after render
   };
   
   // Reference for the dates ScrollView
   const datesScrollViewRef = useRef(null);
   
-  // Effect to scroll to today when component mounts
-  useEffect(() => {
-    // Timeout to ensure the ScrollView has rendered
+  // Function to center selected date in the scroll view
+  const centerSelectedDate = (date) => {
     setTimeout(() => {
-      centerSelectedDate();
-    }, 100);
+      if (datesScrollViewRef.current && monthDates.length > 0) {
+        // Find the index of the date in our monthDates array
+        const dateIndex = monthDates.findIndex(d => 
+          d.getDate() === date.getDate() && 
+          d.getMonth() === date.getMonth() && 
+          d.getFullYear() === date.getFullYear()
+        );
+        
+        if (dateIndex === -1) return; // Date not found in the array
+        
+        // Simple centering approach - calculate item width and approximate center
+        const itemWidth = 44; // Width + margin
+        const scrollViewWidth = 280; // Approximate width of scroll view
+        
+        // Calculate position that would center the item
+        const centerOffset = (scrollViewWidth / 2) - (itemWidth / 2);
+        const scrollToX = dateIndex * itemWidth - centerOffset;
+        
+        // Ensure we don't scroll beyond bounds
+        const maxScroll = monthDates.length * itemWidth - scrollViewWidth;
+        const boundedX = Math.max(0, Math.min(scrollToX, maxScroll > 0 ? maxScroll : 0));
+        
+        // Perform the scroll
+        datesScrollViewRef.current.scrollTo({
+          x: boundedX,
+          animated: true
+        });
+      }
+    }, 50);
+  };
+  
+  // Show month selector modal
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  
+  // Handle month selection
+  const handleMonthSelect = (month, year) => {
+    const newDate = new Date(selectedDate);
+    newDate.setMonth(month);
+    newDate.setFullYear(year);
+    
+    // If the day doesn't exist in the new month (e.g. Feb 30), adjust to last day
+    const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+    if (newDate.getDate() > lastDayOfMonth) {
+      newDate.setDate(lastDayOfMonth);
+    }
+    
+    // Generate dates for the selected month
+    const newMonthDates = [];
+    for (let i = 1; i <= lastDayOfMonth; i++) {
+      const date = new Date(year, month, i);
+      newMonthDates.push(date);
+    }
+    
+    setMonthDates(newMonthDates);
+    handleDateSelect(newDate);
+    // Don't close the picker automatically when selecting month/year
+  };
+  
+  // Function to handle the confirm button click in month picker
+  const handleMonthPickerConfirm = () => {
+    setShowMonthPicker(false);
+  };
+  
+  // Effect to center selected date when dates change
+  useEffect(() => {
+    centerSelectedDate(selectedDate);
   }, [monthDates]);
   
   // Format date for display in date picker
@@ -319,36 +376,41 @@ const SummaryScreen = ({ navigation }) => {
     const isSelectedToday = isToday(date);
     setIsViewingHistory(!isSelectedToday);
     
-    // Center the selected date in the scrollview
-    setTimeout(() => {
-      centerSelectedDate();
-    }, 50);
+    // Center the selected date - needs a slight delay to ensure UI updates first
+    setTimeout(() => centerSelectedDate(date), 10);
   };
-  
-  // Function to center the selected date in the scrollview
-  const centerSelectedDate = () => {
-    if (datesScrollViewRef.current && monthDates.length > 0) {
-      // Find index of selected date
-      const selectedIndex = monthDates.findIndex(date => 
-        date.getDate() === selectedDate.getDate() && 
-        date.getMonth() === selectedDate.getMonth() && 
-        date.getFullYear() === selectedDate.getFullYear()
-      );
-      
-      if (selectedIndex !== -1) {
-        // Calculate the item width (including margins)
-        const itemWidth = 44; // width + margins
-        
-        // Estimate the visible width of the ScrollView
-        const visibleWidth = 250; // Approximate visible width
-        
-        // Calculate position to center the selected date
-        const scrollToX = Math.max(0, (selectedIndex * itemWidth) - (visibleWidth / 2) + (itemWidth / 2));
-        
-        // Scroll to the calculated position
-        datesScrollViewRef.current.scrollTo({ x: scrollToX, animated: true });
-      }
+
+  // Update Today button in month picker modal
+  const goToToday = () => {
+    const today = new Date();
+    
+    // Update the month and dates
+    const month = today.getMonth();
+    const year = today.getFullYear();
+    
+    // Get the last day of the month
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    
+    // Generate dates for current month
+    const newMonthDates = [];
+    for (let i = 1; i <= lastDay; i++) {
+      const date = new Date(year, month, i);
+      newMonthDates.push(date);
     }
+    
+    setMonthDates(newMonthDates);
+    
+    // Update selected date
+    setSelectedDate(today);
+    setIsViewingHistory(false); // Today is not history
+    
+    // Close the modal
+    setShowMonthPicker(false);
+    
+    // Wait for UI to update, then center the date
+    setTimeout(() => {
+      centerSelectedDate(today);
+    }, 100);
   };
 
   const loadData = async () => {
@@ -806,6 +868,16 @@ const SummaryScreen = ({ navigation }) => {
     </View>
   );
 
+  // Effect to scroll to initial position when month changes
+  useEffect(() => {
+    if (monthDates.length > 0 && datesScrollViewRef.current) {
+      // Need a timeout to ensure the ScrollView has rendered
+      setTimeout(() => {
+        centerSelectedDate(selectedDate);
+      }, 100);
+    }
+  }, [monthDates]);
+
   return (
     <View
       style={[
@@ -850,11 +922,17 @@ const SummaryScreen = ({ navigation }) => {
             </Text>
             
             {/* Month display */}
-            <View style={styles.monthDisplayContainer}>
-              <Text style={styles.monthText}>
-                {selectedDate.toLocaleString('default', { month: 'long' })} {selectedDate.getFullYear()}
-              </Text>
-            </View>
+            <TouchableOpacity 
+              style={styles.monthDisplayContainer}
+              onPress={() => setShowMonthPicker(true)}
+            >
+              <View style={styles.monthDisplayContent}>
+                <Text style={styles.monthText}>
+                  {selectedDate.toLocaleString('default', { month: 'long' })} {selectedDate.getFullYear()}
+                </Text>
+                <AntDesign name="caretdown" size={10} color="#999999" style={styles.dropdownIcon} />
+              </View>
+            </TouchableOpacity>
           </View>
           
           {/* Month date selection */}
@@ -884,7 +962,17 @@ const SummaryScreen = ({ navigation }) => {
                   setMonthDates(newMonthDates);
                 }
                 
-                handleDateSelect(newDate);
+                // Update selected date after any potential month changes
+                setSelectedDate(newDate);
+                
+                // Check if selected date is today
+                const isSelectedToday = isToday(newDate);
+                setIsViewingHistory(!isSelectedToday);
+                
+                // Use a timeout to ensure UI updates before scrolling
+                setTimeout(() => {
+                  centerSelectedDate(newDate);
+                }, 50);
               }}
             >
               <AntDesign name="left" size={18} color="#AAAAAA" />
@@ -901,19 +989,32 @@ const SummaryScreen = ({ navigation }) => {
                   key={index}
                   style={[
                     styles.dateItem,
-                    isSelected(date) && styles.selectedDateItem
+                    isSelected(date) && styles.selectedDateItem,
+                    isToday(date) && !isSelected(date) && styles.todayDateItem
                   ]}
-                  onPress={() => handleDateSelect(date)}
+                  onPress={() => {
+                    setSelectedDate(date);
+                    
+                    // Check if selected date is today
+                    const isSelectedToday = isToday(date);
+                    setIsViewingHistory(!isSelectedToday);
+                    
+                    // Use a timeout to ensure UI updates before scrolling
+                    setTimeout(() => {
+                      centerSelectedDate(date);
+                    }, 50);
+                  }}
                 >
                   <Text style={[
                     styles.dateItemText,
-                    isSelected(date) ? styles.selectedDateItemText : (isToday(date) ? styles.todayDateItemText : styles.dateItemText)
+                    isSelected(date) ? styles.selectedDateItemText : 
+                    (isToday(date) ? styles.todayDateItemText : styles.dateItemText)
                   ]}>
                     {formatDateForDisplay(date)}
                   </Text>
                   
-                  {/* Today indicator dot */}
-                  {isToday(date) && !isSelected(date) && (
+                  {/* Today indicator dot - always show for today's date */}
+                  {isToday(date) && (
                     <View style={styles.todayIndicator} />
                   )}
                 </TouchableOpacity>
@@ -950,7 +1051,17 @@ const SummaryScreen = ({ navigation }) => {
                     setMonthDates(newMonthDates);
                   }
                   
-                  handleDateSelect(newDate);
+                  // Update selected date after any potential month changes
+                  setSelectedDate(newDate);
+                  
+                  // Check if selected date is today
+                  const isSelectedToday = isToday(newDate);
+                  setIsViewingHistory(!isSelectedToday);
+                  
+                  // Use a timeout to ensure UI updates before scrolling
+                  setTimeout(() => {
+                    centerSelectedDate(newDate);
+                  }, 50);
                 }
               }}
             >
@@ -1243,6 +1354,142 @@ const SummaryScreen = ({ navigation }) => {
           </View>
         )}
       </Animated.ScrollView>
+
+      {/* Month Picker Modal - Moved outside of ScrollView */}
+      {showMonthPicker && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Month</Text>
+            
+            <View style={styles.monthGrid}>
+              {Array.from({ length: 12 }).map((_, index) => {
+                const year = selectedDate.getFullYear();
+                const monthName = new Date(year, index).toLocaleString('default', { month: 'short' });
+                const isCurrentMonth = index === selectedDate.getMonth();
+                
+                // Check if this month is in the future (for the current year)
+                const isInFuture = year === new Date().getFullYear() && index > new Date().getMonth();
+                // Check if this month is current month and year
+                const isCurrentActualMonth = year === new Date().getFullYear() && index === new Date().getMonth();
+                // Check if this month is in the past
+                const isInPast = year < new Date().getFullYear() || 
+                  (year === new Date().getFullYear() && index < new Date().getMonth());
+                
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.monthGridItem,
+                      isCurrentMonth && styles.selectedMonthItem,
+                      isInFuture && styles.futureMonthItem,
+                      isCurrentActualMonth && styles.currentActualMonthItem,
+                      isInPast && styles.pastMonthItem
+                    ]}
+                    disabled={isInFuture}
+                    onPress={() => handleMonthSelect(index, year)}
+                  >
+                    <Text style={[
+                      styles.monthGridText,
+                      isCurrentMonth && styles.selectedMonthText,
+                      isInFuture && styles.futureMonthText,
+                      isCurrentActualMonth && styles.currentActualMonthText,
+                      isInPast && styles.pastMonthText
+                    ]}>
+                      {monthName}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            
+            <View style={styles.yearSelector}>
+              <TouchableOpacity
+                style={[
+                  styles.yearButton,
+                  selectedDate.getFullYear() - 1 === selectedDate.getFullYear() && styles.selectedYearItem
+                ]}
+                onPress={() => {
+                  const year = selectedDate.getFullYear() - 1;
+                  handleMonthSelect(selectedDate.getMonth(), year);
+                }}
+              >
+                <Text style={[
+                  styles.yearButtonText,
+                  selectedDate.getFullYear() - 1 === selectedDate.getFullYear() && styles.selectedYearText,
+                  selectedDate.getFullYear() - 1 === new Date().getFullYear() && styles.currentActualYearText,
+                  selectedDate.getFullYear() - 1 < new Date().getFullYear() && styles.pastYearText,
+                  selectedDate.getFullYear() - 1 > new Date().getFullYear() && styles.futureYearText
+                ]}>
+                  {selectedDate.getFullYear() - 1}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.yearButton,
+                  styles.selectedYearItem
+                ]}
+              >
+                <Text style={[
+                  styles.selectedYearText,
+                  selectedDate.getFullYear() === new Date().getFullYear() && styles.currentActualYearText
+                ]}>
+                  {selectedDate.getFullYear()}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.yearButton,
+                  selectedDate.getFullYear() + 1 === selectedDate.getFullYear() && styles.selectedYearItem,
+                  // Disable if next year is in the future
+                  selectedDate.getFullYear() >= new Date().getFullYear() && styles.disabledYearButton
+                ]}
+                disabled={selectedDate.getFullYear() >= new Date().getFullYear()}
+                onPress={() => {
+                  const year = selectedDate.getFullYear() + 1;
+                  if (year <= new Date().getFullYear()) {
+                    handleMonthSelect(selectedDate.getMonth(), year);
+                  }
+                }}
+              >
+                <Text style={[
+                  styles.yearButtonText,
+                  selectedDate.getFullYear() + 1 === selectedDate.getFullYear() && styles.selectedYearText,
+                  selectedDate.getFullYear() + 1 === new Date().getFullYear() && styles.currentActualYearText,
+                  selectedDate.getFullYear() + 1 < new Date().getFullYear() && styles.pastYearText,
+                  selectedDate.getFullYear() + 1 > new Date().getFullYear() && styles.futureYearText
+                ]}>
+                  {selectedDate.getFullYear() + 1}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={handleMonthPickerConfirm}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalPrimaryButton]}
+                onPress={goToToday}
+              >
+                <Text style={styles.modalPrimaryText}>Today</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalConfirmButton]}
+                onPress={handleMonthPickerConfirm}
+              >
+                <Text style={styles.modalConfirmText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -1651,6 +1898,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
   },
   dateItemText: {
     color: "#AAAAAA",
@@ -1664,29 +1912,200 @@ const styles = StyleSheet.create({
     color: "#000000",
     fontWeight: "700",
   },
+  todayDateItem: {
+    backgroundColor: "transparent", // No background for today's date
+  },
   todayDateItemText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
+    color: "#FFFFFF", // White text for today
+    fontWeight: "900",  // Extra bold
   },
   todayIndicator: {
     position: "absolute",
-    bottom: -3,
+    bottom: 2,
     width: 4,
     height: 4,
-    borderRadius: 2,
+    borderRadius: 4,
     backgroundColor: "#FFFFFF",
+    left: "50%",
+    marginLeft: -4,
+    zIndex: 2,
   },
   monthDisplayContainer: {
-    padding: 4,
+    padding: 6,
+    paddingHorizontal: 10,
     borderRadius: 12,
     backgroundColor: "#111",
-    alignItems: "center",
     justifyContent: "center",
+  },
+  monthDisplayContent: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   monthText: {
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
+    marginRight: 5,
+  },
+  dropdownIcon: {
+    marginTop: 2,
+  },
+  modalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 999,
+  },
+  modalContent: {
+    backgroundColor: "#1A1A1A",
+    borderRadius: 16,
+    width: "90%",
+    overflow: "hidden",
+  },
+  modalTitle: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 10,
+    textAlign: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#333",
+  },
+  monthGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    padding: 16,
+  },
+  monthGridItem: {
+    width: "25%",
+    height: 50,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
+    borderRadius: 6,
+    marginHorizontal: 0,
+  },
+  monthGridText: {
+    color: "#999999", // Medium shade for default
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  selectedMonthItem: {
+    backgroundColor: "transparent", // No background
+    borderWidth: 1,
+    borderColor: "#FFFFFF",
+  },
+  selectedMonthText: {
+    color: "#FFFFFF", // Brightest white for selected
+    fontWeight: "700",
+  },
+  futureMonthItem: {
+    backgroundColor: "transparent", // No background
+  },
+  futureMonthText: {
+    color: "#555555", // Darkest shade for future
+  },
+  currentActualMonthItem: {
+    backgroundColor: "transparent", // No background
+  },
+  currentActualMonthText: {
+    color: "#DDDDDD", // Bright white for current month
+    fontWeight: "700",
+  },
+  pastMonthItem: {
+    backgroundColor: "transparent", // No background
+  },
+  pastMonthText: {
+    color: "#999999", // Medium shade for past
+  },
+  yearSelector: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "#333",
+    borderBottomWidth: 1,
+    borderBottomColor: "#333",
+    padding: 12,
+  },
+  yearButton: {
+    padding: 8,
+    width: 80,
+    alignItems: "center",
+    borderRadius: 6,
+    backgroundColor: "transparent", // No background
+  },
+  yearButtonText: {
+    color: "#999999", // Medium shade
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  selectedYearItem: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "#FFFFFF",
+  },
+  selectedYearText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  currentActualYearText: {
+    color: "#DDDDDD",
+    fontWeight: "700",
+  },
+  pastYearText: {
+    color: "#999999",
+  },
+  futureYearText: {
+    color: "#555555",
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#333",
+  },
+  modalButton: {
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "#333",
+    justifyContent: "center",
+    alignItems: "center",
+    width: 90, // Increase width to prevent text wrapping
+  },
+  modalButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  modalPrimaryButton: {
+    backgroundColor: "#555555", // Darker button
+  },
+  modalPrimaryText: {
+    color: "#FFFFFF", // White text
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  modalConfirmButton: {
+    backgroundColor: "#FFFFFF",
+  },
+  modalConfirmText: {
+    color: "#000000",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  disabledYearButton: {
+    backgroundColor: "transparent", // No background
+    opacity: 0.5,
   },
 });
 
