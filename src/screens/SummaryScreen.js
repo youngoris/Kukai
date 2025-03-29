@@ -65,9 +65,14 @@ const SummaryScreen = ({ navigation }) => {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [appTheme, setAppTheme] = useState("dark");
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  
+  // Added states for date navigation
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [monthDates, setMonthDates] = useState([]);
+  const [isViewingHistory, setIsViewingHistory] = useState(false);
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
   const inputRef = useRef(null);
   const scrollViewRef = useRef(null);
   const addTaskContainerRef = useRef(null);
@@ -109,20 +114,15 @@ const SummaryScreen = ({ navigation }) => {
     // Check if daily reset is needed
     checkDailyReset();
     loadData();
+    generateMonthDates();
 
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    // Animation effects removed as requested
   }, []);
+
+  // Add effect to reload data when selected date changes
+  useEffect(() => {
+    loadData();
+  }, [selectedDate]);
 
   // Add keyboard event listeners
   useEffect(() => {
@@ -250,8 +250,111 @@ const SummaryScreen = ({ navigation }) => {
     }
   };
 
+  // Generate array of dates for the month with the selected date in the middle
+  const generateMonthDates = () => {
+    const today = new Date();
+    const datesArray = [];
+    
+    // Generate dates for the current month
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    
+    // Get first day of month
+    const firstDay = new Date(currentYear, currentMonth, 1);
+    
+    // Get last day of month
+    const lastDay = new Date(currentYear, currentMonth + 1, 0);
+    
+    // Generate all dates in the current month
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      const date = new Date(currentYear, currentMonth, i);
+      datesArray.push(date);
+    }
+    
+    setMonthDates(datesArray);
+    
+    // Set initial selected date to today
+    setSelectedDate(today);
+    
+    // Calculate scroll position to show today in the middle
+    // This will be used in a useEffect after render
+  };
+  
+  // Reference for the dates ScrollView
+  const datesScrollViewRef = useRef(null);
+  
+  // Effect to scroll to today when component mounts
+  useEffect(() => {
+    // Timeout to ensure the ScrollView has rendered
+    setTimeout(() => {
+      centerSelectedDate();
+    }, 100);
+  }, [monthDates]);
+  
+  // Format date for display in date picker
+  const formatDateForDisplay = (date) => {
+    return date.getDate().toString();
+  };
+  
+  // Check if date is today
+  const isToday = (date) => {
+    const today = new Date();
+    return date.getDate() === today.getDate() && 
+           date.getMonth() === today.getMonth() && 
+           date.getFullYear() === today.getFullYear();
+  };
+  
+  // Check if date is selected
+  const isSelected = (date) => {
+    return date.getDate() === selectedDate.getDate() && 
+           date.getMonth() === selectedDate.getMonth() && 
+           date.getFullYear() === selectedDate.getFullYear();
+  };
+  
+  // Handle date selection
+  const handleDateSelect = (date) => {
+    setSelectedDate(date);
+    
+    // Check if selected date is today
+    const isSelectedToday = isToday(date);
+    setIsViewingHistory(!isSelectedToday);
+    
+    // Center the selected date in the scrollview
+    setTimeout(() => {
+      centerSelectedDate();
+    }, 50);
+  };
+  
+  // Function to center the selected date in the scrollview
+  const centerSelectedDate = () => {
+    if (datesScrollViewRef.current && monthDates.length > 0) {
+      // Find index of selected date
+      const selectedIndex = monthDates.findIndex(date => 
+        date.getDate() === selectedDate.getDate() && 
+        date.getMonth() === selectedDate.getMonth() && 
+        date.getFullYear() === selectedDate.getFullYear()
+      );
+      
+      if (selectedIndex !== -1) {
+        // Calculate the item width (including margins)
+        const itemWidth = 44; // width + margins
+        
+        // Estimate the visible width of the ScrollView
+        const visibleWidth = 250; // Approximate visible width
+        
+        // Calculate position to center the selected date
+        const scrollToX = Math.max(0, (selectedIndex * itemWidth) - (visibleWidth / 2) + (itemWidth / 2));
+        
+        // Scroll to the calculated position
+        datesScrollViewRef.current.scrollTo({ x: scrollToX, animated: true });
+      }
+    }
+  };
+
   const loadData = async () => {
     try {
+      // Use the selected date instead of today
+      const selectedDateStr = selectedDate.toISOString().split("T")[0];
       const today = new Date().toISOString().split("T")[0];
 
       // Load task data
@@ -261,29 +364,31 @@ const SummaryScreen = ({ navigation }) => {
       // Process task data
       if (tasksJson) {
         allTasks = JSON.parse(tasksJson);
-        // Filter completed and pending tasks for today
-        const todayTasks = allTasks.filter((task) => {
-          // If task has a completion time, check if it's today's task
+        
+        // Filter completed and pending tasks for the selected date
+        const selectedDateTasks = allTasks.filter((task) => {
+          // If task has a completion time, check if it's on the selected date
           if (task.completedAt) {
             const completedDate = new Date(task.completedAt)
               .toISOString()
               .split("T")[0];
-            return completedDate === today;
+            return completedDate === selectedDateStr;
           }
-          // For pending tasks, default to showing all pending tasks
-          return !task.completed;
+          
+          // For pending tasks, only show them for today
+          return !task.completed && selectedDateStr === today;
         });
 
-        const completed = todayTasks.filter((task) => task.completed);
-        const pending = todayTasks.filter((task) => !task.completed);
+        const completed = selectedDateTasks.filter((task) => task.completed);
+        const pending = selectedDateTasks.filter((task) => !task.completed);
 
         setCompletedTasks(completed);
         setPendingTasks(pending);
 
-        // Calculate today's task completion rate (only consider today's tasks)
+        // Calculate task completion rate (only consider selected date's tasks)
         const rate =
-          todayTasks.length > 0
-            ? (completed.length / todayTasks.length) * 100
+          selectedDateTasks.length > 0
+            ? (completed.length / selectedDateTasks.length) * 100
             : 0;
         setCompletionRate(Math.round(rate));
       } else {
@@ -295,57 +400,59 @@ const SummaryScreen = ({ navigation }) => {
         await storageService.setItem("tasks", JSON.stringify([]));
       }
 
-      // Load meditation data (只统计当天的冥想时间)
+      // Load meditation data (filter for selected date)
       const meditationSessionsJson =
         await storageService.getItem("meditationHistory");
-      let todayMeditationMinutes = 0;
+      let selectedDateMeditationMinutes = 0;
       if (meditationSessionsJson) {
         const meditationSessions = JSON.parse(meditationSessionsJson);
-        // 过滤出当天的冥想会话
-        const todaySessions = meditationSessions.filter(
-          (session) => session.date.split('T')[0] === today
+        // Filter for selected date
+        const selectedDateSessions = meditationSessions.filter(
+          (session) => session.date.split('T')[0] === selectedDateStr
         );
-        // 只计算当天的冥想时间
-        todayMeditationMinutes = todaySessions.reduce(
+        // Calculate total minutes
+        selectedDateMeditationMinutes = selectedDateSessions.reduce(
           (total, session) => total + session.duration,
           0
         );
       }
-      setTotalMeditationMinutes(todayMeditationMinutes);
+      setTotalMeditationMinutes(selectedDateMeditationMinutes);
 
-      // Load focus time data (只统计当天的专注时间和番茄钟会话数)
+      // Load focus time data (filter for selected date)
       const focusHistoryJson = await storageService.getItem("focusHistory");
       if (focusHistoryJson) {
         const focusHistory = JSON.parse(focusHistoryJson);
-        // 过滤出今天的专注会话（非休息时间）
-        const todaySessions = focusHistory.filter(
+        // Filter for selected date
+        const selectedDateSessions = focusHistory.filter(
           (session) => 
-            session.date.split('T')[0] === today && 
+            session.date.split('T')[0] === selectedDateStr && 
             !session.isBreak
         );
         
-        // 计算今天的专注总时间（分钟）
-        const todayMinutes = todaySessions.reduce(
+        // Calculate total focus minutes
+        const selectedDateMinutes = selectedDateSessions.reduce(
           (total, session) => total + session.duration,
           0
         );
-        setTotalFocusMinutes(todayMinutes);
+        setTotalFocusMinutes(selectedDateMinutes);
         
-        // 计算今天的番茄钟会话数量
-        setPomodoroCount(todaySessions.length);
+        // Calculate pomodoro session count
+        setPomodoroCount(selectedDateSessions.length);
       } else {
         setTotalFocusMinutes(0);
         setPomodoroCount(0);
       }
 
-      // Load tomorrow's tasks
-      const tomorrowTasksJson = await storageService.getItem("tomorrowTasks");
-      if (tomorrowTasksJson) {
-        setTomorrowTasks(JSON.parse(tomorrowTasksJson));
-      } else {
-        // If no tomorrow task data, initialize as empty array
-        setTomorrowTasks([]);
-        await storageService.setItem("tomorrowTasks", JSON.stringify([]));
+      // Only load tomorrow's tasks when viewing today
+      if (selectedDateStr === today) {
+        const tomorrowTasksJson = await storageService.getItem("tomorrowTasks");
+        if (tomorrowTasksJson) {
+          setTomorrowTasks(JSON.parse(tomorrowTasksJson));
+        } else {
+          // If no tomorrow task data, initialize as empty array
+          setTomorrowTasks([]);
+          await storageService.setItem("tomorrowTasks", JSON.stringify([]));
+        }
       }
     } catch (error) {
       console.error("Error loading data:", error);
@@ -737,10 +844,119 @@ const SummaryScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headerContainer}>
-          <Text style={[styles.headerSubtitle, isLightTheme && styles.lightText]}>Today</Text>
-          <Text style={[styles.dateText, isLightTheme && styles.lightText]}>
-            {new Date().toLocaleDateString()}
-          </Text>
+          <View style={styles.headerTitleRow}>
+            <Text style={[styles.headerSubtitle, isLightTheme && styles.lightText]}>
+              {isViewingHistory ? "History" : "Today"}
+            </Text>
+            
+            {/* Month display */}
+            <View style={styles.monthDisplayContainer}>
+              <Text style={styles.monthText}>
+                {selectedDate.toLocaleString('default', { month: 'long' })} {selectedDate.getFullYear()}
+              </Text>
+            </View>
+          </View>
+          
+          {/* Month date selection */}
+          <View style={styles.dateSelectionContainer}>
+            <TouchableOpacity 
+              style={styles.dateNavigationButton}
+              onPress={() => {
+                // Handle previous day navigation
+                const newDate = new Date(selectedDate);
+                newDate.setDate(selectedDate.getDate() - 1);
+                
+                // If moving to previous month, regenerate dates
+                if (newDate.getMonth() !== selectedDate.getMonth()) {
+                  const newMonthDates = [];
+                  const currentMonth = newDate.getMonth();
+                  const currentYear = newDate.getFullYear();
+                  
+                  // Get last day of month
+                  const lastDay = new Date(currentYear, currentMonth + 1, 0);
+                  
+                  // Generate all dates in the current month
+                  for (let i = 1; i <= lastDay.getDate(); i++) {
+                    const date = new Date(currentYear, currentMonth, i);
+                    newMonthDates.push(date);
+                  }
+                  
+                  setMonthDates(newMonthDates);
+                }
+                
+                handleDateSelect(newDate);
+              }}
+            >
+              <AntDesign name="left" size={18} color="#AAAAAA" />
+            </TouchableOpacity>
+            
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.datesScrollContent}
+              ref={datesScrollViewRef}
+            >
+              {monthDates.map((date, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.dateItem,
+                    isSelected(date) && styles.selectedDateItem
+                  ]}
+                  onPress={() => handleDateSelect(date)}
+                >
+                  <Text style={[
+                    styles.dateItemText,
+                    isSelected(date) ? styles.selectedDateItemText : (isToday(date) ? styles.todayDateItemText : styles.dateItemText)
+                  ]}>
+                    {formatDateForDisplay(date)}
+                  </Text>
+                  
+                  {/* Today indicator dot */}
+                  {isToday(date) && !isSelected(date) && (
+                    <View style={styles.todayIndicator} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            
+            <TouchableOpacity 
+              style={styles.dateNavigationButton}
+              onPress={() => {
+                // Handle next day navigation
+                const newDate = new Date(selectedDate);
+                newDate.setDate(selectedDate.getDate() + 1);
+                
+                // Only allow selecting up to today
+                const today = new Date();
+                today.setHours(23, 59, 59, 999);
+                
+                if (newDate <= today) {
+                  // If moving to next month, regenerate dates
+                  if (newDate.getMonth() !== selectedDate.getMonth()) {
+                    const newMonthDates = [];
+                    const currentMonth = newDate.getMonth();
+                    const currentYear = newDate.getFullYear();
+                    
+                    // Get last day of month
+                    const lastDay = new Date(currentYear, currentMonth + 1, 0);
+                    
+                    // Generate all dates in the current month
+                    for (let i = 1; i <= lastDay.getDate(); i++) {
+                      const date = new Date(currentYear, currentMonth, i);
+                      newMonthDates.push(date);
+                    }
+                    
+                    setMonthDates(newMonthDates);
+                  }
+                  
+                  handleDateSelect(newDate);
+                }
+              }}
+            >
+              <AntDesign name="right" size={18} color="#AAAAAA" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Daily Statistics */}
@@ -852,178 +1068,180 @@ const SummaryScreen = ({ navigation }) => {
           )}
         </View>
 
-        {/* Tomorrow's Plan */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Tomorrow's Plan</Text>
-          {!isAddingTask ? (
-            <TouchableOpacity
-              style={styles.addTaskButton}
-              onPress={() => {
-                setIsAddingTask(true);
-                setTimeout(() => {
-                  inputRef.current?.focus();
-                  scrollToInput();
-                }, 100);
-              }}
-            >
-              <AntDesign name="plus" size={20} color="#CCCCCC" />
-              <Text style={styles.addTaskText}>Add Tomorrow Task</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.addTaskWrapperContainer}>
-              <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "position" : null}
-                keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-                style={{width: '100%'}}
-                enabled
-              >
-                <ScrollView
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={{ paddingBottom: 10 }}
-                >
-                  <View 
-                    ref={addTaskContainerRef}
-                    style={styles.addTaskContainer}
-                  >
-                    <TextInput
-                      ref={inputRef}
-                      style={styles.taskInput}
-                      placeholder="Enter task..."
-                      placeholderTextColor="#666"
-                      value={newTomorrowTask}
-                      onChangeText={setNewTomorrowTask}
-                      onSubmitEditing={addTomorrowTask}
-                      keyboardAppearance="dark"
-                    />
-                    <View style={styles.tagButtonsRow}>
-                      {renderTagButtons()}
-                      <View style={styles.spacer} />
-                      <TouchableOpacity
-                        style={[styles.inputButton, styles.cancelButton]}
-                        onPress={() => {
-                          setIsAddingTask(false);
-                          setNewTomorrowTask("");
-                          Keyboard.dismiss();
-                        }}
-                      >
-                        <AntDesign name="close" size={24} color="#FFFFFF" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.inputButton, styles.saveButton]}
-                        onPress={addTomorrowTask}
-                      >
-                        <AntDesign name="check" size={24} color="#000000" />
-                      </TouchableOpacity>
-                    </View>
-                    {showTimePicker && (
-                      <View style={[styles.timePickerContainer, { marginBottom: 20 }]}>
-                        <CustomDateTimePicker
-                          value={taskTime}
-                          mode="time"
-                          is24Hour={true}
-                          display="spinner"
-                          onChange={onTimeChange}
-                          textColor="#FFFFFF"
-                          themeVariant="dark"
-                          style={styles.timePicker}
-                          minuteInterval={15}
-                        />
-                      </View>
-                    )}
-                    {showReminderOptions && (
-                      <View
-                        style={[
-                          styles.reminderOptionsContainer,
-                          { marginBottom: 20 },
-                        ]}
-                        onLayout={() => scrollToInput()}
-                      >
-                        <Text style={styles.reminderOptionsTitle}>
-                          Select Reminder Time
-                        </Text>
-                        <View style={styles.reminderButtonsContainer}>
-                          <TouchableOpacity
-                            style={[
-                              styles.reminderButton,
-                              reminderTime === 15 && styles.reminderButtonActive,
-                            ]}
-                            onPress={() => selectReminderTime(15)}
-                          >
-                            <Text
-                              style={[
-                                styles.reminderButtonText,
-                                reminderTime === 15 &&
-                                  styles.reminderButtonTextActive,
-                              ]}
-                            >
-                              15 min
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[
-                              styles.reminderButton,
-                              reminderTime === 30 && styles.reminderButtonActive,
-                            ]}
-                            onPress={() => selectReminderTime(30)}
-                          >
-                            <Text
-                              style={[
-                                styles.reminderButtonText,
-                                reminderTime === 30 &&
-                                  styles.reminderButtonTextActive,
-                              ]}
-                            >
-                              30 min
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[
-                              styles.reminderButton,
-                              reminderTime === 60 && styles.reminderButtonActive,
-                            ]}
-                            onPress={() => selectReminderTime(60)}
-                          >
-                            <Text
-                              style={[
-                                styles.reminderButtonText,
-                                reminderTime === 60 &&
-                                  styles.reminderButtonTextActive,
-                              ]}
-                            >
-                              1 hour
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                </ScrollView>
-              </KeyboardAvoidingView>
-            </View>
-          )}
-
-          {/* Tomorrow task list */}
-          {tomorrowTasks.length > 0 ? (
-            <>
-              <FlatList
-                data={tomorrowTasks}
-                renderItem={renderTomorrowTask}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-              />
+        {/* Tomorrow's Plan - Only show when viewing today */}
+        {!isViewingHistory && (
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>Tomorrow's Plan</Text>
+            {!isAddingTask ? (
               <TouchableOpacity
-                style={styles.transferButton}
-                onPress={transferTomorrowTasks}
+                style={styles.addTaskButton}
+                onPress={() => {
+                  setIsAddingTask(true);
+                  setTimeout(() => {
+                    inputRef.current?.focus();
+                    scrollToInput();
+                  }, 100);
+                }}
               >
-                <AntDesign name="swap" size={18} color="#000000" />
-                <Text style={styles.transferButtonText}>Move to Task List</Text>
+                <AntDesign name="plus" size={20} color="#CCCCCC" />
+                <Text style={styles.addTaskText}>Add Tomorrow Task</Text>
               </TouchableOpacity>
-            </>
-          ) : (
-            <Text style={styles.emptyText}>No tasks for tomorrow</Text>
-          )}
-        </View>
+            ) : (
+              <View style={styles.addTaskWrapperContainer}>
+                <KeyboardAvoidingView
+                  behavior={Platform.OS === "ios" ? "position" : null}
+                  keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+                  style={{width: '100%'}}
+                  enabled
+                >
+                  <ScrollView
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ paddingBottom: 10 }}
+                  >
+                    <View 
+                      ref={addTaskContainerRef}
+                      style={styles.addTaskContainer}
+                    >
+                      <TextInput
+                        ref={inputRef}
+                        style={styles.taskInput}
+                        placeholder="Enter task..."
+                        placeholderTextColor="#666"
+                        value={newTomorrowTask}
+                        onChangeText={setNewTomorrowTask}
+                        onSubmitEditing={addTomorrowTask}
+                        keyboardAppearance="dark"
+                      />
+                      <View style={styles.tagButtonsRow}>
+                        {renderTagButtons()}
+                        <View style={styles.spacer} />
+                        <TouchableOpacity
+                          style={[styles.inputButton, styles.cancelButton]}
+                          onPress={() => {
+                            setIsAddingTask(false);
+                            setNewTomorrowTask("");
+                            Keyboard.dismiss();
+                          }}
+                        >
+                          <AntDesign name="close" size={24} color="#FFFFFF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.inputButton, styles.saveButton]}
+                          onPress={addTomorrowTask}
+                        >
+                          <AntDesign name="check" size={24} color="#000000" />
+                        </TouchableOpacity>
+                      </View>
+                      {showTimePicker && (
+                        <View style={[styles.timePickerContainer, { marginBottom: 20 }]}>
+                          <CustomDateTimePicker
+                            value={taskTime}
+                            mode="time"
+                            is24Hour={true}
+                            display="spinner"
+                            onChange={onTimeChange}
+                            textColor="#FFFFFF"
+                            themeVariant="dark"
+                            style={styles.timePicker}
+                            minuteInterval={15}
+                          />
+                        </View>
+                      )}
+                      {showReminderOptions && (
+                        <View
+                          style={[
+                            styles.reminderOptionsContainer,
+                            { marginBottom: 20 },
+                          ]}
+                          onLayout={() => scrollToInput()}
+                        >
+                          <Text style={styles.reminderOptionsTitle}>
+                            Select Reminder Time
+                          </Text>
+                          <View style={styles.reminderButtonsContainer}>
+                            <TouchableOpacity
+                              style={[
+                                styles.reminderButton,
+                                reminderTime === 15 && styles.reminderButtonActive,
+                              ]}
+                              onPress={() => selectReminderTime(15)}
+                            >
+                              <Text
+                                style={[
+                                  styles.reminderButtonText,
+                                  reminderTime === 15 &&
+                                    styles.reminderButtonTextActive,
+                                ]}
+                              >
+                                15 min
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[
+                                styles.reminderButton,
+                                reminderTime === 30 && styles.reminderButtonActive,
+                              ]}
+                              onPress={() => selectReminderTime(30)}
+                            >
+                              <Text
+                                style={[
+                                  styles.reminderButtonText,
+                                  reminderTime === 30 &&
+                                    styles.reminderButtonTextActive,
+                                ]}
+                              >
+                                30 min
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[
+                                styles.reminderButton,
+                                reminderTime === 60 && styles.reminderButtonActive,
+                              ]}
+                              onPress={() => selectReminderTime(60)}
+                            >
+                              <Text
+                                style={[
+                                  styles.reminderButtonText,
+                                  reminderTime === 60 &&
+                                    styles.reminderButtonTextActive,
+                                ]}
+                              >
+                                1 hour
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  </ScrollView>
+                </KeyboardAvoidingView>
+              </View>
+            )}
+
+            {/* Tomorrow task list */}
+            {tomorrowTasks.length > 0 ? (
+              <>
+                <FlatList
+                  data={tomorrowTasks}
+                  renderItem={renderTomorrowTask}
+                  keyExtractor={(item) => item.id}
+                  scrollEnabled={false}
+                />
+                <TouchableOpacity
+                  style={styles.transferButton}
+                  onPress={transferTomorrowTasks}
+                >
+                  <AntDesign name="swap" size={18} color="#000000" />
+                  <Text style={styles.transferButtonText}>Move to Task List</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text style={styles.emptyText}>No tasks for tomorrow</Text>
+            )}
+          </View>
+        )}
       </Animated.ScrollView>
     </View>
   );
@@ -1033,6 +1251,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
+  },
+  lightContainer: {
+    backgroundColor: "#FFFFFF",
   },
   header: {
     flexDirection: "row",
@@ -1058,22 +1279,27 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   scrollContent: {
-    paddingTop: 10,
+    paddingTop: 5,
     paddingHorizontal: 20,
     paddingBottom: 50,
   },
   headerContainer: {
-    padding: 10,
-    marginBottom: 10,
+    padding: 5,
+    marginBottom: 5,
     borderBottomWidth: 0,
+  },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
   },
   headerSubtitle: {
     color: "#fff",
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "700",
-    marginBottom: 4,
     letterSpacing: 2,
-    textAlign: "center",
+    textAlign: "left",
   },
   dateText: {
     color: "#aaa",
@@ -1082,21 +1308,21 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   statsContainer: {
-    marginBottom: 15,
-    marginTop: 10,
+    marginBottom: 12,
+    marginTop: 5,
   },
   statsCard: {
     backgroundColor: "#111",
     borderRadius: 12,
-    padding: 20,
-    marginBottom: 15,
+    padding: 16,
+    marginBottom: 10,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
   statItem: {
-    marginBottom: 15,
+    marginBottom: 12,
   },
   statTitle: {
     color: "#aaa",
@@ -1139,22 +1365,22 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   sectionContainer: {
-    marginBottom: 15,
+    marginBottom: 10,
   },
   sectionTitle: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
-    marginBottom: 12,
-    marginTop: 15,
+    marginBottom: 8,
+    marginTop: 10,
     letterSpacing: 1,
   },
   taskItem: {
     flexDirection: "row",
     backgroundColor: "#111",
     borderRadius: 8,
-    padding: 20,
-    marginBottom: 15,
+    padding: 15,
+    marginBottom: 10,
     alignItems: "center",
   },
   taskPriorityIndicator: {
@@ -1206,8 +1432,8 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     backgroundColor: "#111",
     borderRadius: 8,
-    padding: 20,
-    marginBottom: 15,
+    padding: 15,
+    marginBottom: 12,
   },
   addTaskButton: {
     flexDirection: "row",
@@ -1397,6 +1623,70 @@ const styles = StyleSheet.create({
   },
   addTaskWrapperContainer: {
     marginBottom: 20,
+  },
+  dateSelectionContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    width: "100%",
+  },
+  dateNavigationButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: "#111", 
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  datesScrollContent: {
+    paddingHorizontal: 5,
+    flexGrow: 0,
+  },
+  dateItem: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dateItemText: {
+    color: "#AAAAAA",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  selectedDateItem: {
+    backgroundColor: "#FFFFFF",
+  },
+  selectedDateItemText: {
+    color: "#000000",
+    fontWeight: "700",
+  },
+  todayDateItemText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  todayIndicator: {
+    position: "absolute",
+    bottom: -3,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#FFFFFF",
+  },
+  monthDisplayContainer: {
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: "#111",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  monthText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
 
