@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   SafeAreaView,
   SectionList,
+  BackHandler,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
@@ -27,7 +28,7 @@ const { width, height } = Dimensions.get('window');
 const DEFAULT_COLUMN_COUNT = 5;
 const GRID_SPACING = SPACING.s;
 
-const PhotoGalleryScreen = ({ navigation }) => {
+const PhotoGalleryScreen = ({ navigation, route }) => {
   const [photos, setPhotos] = useState([]);
   const [photosGrouped, setPhotosGrouped] = useState([]);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
@@ -39,6 +40,9 @@ const PhotoGalleryScreen = ({ navigation }) => {
   const [hasTodaySelfie, setHasTodaySelfie] = useState(false);
   const [showPhotoInfo, setShowPhotoInfo] = useState(false);
   
+  // Check if we came from a retake operation
+  const fromRetake = route.params?.fromRetake || false;
+
   // Photo size calculation considering safe margins
   const containerPadding = SPACING.s * 2; // Container padding
   const footerHeight = 100; // Bottom navigation area height
@@ -46,22 +50,59 @@ const PhotoGalleryScreen = ({ navigation }) => {
   const totalGapWidth = GRID_SPACING * (columnCount - 1);
   const itemSize = Math.floor((availableWidth - totalGapWidth) / columnCount);
 
-  // Add refresh on focus to ensure photos are always up to date
+  // Override hardware back button behavior if coming from retake
+  useFocusEffect(
+    React.useCallback(() => {
+      if (fromRetake) {
+        const onBackPress = () => {
+          navigation.navigate('Home', {}, { animation: 'none' });
+          return true; // Prevent default behavior
+        };
+
+        // Add back button handler for Android
+        const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+        // For iOS gesture navigation, we'll handle in componentDidMount below
+        return () => subscription.remove();
+      }
+      return () => {}; // No override if not from retake
+    }, [fromRetake])
+  );
+
+  // Handle navigation overrides when screen is focused
   useFocusEffect(
     React.useCallback(() => {
       console.log('Photo Gallery screen focused - loading photos');
       loadPhotos();
+
+      // Override navigation behavior if coming from retake
+      if (fromRetake) {
+        // Add a listener for beforeRemove to override the destination
+        const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+          // If it's a gesture-triggered navigation (swipe back)
+          if (e.data.action.type === 'GO_BACK') {
+            // Prevent default navigation
+            e.preventDefault();
+            
+            // Navigate to home instead
+            navigation.navigate('Home', {}, { animation: 'none' });
+          }
+        });
+        
+        return unsubscribe;
+      }
+      
       return () => {};
-    }, [])
+    }, [fromRetake])
   );
 
   useEffect(() => {
     loadPhotos();
   }, []);
 
-  // 将照片按月份分组
+  // Group photos by month
   const groupPhotosByMonth = (photosList) => {
-    // 创建一个按月份分组的对象
+    // Create an object to group by month
     const groupedByMonth = {};
     
     photosList.forEach(photo => {
@@ -72,13 +113,13 @@ const PhotoGalleryScreen = ({ navigation }) => {
       groupedByMonth[monthYear].push(photo);
     });
     
-    // 转换为SectionList需要的格式
+    // Convert to format needed by SectionList
     const groupedData = Object.keys(groupedByMonth).map(month => ({
       title: month,
       data: groupedByMonth[month]
     }));
     
-    // 按日期倒序排列
+    // Sort in descending date order
     groupedData.sort((a, b) => {
       const dateA = new Date(a.data[0].date);
       const dateB = new Date(b.data[0].date);
@@ -94,7 +135,13 @@ const PhotoGalleryScreen = ({ navigation }) => {
       const dirInfo = await FileSystem.getInfoAsync(photoDir);
       
       if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(photoDir);
+        try {
+          await FileSystem.makeDirectoryAsync(photoDir);
+          console.log('Created selfies directory successfully in PhotoGalleryScreen');
+        } catch (dirError) {
+          console.log(`Directory creation issue in PhotoGalleryScreen: ${dirError.message}`);
+          // Even if directory creation fails, still set these states to empty
+        }
         setHasTodaySelfie(false);
         setPhotos([]);
         setPhotosGrouped([]);
@@ -102,7 +149,7 @@ const PhotoGalleryScreen = ({ navigation }) => {
       }
 
       const files = await FileSystem.readDirectoryAsync(photoDir);
-      // 筛选jpg文件，并按日期倒序排序
+      // Filter jpg files and sort by date in descending order
       const sortedFiles = files
         .filter(file => file.endsWith('.jpg'))
         .sort((a, b) => {
@@ -111,27 +158,27 @@ const PhotoGalleryScreen = ({ navigation }) => {
           return dateB - dateA;
         });
 
-      // 创建照片列表，尝试加载每张照片的EXIF数据
+      // Create photo list and try to load EXIF data for each photo
       const photosList = [];
       
       for (const file of sortedFiles) {
         const photoUri = `${photoDir}${file}`;
         const exifFilePath = `${photoDir}${file.replace('.jpg', '.exif.json')}`;
         
-        // 默认使用文件名中的日期
+        // Default to using date from filename
         let photoDate = new Date(file.split('_')[0]);
         let exifData = null;
         
-        // 检查是否有对应的EXIF数据文件
+        // Check if there's a corresponding EXIF data file
         const exifInfo = await FileSystem.getInfoAsync(exifFilePath);
         if (exifInfo.exists) {
           try {
             const exifString = await FileSystem.readAsStringAsync(exifFilePath);
             exifData = JSON.parse(exifString);
             
-            // 如果有DateTime字段，使用它作为照片日期
+            // If there's a DateTime field, use it as the photo date
             if (exifData.DateTime) {
-              // 将EXIF日期时间字符串转换为Date对象 (格式: 2023:06:15 14:30:25)
+              // Convert EXIF date time string to Date object (format: 2023:06:15 14:30:25)
               const exifDate = exifData.DateTime.replace(/:/g, '-').replace(' ', 'T');
               photoDate = new Date(exifDate);
             }
@@ -148,15 +195,15 @@ const PhotoGalleryScreen = ({ navigation }) => {
         });
       }
       
-      // 检查今日自拍
+      // Check for today's selfie
       const todaySelfie = photosList.find(photo => isToday(photo.date));
       setHasTodaySelfie(!!todaySelfie);
       console.log('Today selfie exists:', !!todaySelfie);
       
-      // 设置照片列表
+      // Set photo list
       setPhotos(photosList);
       
-      // 分组照片
+      // Group photos
       const groupedPhotos = groupPhotosByMonth(photosList);
       setPhotosGrouped(groupedPhotos);
     } catch (error) {
@@ -248,7 +295,7 @@ const PhotoGalleryScreen = ({ navigation }) => {
       // Delete current photo
       await FileSystem.deleteAsync(selectedPhoto.uri);
       
-      // 删除对应的EXIF数据文件（如果存在）
+      // Delete corresponding EXIF data file if it exists
       const exifFilePath = selectedPhoto.uri.replace('.jpg', '.exif.json');
       const exifInfo = await FileSystem.getInfoAsync(exifFilePath);
       if (exifInfo.exists) {
@@ -270,7 +317,7 @@ const PhotoGalleryScreen = ({ navigation }) => {
   };
 
   const handleTakeNewPicture = async () => {
-    // 每次调用时都重新检查今日自拍状态
+    // Check today's selfie status each time
     await loadPhotos();
     
     if (hasTodaySelfie) {
@@ -282,31 +329,31 @@ const PhotoGalleryScreen = ({ navigation }) => {
           { 
             text: 'Retake', 
             onPress: async () => {
-              // 如果要重拍，找到今日自拍并删除
+              // If retaking, find and delete today's selfie
               const todaySelfie = photos.find(photo => isToday(photo.date));
               if (todaySelfie) {
                 try {
-                  // 删除图片文件
+                  // Delete image file
                   await FileSystem.deleteAsync(todaySelfie.uri);
                   
-                  // 删除对应的EXIF数据文件（如果存在）
+                  // Delete corresponding EXIF data file if it exists
                   const exifFilePath = todaySelfie.uri.replace('.jpg', '.exif.json');
                   const exifInfo = await FileSystem.getInfoAsync(exifFilePath);
                   if (exifInfo.exists) {
                     await FileSystem.deleteAsync(exifFilePath);
                   }
                   
-                  // 重新加载照片以更新状态
+                  // Reload photos to update state
                   await loadPhotos();
                   
-                  // 导航到相机
+                  // Navigate to camera
                   navigation.navigate('Camera', { fromRetake: true }, { animation: 'none' });
                 } catch (error) {
                   console.error('Error deleting today\'s selfie:', error);
                   Alert.alert('Error', 'Failed to prepare for retake.');
                 }
               } else {
-                // 重新检查后发现没有今日自拍，直接导航到相机
+                // After rechecking, if no selfie for today, navigate directly to camera
                 navigation.navigate('Camera', { fromRetake: true }, { animation: 'none' });
               }
             }
@@ -369,14 +416,14 @@ const PhotoGalleryScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
-  // 获取照片信息
+  // Get photo information
   const getPhotoInfo = (photo) => {
     if (!photo) return null;
     
     const exif = photo.exif;
     let dateTime = format(photo.date, 'HH:mm'); 
     
-    // 从EXIF中获取相机信息
+    // Get camera information from EXIF
     let deviceInfo = Device.modelName || 'Unknown Device';
     if (exif?.LensModel) {
       deviceInfo = exif.LensModel;
@@ -384,13 +431,13 @@ const PhotoGalleryScreen = ({ navigation }) => {
       deviceInfo = `${exif.Make} ${exif.Model || ''}`;
     }
     
-    // 获取拍摄参数 (ISO, 快门速度, 光圈)
+    // Get shooting parameters (ISO, shutter speed, aperture)
     let shotInfo = '';
     if (exif?.ISOSpeedRatings) {
       shotInfo += `ISO ${exif.ISOSpeedRatings[0]} `;
     }
     if (exif?.ExposureTime) {
-      // 将曝光时间转换为分数形式 (例如 0.0666... → 1/15s)
+      // Convert exposure time to fraction format (e.g., 0.0666... → 1/15s)
       const exposureTime = exif.ExposureTime;
       if (exposureTime < 1) {
         const denominator = Math.round(1 / exposureTime);
@@ -403,30 +450,30 @@ const PhotoGalleryScreen = ({ navigation }) => {
       shotInfo += `f/${exif.FNumber}`;
     }
     
-    // 获取照片分辨率
+    // Get photo resolution
     let resolution = 'Unknown';
     if (exif?.PixelXDimension && exif?.PixelYDimension) {
       resolution = `${exif.PixelXDimension} × ${exif.PixelYDimension}`;
     }
     
-    // 尝试获取位置信息
+    // Try to get location information
     let location = 'Location data not available';
     if (exif?.GPSLatitude && exif?.GPSLongitude) {
       location = `${exif.GPSLatitude}, ${exif.GPSLongitude}`;
     }
     
-    // 使用EXIF中的实际拍摄时间 - 尝试多个字段
+    // Use actual capture time from EXIF - try multiple fields
     try {
-      // 首先尝试DateTimeDigitized
+      // First try DateTimeDigitized
       if (exif?.DateTimeDigitized) {
         const exifDateStr = exif.DateTimeDigitized;
-        // 标准EXIF日期格式：YYYY:MM:DD HH:MM:SS
+        // Standard EXIF date format: YYYY:MM:DD HH:MM:SS
         const [datePart, timePart] = exifDateStr.split(' ');
         if (datePart && timePart) {
           const [year, month, day] = datePart.split(':').map(Number);
           const [hour, minute, second] = timePart.split(':').map(Number);
           
-          // 检查日期值是否有效
+          // Check if date values are valid
           if (year > 0 && month > 0 && month <= 12 && day > 0 && day <= 31 &&
               hour >= 0 && hour < 24 && minute >= 0 && minute < 60 && second >= 0 && second < 60) {
             const jsDate = new Date(year, month - 1, day, hour, minute, second);
@@ -436,7 +483,7 @@ const PhotoGalleryScreen = ({ navigation }) => {
           }
         }
       }
-      // 备选：尝试DateTimeOriginal
+      // Alternative: try DateTimeOriginal
       else if (exif?.DateTimeOriginal) {
         const exifDateStr = exif.DateTimeOriginal;
         const [datePart, timePart] = exifDateStr.split(' ');
@@ -455,7 +502,7 @@ const PhotoGalleryScreen = ({ navigation }) => {
       }
     } catch (e) {
       console.error('Failed to format EXIF date:', e);
-      // 出错时使用文件名中的日期时间
+      // Use date from filename if error occurs
     }
     
     return {
@@ -467,14 +514,14 @@ const PhotoGalleryScreen = ({ navigation }) => {
     };
   };
 
-  // 获取照片标题（月日年）
+  // Get photo title (month day, year)
   const getPhotoTitle = (photo) => {
     if (!photo) return '';
     
-    return format(photo.date, 'MMMM d, yyyy'); // 月日年格式
+    return format(photo.date, 'MMMM d, yyyy'); // Month day, year format
   };
 
-  // 切换照片信息显示状态
+  // Toggle photo info display
   const togglePhotoInfo = () => {
     setShowPhotoInfo(!showPhotoInfo);
   };
@@ -551,14 +598,14 @@ const PhotoGalleryScreen = ({ navigation }) => {
         onRequestClose={closePhotoPreview}
       >
         <SafeAreaView style={styles.modalContainer}>
-          {/* 标题 */}
+          {/* Title */}
           {selectedPhoto && (
             <Text style={styles.previewTitle}>
               {getPhotoTitle(selectedPhoto)}
             </Text>
           )}
           
-          {/* 照片预览区域 */}
+          {/* Photo preview area */}
           <View style={styles.previewContainer}>
             {isLoading ? (
               <ActivityIndicator size="large" color={COLORS.text.primary} />
@@ -573,7 +620,7 @@ const PhotoGalleryScreen = ({ navigation }) => {
             )}
           </View>
           
-          {/* 照片信息显示 */}
+          {/* Photo info display */}
           {showPhotoInfo && selectedPhoto && (
             <View style={styles.photoInfoContainer}>
               <View style={styles.photoInfoRow}>
@@ -623,7 +670,7 @@ const PhotoGalleryScreen = ({ navigation }) => {
             </View>
           )}
           
-          {/* 底部控制栏 */}
+          {/* Bottom control bar */}
           <View style={styles.previewControls}>
             <TouchableOpacity 
               style={styles.previewButton} 
@@ -650,7 +697,7 @@ const PhotoGalleryScreen = ({ navigation }) => {
               onPress={retakePhoto}
               disabled={isLoading}
             >
-              <MaterialIcons name="camera-alt" size={26} color={COLORS.text.secondary} />
+              <MaterialIcons name="rotate-right" size={26} color={COLORS.text.secondary} />
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -779,7 +826,7 @@ const styles = StyleSheet.create({
     height: width,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: -130, // 微调照片位置
+    marginTop: -130, // Fine-tune photo position
   },
   previewImage: {
     width: width * 0.85,
@@ -793,12 +840,12 @@ const styles = StyleSheet.create({
     padding: SPACING.m,
     borderRadius: 12,
     position: 'absolute',
-    bottom: 180, // 增加与底部控制栏的距离
+    bottom: 180, // Increase distance from bottom control bar
   },
   photoInfoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: SPACING.xs, // 减小行间距
+    marginBottom: SPACING.xs, // Reduce row spacing
   },
   photoInfoItem: {
     flexDirection: 'row',
@@ -809,12 +856,12 @@ const styles = StyleSheet.create({
   photoInfoText: {
     color: COLORS.text.secondary,
     fontSize: FONT_SIZE.s,
-    marginLeft: SPACING.xs, // 减小图标和文本间距
+    marginLeft: SPACING.xs, // Reduce icon and text spacing
     flexShrink: 1,
   },
   previewControls: {
     position: 'absolute',
-    bottom: 40, // 提高底部位置
+    bottom: 40, // Raise bottom position
     width: '85%',
     flexDirection: 'row',
     justifyContent: 'space-around',

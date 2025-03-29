@@ -3,7 +3,7 @@
  * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
  */
 import React, { useEffect, useRef } from "react";
-import { StatusBar, Platform } from "react-native";
+import { StatusBar, Platform, LogBox } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -18,7 +18,8 @@ import {
 import * as SplashScreen from "expo-splash-screen";
 import { AppProvider } from './context/AppContext';
 import AppNavigator from './navigation/AppNavigator';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import { ErrorBoundary, setupGlobalErrorHandler } from './components/ErrorBoundary';
+import { errorLogger } from './services/errorLogger';
 
 // Import services
 import googleDriveService from "./services/GoogleDriveService";
@@ -34,6 +35,16 @@ SplashScreen.preventAutoHideAsync().catch(() => {
   /* Ignore errors */
 });
 
+// Set up global error handler for uncaught JS exceptions
+setupGlobalErrorHandler();
+
+// Ignore specific harmless warnings
+LogBox.ignoreLogs([
+  'ViewPropTypes will be removed from React Native',
+  'AsyncStorage has been extracted from react-native',
+  // Add other warnings you want to suppress
+]);
+
 // Main application component
 export default function App() {
   // Load fonts
@@ -47,7 +58,7 @@ export default function App() {
   // Create navigation reference
   const navigationRef = useRef(null);
 
-  // Initialize database
+  // Initialize database with error handling
   useEffect(() => {
     const initializeDatabase = async () => {
       try {
@@ -55,8 +66,7 @@ export default function App() {
         
         // Make sure database service is properly instantiated
         if (!databaseService) {
-          console.error("Database service is undefined");
-          return;
+          throw new Error("Database service is undefined");
         }
         
         // Initialize database
@@ -79,18 +89,14 @@ export default function App() {
           }
           
         } else {
-          console.error("Database initialization failed:", dbResult.error);
-          
-          // Attempt to recover from initialization failure
-          // This might happen if a migration failed
-          if (dbResult.error && dbResult.error.includes('migration')) {
-            console.log("Attempting to recover from migration failure...");
-            // In a production app, you might want to show a dialog to the user here
-            // For now, we'll just log the error
-          }
+          throw new Error(`Database initialization failed: ${dbResult.error || 'Unknown error'}`);
         }
       } catch (error) {
         console.error("Failed to initialize database:", error);
+        // Log to error tracking system
+        errorLogger.logError(error, { componentStack: 'Database initialization' });
+        
+        // Continue app execution - we'll handle database errors at the component level
       }
     };
 
@@ -100,15 +106,20 @@ export default function App() {
   // Hide splash screen when fonts are loaded
   useEffect(() => {
     const hideSplash = async () => {
-      if (fontsLoaded) {
-        await SplashScreen.hideAsync();
+      try {
+        if (fontsLoaded) {
+          await SplashScreen.hideAsync();
+        }
+      } catch (error) {
+        console.error("Error hiding splash screen:", error);
+        // Non-critical error, can continue
       }
     };
 
     hideSplash();
   }, [fontsLoaded]);
 
-  // Initialize Google Drive service
+  // Initialize Google Drive service with error handling
   useEffect(() => {
     const initializeGoogleDrive = async () => {
       try {
@@ -142,23 +153,36 @@ export default function App() {
         }
       } catch (error) {
         console.error("Failed to initialize Google Drive service:", error);
+        // Log to error tracking system
+        errorLogger.logError(error, { componentStack: 'Google Drive initialization' });
+        // Continue without Google Drive integration
       }
     };
 
     initializeGoogleDrive();
   }, []);
 
-  // Initialize notification service
+  // Initialize notification service with error handling
   useEffect(() => {
-    notificationService.initialize().then((initialized) => {
-      if (initialized) {
-        console.log("Notification system initialized successfully");
-      } else {
-        console.log(
-          "Notification system initialization failed, permissions may have been denied",
-        );
+    const initializeNotifications = async () => {
+      try {
+        const initialized = await notificationService.initialize();
+        if (initialized) {
+          console.log("Notification system initialized successfully");
+        } else {
+          console.log(
+            "Notification system initialization failed, permissions may have been denied",
+          );
+        }
+      } catch (error) {
+        console.error("Failed to initialize notifications:", error);
+        // Log to error tracking system
+        errorLogger.logError(error, { componentStack: 'Notification initialization' });
+        // Continue without notifications
       }
-    });
+    };
+    
+    initializeNotifications();
 
     // Clean up notification listener
     return () => {
@@ -191,7 +215,17 @@ export default function App() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <AppProvider>
-            <NavigationContainer ref={navigationRef}>
+            <NavigationContainer 
+              ref={navigationRef}
+              onStateChange={(state) => {
+                // Track navigation state changes for error context
+                const currentRouteName = navigationRef.current?.getCurrentRoute()?.name;
+                if (currentRouteName) {
+                  // Store current route for error context
+                  global.currentScreen = currentRouteName;
+                }
+              }}
+            >
               <StatusBar style="auto" />
               <AppNavigator />
             </NavigationContainer>

@@ -18,11 +18,13 @@ import { format, isToday } from 'date-fns';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONT_SIZE } from '../constants/DesignSystem';
 import { pressAnimation } from '../utils/AnimationUtils';
+import { errorLogger } from '../services/errorLogger';
+import { withErrorBoundary } from '../components/ErrorBoundary';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const VIEWFINDER_SIZE = screenWidth * 0.8; // 80% of screen width for the square
 
-// 自拍格言数组
+// Selfie quotes array
 const SELFIE_QUOTES = [
   "Capture today's self, tomorrow's memory.",
   "A selfie a day keeps forgetting away.",
@@ -40,12 +42,12 @@ const CameraScreen = ({ navigation, route }) => {
   const cameraRef = useRef(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   
-  // 随机选择一条格言
+  // Randomly select a quote
   const [quote] = useState(
     SELFIE_QUOTES[Math.floor(Math.random() * SELFIE_QUOTES.length)]
   );
   
-  // 检查是否来自retake操作
+  // Check if coming from retake operation
   const fromRetake = route.params?.fromRetake || false;
 
   // Check if a selfie has already been taken today
@@ -67,6 +69,10 @@ const CameraScreen = ({ navigation, route }) => {
       return todayPhotos.length > 0;
     } catch (error) {
       console.error('Error checking today\'s selfie:', error);
+      errorLogger.logError(error, { 
+        componentStack: 'CameraScreen.checkTodaySelfie',
+        extraInfo: 'Failed to check if today\'s selfie exists'
+      });
       return false;
     }
   };
@@ -82,22 +88,35 @@ const CameraScreen = ({ navigation, route }) => {
   const takePicture = async () => {
     if (!cameraRef.current || !isCameraReady || isProcessing) return;
 
-    // Check if a selfie has already been taken today
-    const hasTodaySelfie = await checkTodaySelfie();
-    
-    if (hasTodaySelfie) {
-      // Show alert if a selfie has already been taken today
+    try {
+      // Check if a selfie has already been taken today
+      const hasTodaySelfie = await checkTodaySelfie();
+      
+      if (hasTodaySelfie) {
+        // Show alert if a selfie has already been taken today
+        Alert.alert(
+          'Daily Selfie Complete',
+          'You have already taken your selfie for today. Would you like to replace it?',
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => navigation.goBack() },
+            { text: 'Replace', onPress: () => captureAndSave() }
+          ]
+        );
+      } else {
+        // Proceed with taking a picture
+        captureAndSave();
+      }
+    } catch (error) {
+      console.error('Error in takePicture:', error);
+      errorLogger.logError(error, { 
+        componentStack: 'CameraScreen.takePicture',
+        extraInfo: 'Failed to check or take picture'
+      });
       Alert.alert(
-        'Daily Selfie Complete',
-        'You have already taken your selfie for today. Would you like to replace it?',
-        [
-          { text: 'Cancel', style: 'cancel', onPress: () => navigation.goBack() },
-          { text: 'Replace', onPress: () => captureAndSave() }
-        ]
+        'Error',
+        'Failed to process the photo. Please try again.',
+        [{ text: 'OK' }]
       );
-    } else {
-      // Proceed with taking a picture
-      captureAndSave();
     }
   };
   
@@ -106,36 +125,47 @@ const CameraScreen = ({ navigation, route }) => {
       setIsProcessing(true); // Prevent multiple captures
       pressAnimation(scaleAnim);
       
-      // Take the photo with 1:1 aspect ratio, 添加exif选项获取EXIF数据
+      // Take the photo with 1:1 aspect ratio, add exif option to get EXIF data
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.75,
         skipProcessing: true,
-        exif: true, // 获取EXIF数据
+        exif: true, // Get EXIF data
       });
 
       // Log photo dimensions for debugging
       console.log(`Original photo dimensions: ${photo.width}x${photo.height}`);
-      console.log('EXIF data:', photo.exif); // 打印EXIF数据用于调试
+      console.log('EXIF data:', photo.exif); // Print EXIF data for debugging
       
       const photoDir = `${FileSystem.documentDirectory}selfies/`;
       const dirInfo = await FileSystem.getInfoAsync(photoDir);
       
       if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(photoDir, { intermediates: true });
+        try {
+          await FileSystem.makeDirectoryAsync(photoDir, { intermediates: true });
+        } catch (dirError) {
+          // If directory already exists or cannot be created, log and continue
+          console.log(`Directory creation issue: ${dirError.message}`);
+          // Do not return, try to continue with saving photo
+        }
       }
 
       // Delete any existing selfies from today
-      const files = await FileSystem.readDirectoryAsync(photoDir);
-      const todayFiles = files.filter(file => {
-        const date = new Date(file.split('_')[0]);
-        return isToday(date);
-      });
-      
-      for (const file of todayFiles) {
-        await FileSystem.deleteAsync(`${photoDir}${file}`);
+      try {
+        const files = await FileSystem.readDirectoryAsync(photoDir);
+        const todayFiles = files.filter(file => {
+          const date = new Date(file.split('_')[0]);
+          return isToday(date);
+        });
+        
+        for (const file of todayFiles) {
+          await FileSystem.deleteAsync(`${photoDir}${file}`);
+        }
+      } catch (fileError) {
+        console.log(`Error managing existing files: ${fileError.message}`);
+        // Continue with saving the new photo
       }
 
-      // 使用实际拍摄时间（如果有）或当前时间作为文件名
+      // Use actual capture time (if available) or current time for filename
       const timestamp = photo.exif?.DateTime 
         ? new Date(photo.exif.DateTime.replace(/:/g, '-').replace(' ', 'T'))
         : new Date();
@@ -143,7 +173,7 @@ const CameraScreen = ({ navigation, route }) => {
       const fileName = `${format(new Date(), 'yyyy-MM-dd')}_${Date.now()}_exif.jpg`;
       const newPhotoUri = `${photoDir}${fileName}`;
       
-      // 保存EXIF数据到一个附加文件，以便后续读取
+      // Save EXIF data to a separate file for later access
       if (photo.exif) {
         const exifFilePath = `${photoDir}${fileName.replace('.jpg', '.exif.json')}`;
         await FileSystem.writeAsStringAsync(exifFilePath, JSON.stringify(photo.exif));
@@ -154,7 +184,7 @@ const CameraScreen = ({ navigation, route }) => {
       const offsetX = (photo.width - minSize) / 2;
       const offsetY = (photo.height - minSize) / 2;
       
-      // Apply crop and black and white effect - 确保应用强烈的黑白效果
+      // Apply crop and black and white effect - ensure strong B&W effect is applied
       const processedPhoto = await ImageManipulator.manipulateAsync(
         photo.uri,
         [
@@ -186,11 +216,17 @@ const CameraScreen = ({ navigation, route }) => {
       
       // Always navigate to PhotoGallery directly instead of using goBack()
       // This ensures we go to the gallery regardless of where we came from
-      navigation.navigate('PhotoGallery', {}, { animation: 'none' });
+      navigation.navigate('PhotoGallery', { 
+        fromRetake: fromRetake  // Pass the fromRetake flag to PhotoGallery
+      }, { animation: 'none' });
       
       // No need for fallback as we're directly navigating to PhotoGallery
     } catch (error) {
       console.error('Error taking picture:', error);
+      errorLogger.logError(error, { 
+        componentStack: 'CameraScreen.captureAndSave',
+        extraInfo: 'Failed during photo capture, processing, or saving'
+      });
       setIsProcessing(false);
       Alert.alert(
         'Error',
@@ -200,14 +236,24 @@ const CameraScreen = ({ navigation, route }) => {
     }
   };
 
-  // 处理关闭按钮，根据来源决定返回位置
+  // Handle close button, decide return location based on source
   const handleClose = () => {
-    if (fromRetake) {
-      // 如果是从retake来的，返回主页以刷新状态
+    try {
+      if (fromRetake) {
+        // If coming from retake, return to home to refresh state
+        navigation.navigate('Home', {}, { animation: 'none' });
+      } else {
+        // Otherwise normal return
+        navigation.goBack();
+      }
+    } catch (error) {
+      console.error('Error handling close:', error);
+      errorLogger.logError(error, { 
+        componentStack: 'CameraScreen.handleClose',
+        extraInfo: 'Failed to navigate during close'
+      });
+      // Fallback to navigating home on error
       navigation.navigate('Home', {}, { animation: 'none' });
-    } else {
-      // 否则正常返回
-      navigation.goBack();
     }
   };
 
@@ -243,12 +289,12 @@ const CameraScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* 顶部黑边区域 */}
+      {/* Top bar area */}
       <View style={styles.topBar}>
         <Text style={styles.quoteText}>{quote}</Text>
       </View>
       
-      {/* 相机取景框区域 */}
+      {/* Camera viewfinder area */}
       <View style={styles.cameraContainer}>
         <CameraView
           ref={cameraRef}
@@ -258,7 +304,7 @@ const CameraScreen = ({ navigation, route }) => {
           enableZoomGesture
           ratio="1:1"
         >
-          {/* 辅助线框 - 帮助用户对齐 */}
+          {/* Grid overlay - helps with alignment */}
           <View style={styles.gridOverlay}>
             <View style={styles.gridHorizontalTop} />
             <View style={styles.gridHorizontalBottom} />
@@ -268,7 +314,7 @@ const CameraScreen = ({ navigation, route }) => {
         </CameraView>
       </View>
       
-      {/* 底部黑边区域 */}
+      {/* Bottom bar area */}
       <View style={styles.bottomBar}>
         <View style={styles.buttonContainer}>
           <TouchableOpacity
@@ -440,4 +486,5 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CameraScreen; 
+// Wrap component with error boundary
+export default withErrorBoundary(CameraScreen); 

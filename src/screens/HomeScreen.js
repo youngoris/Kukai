@@ -356,7 +356,13 @@ const HomeScreen = ({ navigation }) => {
       const dirInfo = await FileSystem.getInfoAsync(photoDir);
       
       if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(photoDir);
+        try {
+          await FileSystem.makeDirectoryAsync(photoDir);
+          console.log('Created selfies directory successfully');
+        } catch (dirError) {
+          console.log(`Directory creation issue: ${dirError.message}`);
+          // Still assume no photos since directory couldn't be created
+        }
         setHasTakenPhotoToday(false);
         return;
       }
@@ -367,6 +373,8 @@ const HomeScreen = ({ navigation }) => {
       setHasTakenPhotoToday(hasTodayPhoto);
     } catch (error) {
       console.error('Error checking today photo:', error);
+      // Default to false if we encounter an error
+      setHasTakenPhotoToday(false);
     }
   };
 
