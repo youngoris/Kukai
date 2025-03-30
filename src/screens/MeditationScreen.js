@@ -1848,7 +1848,6 @@ const styles = StyleSheet.create({
     color: COLORS.background,
   },
 
-  
   guidedMeditationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1935,6 +1934,7 @@ const styles = StyleSheet.create({
     top: SPACING.xl,
     left: '50%',
     transform: [{ translateX: -70 }],
+    marginTop: SPACING.xl,
   },
   guidedSwitchText: {
     color: COLORS.text.primary,
