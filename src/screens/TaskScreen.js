@@ -2,7 +2,7 @@
  * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
  * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
  */
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   StyleSheet,
   Text,
@@ -26,9 +26,13 @@ import { MaterialIcons, Ionicons, Feather, AntDesign } from "@expo/vector-icons"
 import FrogIcon from "../../assets/frog.svg";
 import CustomDateTimePicker from "../components/CustomDateTimePicker";
 import notificationService from "../services/NotificationService";
-import CustomHeader from "../components/CustomHeader";
+import SafeHeader from "../components/SafeHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Haptics from "expo-haptics";
+import { useFocusEffect } from "@react-navigation/native";
+import Slider from "@react-native-community/slider";
+import * as Notifications from "expo-notifications";
 
 const TaskScreen = ({ navigation }) => {
   const [tasks, setTasks] = useState([]);
@@ -793,13 +797,9 @@ const TaskScreen = ({ navigation }) => {
     >
       <View style={[
         styles.container, 
-        isLightTheme && styles.lightContainer,
-        { 
-          paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
-        }
+        isLightTheme && styles.lightContainer
       ]}>
-        <CustomHeader 
+        <SafeHeader 
           title="TASK"
           onBackPress={() => navigation.navigate("Home")}
           rightButton={{

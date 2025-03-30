@@ -20,6 +20,7 @@ import { COLORS, SPACING, FONT_SIZE } from '../constants/DesignSystem';
 import { pressAnimation } from '../utils/AnimationUtils';
 import { errorLogger } from '../services/errorLogger';
 import { withErrorBoundary } from '../components/ErrorBoundary';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const VIEWFINDER_SIZE = screenWidth * 0.8; // 80% of screen width for the square
@@ -41,6 +42,9 @@ const CameraScreen = ({ navigation, route }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const cameraRef = useRef(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  
+  // 获取设备安全区域尺寸
+  const insets = useSafeAreaInsets();
   
   // Randomly select a quote
   const [quote] = useState(
@@ -288,9 +292,12 @@ const CameraScreen = ({ navigation, route }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Top bar area */}
-      <View style={styles.topBar}>
+      <View style={[
+        styles.topBar,
+        { paddingTop: insets.top > 0 ? insets.top : Platform.OS === 'ios' ? 40 : 20 }
+      ]}>
         <Text style={styles.quoteText}>{quote}</Text>
       </View>
       
@@ -315,7 +322,10 @@ const CameraScreen = ({ navigation, route }) => {
       </View>
       
       {/* Bottom bar area */}
-      <View style={styles.bottomBar}>
+      <View style={[
+        styles.bottomBar,
+        { paddingBottom: insets.bottom > 0 ? insets.bottom : Platform.OS === 'ios' ? 20 : 10 }
+      ]}>
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.flipButton}
@@ -345,7 +355,7 @@ const CameraScreen = ({ navigation, route }) => {
           </TouchableOpacity>
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -371,11 +381,13 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     opacity: 0.8,
+    marginTop: 20,
   },
   cameraContainer: {
     width: screenWidth,
     height: screenWidth, 
     overflow: 'hidden',
+    marginTop: 40,
   },
   camera: {
     width: '100%',

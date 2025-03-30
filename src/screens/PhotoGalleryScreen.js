@@ -23,6 +23,7 @@ import { format, isToday, parseISO } from 'date-fns';
 import { COLORS, SPACING, FONT_SIZE } from '../constants/DesignSystem';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Device from 'expo-device';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 const DEFAULT_COLUMN_COUNT = 5;
@@ -49,6 +50,9 @@ const PhotoGalleryScreen = ({ navigation, route }) => {
   const availableWidth = width - containerPadding;
   const totalGapWidth = GRID_SPACING * (columnCount - 1);
   const itemSize = Math.floor((availableWidth - totalGapWidth) / columnCount);
+
+  // 获取设备安全区域尺寸
+  const insets = useSafeAreaInsets();
 
   // Override hardware back button behavior if coming from retake
   useFocusEffect(
@@ -527,190 +531,133 @@ const PhotoGalleryScreen = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Daily Selfies</Text>
-      </View>
-      
-      {photosGrouped.length > 0 ? (
-        <SectionList
-          sections={photosGrouped}
-          keyExtractor={(item) => item.uri}
-          renderItem={renderItem}
-          renderSectionHeader={renderSectionHeader}
-          stickySectionHeadersEnabled={true}
-          contentContainerStyle={styles.gridContainer}
-          showsVerticalScrollIndicator={false}
-          numColumns={columnCount}
-          columnWrapperStyle={{
-            justifyContent: 'flex-start',
-            flexDirection: 'row',
-            flexWrap: 'wrap'
-          }}
-        />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No photos yet</Text>
-          <Text style={styles.emptySubtext}>Take your first daily selfie!</Text>
-          <TouchableOpacity
-            style={styles.takePictureButton}
-            onPress={handleTakeNewPicture}
-          >
-            <Text style={styles.takePictureButtonText}>Take Picture</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      
-      {/* Footer with navigation buttons */}
-      <View style={styles.footer}>
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={[styles.header, { marginTop: insets.top }]}>
         <TouchableOpacity 
-          style={styles.footerButton}
-          onPress={() => navigation.navigate('Home', {}, { animation: 'none' })}
+          style={styles.backButton} 
+          onPress={() => fromRetake 
+            ? navigation.navigate('Home', {}, { animation: 'none' })
+            : navigation.goBack()
+          }
         >
           <MaterialIcons name="arrow-back" size={24} color={COLORS.text.primary} />
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.footerButton}
+        <Text style={styles.headerTitle}>Photo Gallery</Text>
+        <TouchableOpacity
+          style={styles.settingsButton}
           onPress={() => setShowSettings(!showSettings)}
         >
-          <MaterialIcons name="settings" size={24} color={COLORS.text.primary} />
+          <MaterialIcons name="tune" size={24} color={COLORS.text.primary} />
         </TouchableOpacity>
       </View>
       
-      {/* Settings Modal */}
+      {/* Main content - Photo Grid */}
+      {photos.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No selfies yet</Text>
+          <TouchableOpacity 
+            style={styles.emptyButton}
+            onPress={handleTakeNewPicture}
+          >
+            <Text style={styles.emptyButtonText}>Take your first selfie</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <SectionList
+          sections={photosGrouped}
+          keyExtractor={(item, index) => item.uri + index}
+          renderItem={renderItem}
+          renderSectionHeader={renderSectionHeader}
+          stickySectionHeadersEnabled={false}
+          contentContainerStyle={styles.galleryContainer}
+        />
+      )}
+      
+      {/* Footer controls */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 20 }]}>
+        <TouchableOpacity
+          style={styles.cameraButton}
+          onPress={handleTakeNewPicture}
+        >
+          <MaterialIcons name="camera-alt" size={28} color={COLORS.text.primary} />
+        </TouchableOpacity>
+      </View>
+      
+      {/* Settings Panel */}
       {showSettings && (
-        <View style={styles.settingsContainer}>
-          <View style={styles.settingsPanel}>
-            <Text style={styles.settingsTitle}>Photos per row</Text>
-            <View style={styles.columnOptions}>
-              {[3, 4, 5, 6].map(count => renderColumnOption(count))}
-            </View>
+        <View style={[styles.settingsPanel, { bottom: insets.bottom > 0 ? insets.bottom + 90 : 110 }]}>
+          <Text style={styles.settingsTitle}>Grid Size</Text>
+          <View style={styles.columnOptions}>
+            {renderColumnOption(3)}
+            {renderColumnOption(4)}
+            {renderColumnOption(5)}
           </View>
         </View>
       )}
       
       {/* Photo Preview Modal */}
-      <Modal
-        visible={selectedPhoto !== null}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={closePhotoPreview}
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          {/* Title */}
-          {selectedPhoto && (
-            <Text style={styles.previewTitle}>
+      {selectedPhoto && (
+        <Modal
+          transparent={false}
+          animationType="fade"
+          onRequestClose={closePhotoPreview}
+        >
+          <View style={[styles.modalContainer, { paddingTop: insets.top }]}>
+            <Text style={[styles.previewTitle, { top: insets.top > 0 ? insets.top + 60 : 110 }]}>
               {getPhotoTitle(selectedPhoto)}
             </Text>
-          )}
-          
-          {/* Photo preview area */}
-          <View style={styles.previewContainer}>
-            {isLoading ? (
-              <ActivityIndicator size="large" color={COLORS.text.primary} />
-            ) : (
-              <Image 
-                source={{ 
-                  uri: viewingColorVersion ? colorVersionUri : selectedPhoto?.uri 
-                }}
+            
+            <View style={styles.previewContainer}>
+              <Image
+                source={{ uri: viewingColorVersion ? colorVersionUri : selectedPhoto.uri }}
                 style={styles.previewImage}
                 resizeMode="contain"
               />
-            )}
-          </View>
-          
-          {/* Photo info display */}
-          {showPhotoInfo && selectedPhoto && (
-            <View style={styles.photoInfoContainer}>
-              <View style={styles.photoInfoRow}>
-                <View style={styles.photoInfoItem}>
-                  <MaterialIcons name="access-time" size={16} color={COLORS.text.secondary} />
-                  <Text style={styles.photoInfoText}>
-                    {getPhotoInfo(selectedPhoto).dateTime}
-                  </Text>
-                </View>
-                
-                <View style={styles.photoInfoItem}>
-                  <MaterialIcons name="high-quality" size={16} color={COLORS.text.secondary} />
-                  <Text style={styles.photoInfoText}>
-                    {getPhotoInfo(selectedPhoto).resolution}
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.photoInfoRow}>
-                <View style={styles.photoInfoItem}>
-                  <MaterialIcons name="phone-android" size={16} color={COLORS.text.secondary} />
-                  <Text style={styles.photoInfoText}>
-                    {getPhotoInfo(selectedPhoto).deviceInfo}
-                  </Text>
-                </View>
-              </View>
-              
-              {getPhotoInfo(selectedPhoto).shotInfo && (
-                <View style={styles.photoInfoRow}>
-                  <View style={styles.photoInfoItem}>
-                    <MaterialIcons name="camera" size={16} color={COLORS.text.secondary} />
-                    <Text style={styles.photoInfoText}>
-                      {getPhotoInfo(selectedPhoto).shotInfo}
-                    </Text>
-                  </View>
-                </View>
-              )}
-              
-              <View style={styles.photoInfoRow}>
-                <View style={styles.photoInfoItem}>
-                  <MaterialIcons name="location-on" size={16} color={COLORS.text.secondary} />
-                  <Text style={styles.photoInfoText}>
-                    {getPhotoInfo(selectedPhoto).location}
-                  </Text>
-                </View>
-              </View>
             </View>
-          )}
-          
-          {/* Bottom control bar */}
-          <View style={styles.previewControls}>
-            <TouchableOpacity 
-              style={styles.previewButton} 
-              onPress={togglePhotoInfo}
-              disabled={isLoading}
-            >
-              <MaterialIcons 
-                name={showPhotoInfo ? "info-outline" : "info"} 
-                size={26} 
-                color={showPhotoInfo ? COLORS.text.primary : COLORS.text.secondary} 
-              />
-            </TouchableOpacity>
             
-            <TouchableOpacity 
-              style={styles.previewButton} 
-              onPress={saveToGallery}
-              disabled={isLoading}
-            >
-              <MaterialIcons name="save-alt" size={26} color={COLORS.text.secondary} />
-            </TouchableOpacity>
+            {showPhotoInfo && (
+              <View style={[styles.photoInfoContainer, { bottom: insets.bottom > 0 ? insets.bottom + 130 : 180 }]}>
+                {getPhotoInfo(selectedPhoto)}
+              </View>
+            )}
             
-            <TouchableOpacity 
-              style={styles.previewButton} 
-              onPress={retakePhoto}
-              disabled={isLoading}
-            >
-              <MaterialIcons name="rotate-right" size={26} color={COLORS.text.secondary} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.previewButton} 
-              onPress={closePhotoPreview}
-              disabled={isLoading}
-            >
-              <MaterialIcons name="close" size={26} color={COLORS.text.secondary} />
-            </TouchableOpacity>
+            <View style={[styles.previewControls, { bottom: insets.bottom > 0 ? insets.bottom + 20 : 40 }]}>
+              <TouchableOpacity style={styles.previewButton} onPress={togglePhotoInfo}>
+                <MaterialIcons name="info-outline" size={24} color={COLORS.text.primary} />
+                <Text style={styles.previewButtonText}>Info</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.previewButton} onPress={toggleColorView}>
+                <MaterialIcons name={viewingColorVersion ? "filter-b-and-w" : "color-lens"} size={24} color={COLORS.text.primary} />
+                <Text style={styles.previewButtonText}>{viewingColorVersion ? "B&W" : "Color"}</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.previewButton} onPress={saveToGallery}>
+                <MaterialIcons name="save-alt" size={24} color={COLORS.text.primary} />
+                <Text style={styles.previewButtonText}>Save</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.previewButton} onPress={retakePhoto}>
+                <MaterialIcons name="camera-alt" size={24} color={COLORS.text.primary} />
+                <Text style={styles.previewButtonText}>Retake</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.previewButton} onPress={closePhotoPreview}>
+                <MaterialIcons name="close" size={24} color={COLORS.text.primary} />
+                <Text style={styles.previewButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </SafeAreaView>
-      </Modal>
-    </SafeAreaView>
+        </Modal>
+      )}
+      
+      {isLoading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.text.primary} />
+        </View>
+      )}
+    </View>
   );
 };
 
@@ -935,6 +882,35 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.s,
     fontWeight: '600',
     textAlign: 'left',
+  },
+  backButton: {
+    position: 'absolute',
+    left: SPACING.m,
+    top: Platform.OS === 'ios' ? 5 : 10,
+  },
+  headerTitle: {
+    fontSize: FONT_SIZE.xl,
+    color: COLORS.text.primary,
+    fontWeight: '600',
+  },
+  settingsButton: {
+    position: 'absolute',
+    right: SPACING.m,
+    top: Platform.OS === 'ios' ? 5 : 10,
+  },
+  cameraButton: {
+    position: 'absolute',
+    right: SPACING.m,
+    bottom: Platform.OS === 'ios' ? 30 : 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  galleryContainer: {
+    padding: SPACING.s,
+    paddingBottom: 100, // Space for footer
   },
 });
 

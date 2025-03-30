@@ -36,7 +36,7 @@ import {
 } from "../constants/DesignSystem";
 import storageService from "../services/storage/StorageService";
 import { goBackToHome } from "../navigation/NavigationUtils";
-import CustomHeader from "../components/CustomHeader";
+import SafeHeader from "../components/SafeHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { activateKeepAwake, deactivateKeepAwake } from 'expo-keep-awake';
@@ -1380,8 +1380,8 @@ const MeditationScreen = ({ navigation }) => {
   return (
     <View style={[
       styles.container, 
-      isLightTheme && styles.lightContainer,
-      { paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT : (insets?.top || 0) }
+      isLightTheme && styles.lightContainer
+      
     ]}>
       {!isLightTheme && <RNStatusBar barStyle="light-content" />}
       {isLightTheme && <RNStatusBar barStyle="dark-content" />}
@@ -1389,7 +1389,7 @@ const MeditationScreen = ({ navigation }) => {
       {!isMeditating && !isCountingDown && !isMeditationComplete && (
         <>
           <View style={styles.headerContainer}>
-            <CustomHeader 
+            <SafeHeader 
               title="MEDITATION"
               onBackPress={() => goBackToHome(navigation)}
               showBottomBorder={false}
@@ -1728,8 +1728,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   headerContainer: {
-    paddingTop: SPACING.s,
-    marginBottom: SPACING.s,
+    width: '100%',
   },
   selectionContent: {
     flex: 1,

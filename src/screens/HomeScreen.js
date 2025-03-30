@@ -404,15 +404,15 @@ const HomeScreen = ({ navigation }) => {
     <View style={[
       styles.container, 
       { 
-        // Add padding for notch and other safe areas
-        paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
+        // Use StatusBar height directly for Android top padding
+        paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT : insets.top,
         paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
         paddingLeft: insets.left > 0 ? insets.left : 20,
         paddingRight: insets.right > 0 ? insets.right : 20,
       }
     ]}>
       {/* Top date */}
-      <View style={[styles.headerContainer, { marginTop: Platform.OS === 'android' ? 20 : 0 }]}>
+      <View style={styles.headerContainer}>
         <Text style={styles.dateText}>{formatDate()}</Text>
 
         {/* Weather display with enhanced error handling */}
@@ -562,7 +562,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 10,
+    marginTop: Platform.OS === 'ios' ? 10 : 20,
     marginBottom: 30,
   },
   dateText: {
@@ -642,6 +642,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: 10,
+    marginBottom: -5,
   },
   settingsText: {
     color: "#888",
@@ -660,23 +661,47 @@ const styles = StyleSheet.create({
   circleButton: {
     width: 36,
     height: 36,
-    borderRadius: 20,
+    borderRadius: 18,
     backgroundColor: '#555', 
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#fff',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 10,
+    // Fix shadow alignment for Android
+    ...Platform.select({
+      ios: {
+        shadowColor: '#fff',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.6,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 10,
+        // Android needs additional shadow properties
+        shadowColor: '#fff',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.6,
+        shadowRadius: 8,
+      }
+    }),
   },
   circleButtonHighlight: {
-    backgroundColor: '#fff', 
-    shadowColor: '#fff',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 15,
-    elevation: 15,
+    backgroundColor: '#fff',
+    // Fix shadow alignment for Android
+    ...Platform.select({
+      ios: {
+        shadowColor: '#fff',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 15,
+      },
+      android: {
+        elevation: 15,
+        // Android needs additional shadow properties
+        shadowColor: '#fff',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 15,
+      }
+    }),
   },
 });
 

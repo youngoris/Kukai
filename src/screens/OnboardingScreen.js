@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import storageService from '../services/storage/StorageService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   SPACING,
   FONT_SIZE,
@@ -32,6 +33,9 @@ const OnboardingScreen = ({ navigation }) => {
   // Voice guidance setting
   const [voiceGuidanceEnabled, setVoiceGuidanceEnabled] = useState(true);
 
+  // Get safe area insets
+  const insets = useSafeAreaInsets();
+
   // Add debug logs to confirm component is rendering
   console.log("OnboardingScreen rendering");
 
@@ -43,16 +47,16 @@ const OnboardingScreen = ({ navigation }) => {
         const hasCompletedOnboarding = await storageService.getItem('hasCompletedOnboarding');
         console.log("DEBUG - Onboarding status:", hasCompletedOnboarding);
         
-        // Temporarily comment out auto-navigation logic to ensure screen displays
-        // if (hasCompletedOnboarding === 'true') {
-        //   // Navigate to Home screen immediately to avoid flicker
-        //   navigation.replace('Home');
-        // }
+        // Uncomment auto-navigation logic to ensure proper flow
+        if (hasCompletedOnboarding === 'true') {
+          // Navigate to Home screen immediately to avoid flicker
+          navigation.replace('Home');
+        }
       } catch (error) {
         console.error('Error checking onboarding status:', error);
-        // Temporarily removed navigation in error handling
+        // Add back navigation in error handling for better user experience
         // In case of error, still navigate to Home to prevent UX issues
-        // navigation.replace('Home');
+        navigation.replace('Home');
       }
     };
     
@@ -263,13 +267,26 @@ const OnboardingScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       {/* Skip button */}
-      <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+      <TouchableOpacity 
+        style={[
+          styles.skipButton, 
+          { top: insets.top > 0 ? insets.top + 10 : Platform.OS === 'ios' ? 50 : 20 }
+        ]} 
+        onPress={handleSkip}
+      >
         <Text style={styles.skipText}>Skip</Text>
       </TouchableOpacity>
 
       {/* Reset button for testing */}
       <TouchableOpacity 
-        style={[styles.skipButton, { left: 20, right: 'auto' }]} 
+        style={[
+          styles.skipButton, 
+          { 
+            left: 20, 
+            right: 'auto',
+            top: insets.top > 0 ? insets.top + 10 : Platform.OS === 'ios' ? 50 : 20
+          }
+        ]} 
         onPress={resetstorageService}
       >
         <Text style={styles.skipText}>Reset</Text>
@@ -325,7 +342,13 @@ const OnboardingScreen = ({ navigation }) => {
       </View>
 
       {/* Next/Get Started button */}
-      <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+      <TouchableOpacity 
+        style={[
+          styles.nextButton,
+          { marginBottom: insets.bottom > 0 ? insets.bottom + 10 : Platform.OS === 'ios' ? 40 : SPACING.xl }
+        ]} 
+        onPress={handleNext}
+      >
         <Text style={styles.nextButtonText}>
           {currentPage === pages.length - 1 ? 'Get Started' : 'Next'}
         </Text>
@@ -341,7 +364,6 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 20,
     right: 20,
     zIndex: 1,
     padding: SPACING.s,
@@ -403,7 +425,6 @@ const styles = StyleSheet.create({
     width: '90%',
     alignSelf: 'center',
     borderRadius: 16,
-    marginBottom: Platform.OS === 'ios' ? 40 : SPACING.xl,
     ...SHADOWS.medium,
   },
   nextButtonText: {

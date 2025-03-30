@@ -30,7 +30,7 @@ import Markdown from "react-native-markdown-display"; // Import Markdown compone
 import useWeather from "../utils/useWeather"; // Import weather Hook
 import { getTemplateContent } from "../constants/JournalTemplates"; // Import template functionality
 import { getSettingsWithDefaults } from "../utils/defaultSettings"; // Import settings utility
-import CustomHeader from "../components/CustomHeader"; // Import custom header component
+import SafeHeader from "../components/SafeHeader"; // Import SafeHeader component
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const JournalEditScreen = ({ navigation, route }) => {
@@ -856,14 +856,13 @@ const JournalEditScreen = ({ navigation, route }) => {
     <View style={[
       styles.container,
       { 
-        paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
-        paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
+        paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
       }
     ]}>
       <RNStatusBar hidden />
 
       {/* Use CustomHeader component */}
-      <CustomHeader 
+      <SafeHeader 
         title={viewOnly ? "JOURNAL REVIEW" : "EDIT JOURNAL"}
         onBackPress={() => navigation.goBack()}
         rightButton={

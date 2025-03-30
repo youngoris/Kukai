@@ -2,7 +2,7 @@
  * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
  * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
  */
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   StyleSheet,
   Text,
@@ -18,6 +18,7 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
+  Dimensions,
 } from "react-native";
 import {
   AntDesign,
@@ -26,12 +27,13 @@ import {
   Feather,
   Octicons,
 } from "@expo/vector-icons";
+import { FontAwesome } from '@expo/vector-icons';
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import SafeHeader from "../components/SafeHeader";
 import storageService from "../services/storage/StorageService";
 import FrogIcon from "../../assets/frog.svg";
 import CustomDateTimePicker from "../components/CustomDateTimePicker";
-import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const PRIORITY_COLORS = {
   high: "#666666", // Dark gray
@@ -884,21 +886,12 @@ const SummaryScreen = ({ navigation }) => {
     <View
       style={[
         styles.container,
-        isLightTheme && styles.lightContainer,
-        {
-          paddingTop:
-            Platform.OS === "android"
-              ? STATUSBAR_HEIGHT + 40
-              : insets.top > 0
-              ? insets.top + 10
-              : 20,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
-        },
+        isLightTheme && styles.lightContainer
       ]}
     >
       <RNStatusBar hidden={true} />
 
-      <CustomHeader
+      <SafeHeader
         title="SUMMARY"
         onBackPress={() => navigation.navigate("Home")}
         showBottomBorder={false}

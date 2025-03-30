@@ -6,7 +6,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { StatusBar, Platform, LogBox, View, Text } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import "react-native-gesture-handler";
 import {
   useFonts,
@@ -158,6 +158,17 @@ export default function App() {
     }
   }, [navigationRef.current]);
 
+  // Create custom safe area metrics with reduced bottom inset
+  const customSafeAreaMetrics = initialWindowMetrics 
+    ? {
+        ...initialWindowMetrics,
+        insets: {
+          ...initialWindowMetrics.insets,
+          bottom: Math.max(initialWindowMetrics.insets.bottom / 2, 5), // Reduce bottom inset by half, but keep at least 5px
+        }
+      } 
+    : undefined;
+
   // Render loading or error state
   if (!fontsLoaded || !isReady) {
     return null; // Keep splash screen
@@ -176,7 +187,9 @@ export default function App() {
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaProvider>
+        <SafeAreaProvider
+          initialMetrics={customSafeAreaMetrics}
+        >
           <ErrorProvider>
             <AppProvider>
               <NavigationContainer 

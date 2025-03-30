@@ -31,7 +31,7 @@ import CloudBackupSection from "../components/CloudBackupSection";
 import JournalTemplateManager from "../components/JournalTemplateManager";
 import notificationService from "../services/NotificationService";
 import { AVAILABLE_TEMPLATES } from "../constants/JournalTemplates";
-import CustomHeader from "../components/CustomHeader";
+import SafeHeader from "../components/SafeHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 import VoiceGuidanceModal from "../components/VoiceGuidanceModal";
 import * as Sharing from 'expo-sharing';
@@ -1373,17 +1373,13 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView
+    <View
       style={[
         styles.container, 
-        appTheme === "light" && styles.lightContainer,
-        { 
-          paddingTop: Platform.OS === 'android' ? STATUSBAR_HEIGHT + 40 : insets.top > 0 ? insets.top + 10 : 20,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 20
-        }
+        appTheme === "light" && styles.lightContainer
       ]}
     >
-      <CustomHeader 
+      <SafeHeader 
         title="SETTINGS"
         onBackPress={() => navigation.goBack()}
         showBottomBorder={false}
@@ -2137,7 +2133,7 @@ const SettingsScreen = ({ navigation }) => {
         onClose={() => setShowTemplateManager(false)}
         onTemplateSelect={handleTemplateSelect}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 

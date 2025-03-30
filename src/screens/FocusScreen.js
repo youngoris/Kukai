@@ -26,7 +26,7 @@ import { Audio } from "expo-av";
 import storageService from "../services/storage/StorageService";
 import { useFocusEffect } from "@react-navigation/native";
 import notificationService from "../services/NotificationService";
-import CustomHeader from "../components/CustomHeader";
+import SafeHeader from "../components/SafeHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -1036,22 +1036,15 @@ export default function FocusScreen({ navigation }) {
       styles.container, 
       isLightTheme && styles.lightContainer
     ]}>
-      {/* Status bar space */}
-      <View style={{
-        height: Platform.OS === 'android' ? STATUSBAR_HEIGHT : insets.top,
-      }} />
-      
-      {/* Header area - fixed height */}
-      <View style={styles.headerContainer}>
-        {!isActive && (
-          <CustomHeader 
-            title="FOCUS"
-            onBackPress={handleBackPress}
-            hideBackButton={false}
-            showBottomBorder={false}
-          />
-        )}
-      </View>
+      {/* Header area */}
+      {!isActive && (
+        <SafeHeader 
+          title="FOCUS"
+          onBackPress={handleBackPress}
+          hideBackButton={false}
+          showBottomBorder={false}
+        />
+      )}
 
       {/* Main content area */}
       <View style={[
