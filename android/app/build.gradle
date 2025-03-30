@@ -93,11 +93,6 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0.0"
-        
-        vectorDrawables.useSupportLibrary = true
-        
-        // 添加资源配置
-        resourceConfigurations.addAll(['en', 'zh'])
     }
     signingConfigs {
         debug {
@@ -128,18 +123,6 @@ android {
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
-    }
-    
-    // 添加AAPT选项
-    aaptOptions {
-        cruncherEnabled = false
-        noCompress "tflite"
-    }
-    
-    configurations.all {
-        resolutionStrategy {
-            force 'androidx.core:core:1.10.0'
-        }
     }
 }
 

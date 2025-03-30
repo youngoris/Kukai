@@ -2,7 +2,7 @@
  * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
  * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
  */
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
 import {
   StyleSheet,
   Text,
@@ -34,6 +34,7 @@ import { AVAILABLE_TEMPLATES } from "../constants/JournalTemplates";
 import CustomHeader from "../components/CustomHeader";
 import { getSettingsWithDefaults } from "../utils/defaultSettings";
 import VoiceGuidanceModal from "../components/VoiceGuidanceModal";
+import * as Sharing from 'expo-sharing';
 
 const SettingsScreen = ({ navigation }) => {
   // Get safe area insets
@@ -650,74 +651,195 @@ const SettingsScreen = ({ navigation }) => {
       const dataStr = JSON.stringify(allData);
       const encrypted = exportPassword ? dataStr : dataStr; // Simplified, should encrypt if password provided
 
-      const fileUri = FileSystem.documentDirectory + "kukai_backup.json";
+      // Create a timestamp-based filename to avoid conflicts
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const fileName = `kukai_backup_${timestamp}.json`;
+      
+      // Determine file path - iOS and Android use different directories
+      let fileUri;
+      if (Platform.OS === 'ios') {
+        // iOS uses document directory, which is easier to share
+        fileUri = `${FileSystem.documentDirectory}${fileName}`;
+      } else {
+        // Android continues to use cache directory
+        fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+      }
+      
+      console.log(`Saving backup to: ${fileUri} (Platform: ${Platform.OS})`);
+      
+      // Write to file
       await FileSystem.writeAsStringAsync(fileUri, encrypted);
+      
+      // Confirm file was created
+      const fileInfo = await FileSystem.getInfoAsync(fileUri);
+      if (!fileInfo.exists) {
+        throw new Error("Backup file creation failed");
+      }
+      console.log("File created successfully:", fileInfo);
 
-      await Share.share({
-        url: fileUri,
-        title: "Kukai Data Backup",
-      });
+      // Execute platform-specific sharing logic
+      if (Platform.OS === 'android') {
+        try {
+          // Android uses content URI
+          const contentUri = await FileSystem.getContentUriAsync(fileUri);
+          console.log("Android content URI:", contentUri);
+          
+          await Share.share(
+            {
+              message: contentUri, 
+              title: "Kukai Data Backup",
+              url: contentUri
+            },
+            {
+              dialogTitle: "Share Backup File",
+              subject: "Kukai Data Backup",
+              mimeType: "application/json"
+            }
+          );
+        } catch (shareError) {
+          console.error("Share error:", shareError);
+          // If getContentUriAsync fails, try direct file URI
+          await Share.share(
+            { 
+              message: `Kukai Data Backup (${fileName})`,
+              title: "Kukai Data Backup"
+            },
+            {
+              dialogTitle: "Share Backup File", 
+              mimeType: "application/json"
+            }
+          );
+        }
+      } else {
+        // iOS uses Sharing.shareAsync, which is Expo's recommended method for sharing files
+        try {
+          console.log("Using Expo Sharing for iOS");
+          // Check if sharing is available
+          const canShare = await Sharing.isAvailableAsync();
+          if (!canShare) {
+            throw new Error("Sharing is not available on this device");
+          }
+          
+          // Use Expo's specialized sharing method
+          await Sharing.shareAsync(fileUri, {
+            UTI: "public.json", // Uniform Type Identifier for iOS
+            mimeType: "application/json",
+            dialogTitle: "Save Kukai Backup File"
+          });
+        } catch (iosShareError) {
+          console.error("iOS share error:", iosShareError);
+          // Try fallback to basic sharing method
+          await Share.share({
+            title: "Kukai Data Backup",
+            message: "Please save this backup file",
+            url: fileUri
+          });
+        }
+      }
 
       setExportModalVisible(false);
       setExportPassword("");
     } catch (error) {
       console.error("Error exporting data:", error);
-      Alert.alert("Export Error", "Could not export data. Please try again.");
+      Alert.alert("Export Error", `Could not export data: ${error.message}`);
     }
   };
 
   const importData = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "application/json",
-        copyToCacheDirectory: true,
-      });
+      // Use different options for Android and iOS
+      const options = Platform.OS === 'android' 
+        ? { 
+            type: "*/*", 
+            copyToCacheDirectory: true 
+          } 
+        : { 
+            type: "application/json", 
+            copyToCacheDirectory: true 
+          };
+      
+      console.log("Starting document picker with options:", options);
+      const result = await DocumentPicker.getDocumentAsync(options);
+      console.log("Document picker result:", result);
 
-      if (result.type === "success") {
+      if (result.type === "success" || result.type === "cancel") {
+        if (result.type === "cancel") {
+          console.log("User cancelled the document picker");
+          return;
+        }
+        
+        console.log("Reading file from:", result.uri);
         const data = await FileSystem.readAsStringAsync(result.uri);
-        const parsedData = JSON.parse(data);
+        
+        try {
+          // Try to parse JSON data
+          const parsedData = JSON.parse(data);
+          
+          Alert.alert(
+            "Confirm Import",
+            "Import will replace all existing data. Continue?",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Import",
+                style: "destructive",
+                onPress: async () => {
+                  try {
+                    console.log("Starting data import");
+                    await storageService.clear();
 
-        Alert.alert(
-          "Confirm Import",
-          "Importing will replace all existing data. Continue?",
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Import",
-              onPress: async () => {
-                try {
-                  await storageService.clear();
+                    const entries = Object.entries(parsedData);
+                    const multiSetArray = entries.map(([key, value]) => [
+                      key,
+                      value,
+                    ]);
 
-                  const entries = Object.entries(parsedData);
-                  const multiSetArray = entries.map(([key, value]) => [
-                    key,
-                    value,
-                  ]);
+                    await storageService.multiSet(multiSetArray);
+                    await loadSettings();
 
-                  await storageService.multiSet(multiSetArray);
-                  await loadSettings();
-
-                  Alert.alert(
-                    "Import Successful",
-                    "Your data has been successfully imported.",
-                  );
-                } catch (error) {
-                  console.error("Error importing data:", error);
-                  Alert.alert(
-                    "Import Error",
-                    "An error occurred during import.",
-                  );
-                }
+                    Alert.alert(
+                      "Import Successful",
+                      "Data imported successfully, app will reload to apply changes.",
+                      [
+                        {
+                          text: "OK",
+                          onPress: () => {
+                            // Optional: Reload app after import
+                            if (navigation && navigation.reset) {
+                              navigation.reset({
+                                index: 0,
+                                routes: [{ name: 'Home' }],
+                              });
+                            }
+                          }
+                        }
+                      ]
+                    );
+                  } catch (error) {
+                    console.error("Error during import process:", error);
+                    Alert.alert(
+                      "Import Error",
+                      `Error during import: ${error.message}`
+                    );
+                  }
+                },
               },
-            },
-          ],
-        );
+            ],
+            { cancelable: true }
+          );
+        } catch (parseError) {
+          console.error("JSON parse error:", parseError);
+          Alert.alert(
+            "Format Error",
+            "Selected file is not a valid Kukai backup file. Please ensure you selected the correct backup file."
+          );
+        }
       }
     } catch (error) {
       console.error("Error importing data:", error);
       Alert.alert(
         "Import Error",
-        "Could not import data. Please check the file format.",
+        `Could not import data: ${error.message}`
       );
     }
   };

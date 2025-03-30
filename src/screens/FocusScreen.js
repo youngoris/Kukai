@@ -232,9 +232,9 @@ export default function FocusScreen({ navigation }) {
       if (appState.current === "active" && nextAppState.match(/inactive|background/)) {
         saveSessionState();
         
-        // 如果倒计时即将结束（少于5秒）且应用进入后台，发送通知
+        // If countdown is about to end (less than 5 seconds) and app goes to background, send notification
         if (isActive && timeRemaining <= 5 && timeRemaining > 0) {
-          // 安排一个通知在剩余秒数后触发
+          // Schedule a notification to trigger after the remaining seconds
           setTimeout(() => {
             if (AppState.currentState.match(/inactive|background/)) {
               triggerNotification();
@@ -450,7 +450,7 @@ export default function FocusScreen({ navigation }) {
     setIsActive(false);
     
     // Keep break state true to show correct completion screen
-    // setIsBreak(false); - 不在这里重置break状态
+    // Do not reset break state here
     
     // Play break completion sound if app is in foreground
     playCompletionSound();
@@ -979,10 +979,10 @@ export default function FocusScreen({ navigation }) {
     };
   }, []);
 
-  // 完成图标动画效果
+  // Completion icon animation effect
   useEffect(() => {
     if (showChoice) {
-      // 创建一个循环动画，使图标略微放大和缩小
+      // Create a looping animation that slightly scales the icon up and down
       Animated.loop(
         Animated.sequence([
           Animated.timing(iconAnimation, {
@@ -998,7 +998,7 @@ export default function FocusScreen({ navigation }) {
         ])
       ).start();
     } else {
-      // 重置动画
+      // Reset animation
       iconAnimation.setValue(1);
     }
     
@@ -1036,12 +1036,12 @@ export default function FocusScreen({ navigation }) {
       styles.container, 
       isLightTheme && styles.lightContainer
     ]}>
-      {/* 状态栏空间 */}
+      {/* Status bar space */}
       <View style={{
         height: Platform.OS === 'android' ? STATUSBAR_HEIGHT : insets.top,
       }} />
       
-      {/* Header区域 - 固定高度 */}
+      {/* Header area - fixed height */}
       <View style={styles.headerContainer}>
         {!isActive && (
           <CustomHeader 
@@ -1148,7 +1148,7 @@ export default function FocusScreen({ navigation }) {
         )}
       </View>
 
-      {/* 底部安全区域 */}
+      {/* Bottom safe area */}
       <View style={[
         styles.footer,
         { paddingBottom: insets.bottom > 0 ? insets.bottom : 20 }

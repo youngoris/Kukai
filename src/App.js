@@ -2,8 +2,8 @@
  * STORAGE MIGRATION: This file has been updated to use StorageService instead of AsyncStorage.
  * StorageService is a drop-in replacement that uses SQLite under the hood for better performance.
  */
-import React, { useEffect, useRef } from "react";
-import { StatusBar, Platform, LogBox } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { StatusBar, Platform, LogBox, View, Text } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -44,11 +44,16 @@ setupGlobalErrorHandler();
 LogBox.ignoreLogs([
   'ViewPropTypes will be removed from React Native',
   'AsyncStorage has been extracted from react-native',
+  'Require cycle',
   // Add other warnings you want to suppress
 ]);
 
 // Main application component
 export default function App() {
+  // Add initialization state tracking
+  const [isReady, setIsReady] = useState(false);
+  const [initError, setInitError] = useState(null);
+  
   // Load fonts
   const [fontsLoaded] = useFonts({
     Roboto_300Light,
@@ -60,143 +65,82 @@ export default function App() {
   // Create navigation reference
   const navigationRef = useRef(null);
 
-  // Initialize database with error handling
+  // Handle all initialization in a centralized manner
   useEffect(() => {
-    const initializeDatabase = async () => {
-      const result = await withErrorHandling(async () => {
+    async function prepareApp() {
+      try {
+        // 1. Initialize database (as core functionality)
         console.log("Initializing database...");
-        
-        // Make sure database service is properly instantiated
-        if (!databaseService) {
-          throw new Error("Database service is undefined");
-        }
-        
-        // Initialize database
-        const dbResult = await databaseService.initialize();
-        
-        if (dbResult.success) {
-          console.log("Database initialized successfully");
-          console.log(`Database schema version: ${dbResult.dbVersion || 'unknown'}`);
-          
-          // Initialize backup service
-          await databaseBackupService.initialize();
-          
-          // Initialize database indexes for query optimization
-          await databaseQueryOptimizer.ensureIndexes();
-          
-          // Check for automatic backup
-          const backupResult = await databaseBackupService.checkAutomaticBackup();
-          if (backupResult.performed) {
-            console.log("Automatic backup completed:", backupResult.result.name);
+        if (databaseService) {
+          const dbResult = await databaseService.initialize();
+          if (!dbResult.success) {
+            console.warn("DB initialization warning:", dbResult.error);
           }
-          
-        } else {
-          throw new Error(`Database initialization failed: ${dbResult.error || 'Unknown error'}`);
         }
-      }, { operation: 'Database initialization' });
-      
-      if (!result.success) {
-        console.error("Database initialization error:", result.error);
-        // App can continue - we'll handle database errors at the component level
-      }
-    };
 
-    initializeDatabase();
-  }, []);
-
-  // Hide splash screen when fonts are loaded
-  useEffect(() => {
-    const hideSplash = async () => {
-      const result = await withErrorHandling(async () => {
+        // 2. Hide splash screen when fonts are loaded
         if (fontsLoaded) {
           await SplashScreen.hideAsync();
         }
-      }, { operation: 'Hide splash screen', silent: true });
-      
-      // Non-critical error, can continue
-    };
 
-    hideSplash();
+        // 3. Non-critical service initialization - using delayed loading
+        setTimeout(() => {
+          // Background initialization of other services
+          Promise.all([
+            initBackupService(),
+            initGoogleDrive(),
+            initNotifications()
+          ]).catch(err => console.warn("Background services init error:", err));
+        }, 3000);
+
+        // Application ready
+        setIsReady(true);
+      } catch (error) {
+        console.error("App initialization error:", error);
+        setInitError(error.message);
+        // Try to hide splash screen and display error UI
+        if (fontsLoaded) {
+          await SplashScreen.hideAsync().catch(() => {});
+        }
+      }
+    }
+
+    prepareApp();
   }, [fontsLoaded]);
 
-  // Initialize Google Drive service with error handling
-  useEffect(() => {
-    const initializeGoogleDrive = async () => {
-      const result = await withErrorHandling(async () => {
-        console.log("Initializing Google Drive service...");
-
-        // Print environment variables for debugging
-        console.log(
-          "GOOGLE_EXPO_CLIENT_ID:",
-          process.env.GOOGLE_EXPO_CLIENT_ID ? "Set" : "Not set",
-        );
-        console.log(
-          "GOOGLE_IOS_CLIENT_ID:",
-          process.env.GOOGLE_IOS_CLIENT_ID ? "Set" : "Not set",
-        );
-        console.log(
-          "GOOGLE_ANDROID_CLIENT_ID:",
-          process.env.GOOGLE_ANDROID_CLIENT_ID ? "Set" : "Not set",
-        );
-        console.log(
-          "GOOGLE_WEB_CLIENT_ID:",
-          process.env.GOOGLE_WEB_CLIENT_ID ? "Set" : "Not set",
-        );
-
-        const initialized = await googleDriveService.initialize();
-        console.log("Google Drive service initialized:", initialized);
-
-        if (initialized) {
-          const syncPerformed =
-            await googleDriveService.checkAndPerformAutoSync();
-          console.log("Auto sync check performed:", syncPerformed);
-        }
-      }, { operation: 'Google Drive initialization' });
-      
-      if (!result.success) {
-        // Continue without Google Drive integration
-        console.log("Continuing without Google Drive integration");
+  // Background initialization functions
+  const initBackupService = async () => {
+    try {
+      await databaseBackupService.initialize();
+      await databaseQueryOptimizer.ensureIndexes();
+      const backupResult = await databaseBackupService.checkAutomaticBackup();
+      if (backupResult.performed) {
+        console.log("Auto backup completed:", backupResult.result.name);
       }
-    };
-
-    initializeGoogleDrive();
-  }, []);
-
-  // Initialize notification service with error handling
-  useEffect(() => {
-    const initializeNotifications = async () => {
-      const result = await withErrorHandling(async () => {
-        const initialized = await notificationService.initialize();
-        if (initialized) {
-          console.log("Notification system initialized successfully");
-        } else {
-          console.log(
-            "Notification system initialization failed, permissions may have been denied",
-          );
-        }
-        return initialized;
-      }, { operation: 'Notification initialization' });
-      
-      if (!result.success) {
-        // Continue without notifications
-        console.log("Continuing without notifications");
-      }
-    };
-    
-    initializeNotifications();
-
-    // Clean up notification listener
-    return () => {
-      notificationService.cleanup();
-    };
-  }, []);
-
-  // Set navigation reference
-  useEffect(() => {
-    if (navigationRef.current) {
-      notificationService.setNavigationRef(navigationRef.current);
+    } catch (error) {
+      console.warn("Backup service init error:", error);
     }
-  }, [navigationRef.current]);
+  };
+
+  const initGoogleDrive = async () => {
+    try {
+      console.log("Initializing Google Drive service...");
+      const initialized = await googleDriveService.initialize();
+      if (initialized) {
+        await googleDriveService.checkAndPerformAutoSync();
+      }
+    } catch (error) {
+      console.warn("Google Drive init error:", error);
+    }
+  };
+
+  const initNotifications = async () => {
+    try {
+      await notificationService.initialize();
+    } catch (error) {
+      console.warn("Notification init error:", error);
+    }
+  };
 
   // Set status bar for Android
   useEffect(() => {
@@ -207,8 +151,26 @@ export default function App() {
     }
   }, []);
 
-  if (!fontsLoaded) {
-    return null;
+  // Set navigation reference
+  useEffect(() => {
+    if (navigationRef.current) {
+      notificationService.setNavigationRef(navigationRef.current);
+    }
+  }, [navigationRef.current]);
+
+  // Render loading or error state
+  if (!fontsLoaded || !isReady) {
+    return null; // Keep splash screen
+  }
+
+  if (initError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ fontSize: 16, marginBottom: 10 }}>
+          There was a problem starting the application. Please restart the app or contact support.
+        </Text>
+      </View>
+    );
   }
 
   return (

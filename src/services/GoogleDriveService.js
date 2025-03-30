@@ -56,10 +56,10 @@ class GoogleDriveService {
           iosClientId: GOOGLE_IOS_CLIENT_ID, // Only needed for iOS
           offlineAccess: true, // Request refresh token to access Google API
           scopes: [
-            "https://www.googleapis.com/auth/drive.file",       // 文件权限
-            "https://www.googleapis.com/auth/drive.appdata",    // 应用数据
-            "https://www.googleapis.com/auth/drive.metadata.readonly", // 元数据只读权限
-            "https://www.googleapis.com/auth/drive.readonly",   // 只读权限 (用于列出文件)
+            "https://www.googleapis.com/auth/drive.file",       // File permissions
+            "https://www.googleapis.com/auth/drive.appdata",    // Application data
+            "https://www.googleapis.com/auth/drive.metadata.readonly", // Metadata read-only permissions
+            "https://www.googleapis.com/auth/drive.readonly",   // Read-only permissions (for listing files)
           ],
         });
         
@@ -472,11 +472,11 @@ class GoogleDriveService {
       
       console.log("Getting backups from folder ID:", folderId);
       
-      // 修复查询格式，严格按照Google Drive API文档标准
-      // 注意：单引号需要包围folder ID，整个查询不需要额外引号
-      // 参考: https://developers.google.com/drive/api/v3/reference/files/list
+      // Fix query format, strictly following Google Drive API documentation standards
+      // Note: Single quotes must surround the folder ID, and the entire query doesn't need additional quotes
+      // Reference: https://developers.google.com/drive/api/v3/reference/files/list
       
-      // 构建查询并使用URL参数而非直接编码在URL中
+      // Build query and use URL parameters instead of directly encoding in the URL
       const params = new URLSearchParams({
         q: `parents='${folderId}' and trashed=false`,
         fields: 'files(id,name,createdTime,modifiedTime,size)',
@@ -488,7 +488,7 @@ class GoogleDriveService {
       console.log("Query params:", params.toString());
       console.log("Sending request to:", url);
       
-      // 尝试不同的查询格式以防当前格式不起作用
+      // Try different query formats in case the current format doesn't work
       let response;
       let responseText;
       
@@ -506,7 +506,7 @@ class GoogleDriveService {
       } catch (fetchError) {
         console.error("Fetch error:", fetchError);
         
-        // 尝试第二种查询格式
+        // Try second query format
         console.log("Trying alternative query format...");
         
         const alternativeParams = new URLSearchParams({
@@ -583,11 +583,11 @@ class GoogleDriveService {
         throw new Error(`Download failed: ${errorText}`);
       }
       
-      // 获取响应文本
+      // Get response text
       const responseText = await response.text();
       console.log("Downloaded backup data (first 100 chars):", responseText.substring(0, 100));
       
-      // 尝试解析为JSON
+      // Try to parse as JSON
       try {
         const backupData = JSON.parse(responseText);
         return backupData;
@@ -823,17 +823,17 @@ class GoogleDriveService {
       console.log("Backup data downloaded successfully, preparing to restore...");
       console.log("Backup data structure:", Object.keys(backupData));
       
-      // 实际恢复数据逻辑
+      // Actual data restoration logic
       let restoredItems = 0;
       
-      // 处理描述和时间戳
+      // Process description and timestamp
       const description = backupData.description || "";
       const timestamp = backupData.timestamp || new Date().toISOString();
       
-      // 检查数据结构并适应不同格式
+      // Check data structure and adapt to different formats
       let dataToRestore = backupData;
       
-      // 检查备份格式
+      // Check backup format
       if (backupData.data) {
         console.log("Found 'data' property in backup, using it for restoration");
         dataToRestore = backupData.data;
@@ -841,14 +841,14 @@ class GoogleDriveService {
       
       console.log("Data to restore structure:", Object.keys(dataToRestore));
       
-      // 根据数据类型恢复不同的数据集
+      // Restore different datasets based on data type
       const possibleDataKeys = ['meditations', 'tasks', 'journal', 'settings'];
       
       for (const key of possibleDataKeys) {
         if (dataToRestore[key]) {
           console.log(`Restoring ${key} data`);
           try {
-            // 确保数据是有效的JSON格式
+            // Ensure data is in valid JSON format
             const dataValue = typeof dataToRestore[key] === 'string' 
               ? JSON.parse(dataToRestore[key]) 
               : dataToRestore[key];
@@ -862,7 +862,7 @@ class GoogleDriveService {
         }
       }
       
-      // 恢复其他可能存在的数据项
+      // Restore other possible data items
       const otherDataKeys = Object.keys(dataToRestore).filter(key => 
         !possibleDataKeys.includes(key) && 
         !['description', 'timestamp'].includes(key) &&
@@ -942,14 +942,14 @@ class GoogleDriveService {
   // Get shared drives list
   async getSharedDrives() {
     try {
-      // 确保已登录
+      // Ensure logged in
       if (!this.isAuthenticated()) {
         await this.authenticate();
       }
       
       console.log("Getting shared drives list...");
       
-      // 构建API参数
+      // Build API parameters
       const params = new URLSearchParams({
         pageSize: '10'
       });
@@ -966,11 +966,11 @@ class GoogleDriveService {
         },
       });
       
-      // 获取完整响应文本进行调试
+      // Get complete response text for debugging
       const responseText = await response.text();
       console.log("Raw shared drives API response:", responseText);
       
-      // 解析JSON
+      // Parse JSON
       let data;
       try {
         data = JSON.parse(responseText);
@@ -989,7 +989,7 @@ class GoogleDriveService {
       return data.drives || [];
     } catch (error) {
       console.error("Failed to get shared drives:", error);
-      // 如果是权限错误，可能用户没有共享驱动器访问权限，返回空数组
+      // If it's a permission error, the user may not have access to shared drives, return empty array
       if (error.message && error.message.includes("403")) {
         console.log("User may not have access to shared drives (403 error)");
         return [];
@@ -1001,7 +1001,7 @@ class GoogleDriveService {
   // Get specific shared drive
   async getSharedDrive(driveId) {
     try {
-      // 确保已登录
+      // Ensure logged in
       if (!this.isAuthenticated()) {
         await this.authenticate();
       }
