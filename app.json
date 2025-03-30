@@ -17,7 +17,11 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.andre.kukai",
       "infoPlist": {
+        "NSHealthShareUsageDescription": "This app requires access to save your meditation sessions as mindfulness data",
+        "NSHealthUpdateUsageDescription": "This app requires access to save your meditation sessions as mindfulness data",
         "NSLocationWhenInUseUsageDescription": "This app needs access to your location to provide weather information and location-based services",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to provide weather information and location-based features",
+        "NSLocationAlwaysUsageDescription": "This app needs access to your location to provide weather information and location-based features",
         "NSCameraUsageDescription": "This app needs access to your camera to take daily selfies",
         "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to save daily selfies",
         "CFBundleURLTypes": [
@@ -26,9 +30,6 @@
               "com.andre.kukai"
             ]
           }
-        ],
-        "UIBackgroundModes": [
-          "audio"
         ]
       }
     },
@@ -38,9 +39,25 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.andre.kukai",
+      "softwareKeyboardLayoutMode": "pan",
+      "allowsNotchDisplay": true,
       "permissions": [
         "CAMERA",
+        "WRITE_EXTERNAL_STORAGE",
         "READ_EXTERNAL_STORAGE"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "com.andre.kukai",
+              "host": "oauth2redirect"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
       ]
     },
     "web": {

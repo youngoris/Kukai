@@ -73,7 +73,7 @@ class GoogleDriveService {
         try {
           await this.silentSignIn();
         } catch (error) {
-          console.log("Silent sign in failed, token may be invalid", error);
+          console.log("Silent sign in failed, token may be invalid", error.message || error);
           // Clear expired token
           this.accessToken = null;
           this.user = null;
@@ -86,7 +86,8 @@ class GoogleDriveService {
       console.log("GoogleDriveService.initialize: Authentication status:", isAuthenticated);
       return isAuthenticated;
     } catch (error) {
-      console.error("Failed to initialize Google Drive service:", error);
+      // Log without full error object to avoid noisy logs
+      console.log("Failed to initialize Google Drive service:", error.message || "Unknown error");
       return false;
     }
   }
@@ -136,13 +137,14 @@ class GoogleDriveService {
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       return true;
     } catch (error) {
-      console.error("Play Services check failed:", error);
+      // Log specific error message instead of full error
+      console.log("Play Services check failed:", error.message || "Unknown error");
       
       if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        console.error("Play Services not available or outdated");
+        console.log("Play Services not available or outdated");
       }
       
-      throw error;
+      return false;
     }
   }
   
@@ -153,11 +155,21 @@ class GoogleDriveService {
       this.handleSuccessfulAuth(userInfo);
       return true;
     } catch (error) {
+      // Handle various silent sign in failures gracefully without logging full error objects
       if (error.code === statusCodes.SIGN_IN_REQUIRED) {
-        // User needs to sign in again
         console.log("Silent sign in failed, user needs to sign in again");
+        return false;
+      } else if (error.code === statusCodes.NETWORK_ERROR) {
+        console.log("Network error during silent sign in");
+        return false;
+      } else if (error.message && error.message.includes("getTokens requires a user")) {
+        console.log("User not properly signed in for silent authentication");
+        return false;
       }
-      throw error;
+      
+      // Log other errors without full stack trace
+      console.log("Silent sign in failed:", error.message || "Unknown error");
+      return false;
     }
   }
 
@@ -168,40 +180,72 @@ class GoogleDriveService {
       
       // Check Play Services (only needed for Android)
       if (Platform.OS === 'android') {
-        await this.hasPlayServices();
+        try {
+          await this.hasPlayServices();
+        } catch (error) {
+          console.log("Play Services check failed:", error.message || "Unknown error");
+          return false;
+        }
       }
       
       // Try to sign in
-      const userInfo = await GoogleSignin.signIn();
+      let userInfo;
+      try {
+        userInfo = await GoogleSignin.signIn();
+      } catch (error) {
+        if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+          console.log("User cancelled the login flow");
+          return false;
+        } else if (error.code === statusCodes.IN_PROGRESS) {
+          console.log("Sign in already in progress");
+          return false;
+        } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+          console.log("Play services not available or outdated");
+          return false;
+        }
+        
+        // Log other errors without full stack trace
+        console.log("Sign in error:", error.message || "Unknown error");
+        return false;
+      }
+      
       console.log("Google sign in success");
       
       // If Google API access is needed, get access token
       if (Platform.OS !== 'web') {
-        await this.getAccessToken();
+        try {
+          await this.getAccessToken();
+          
+          // If still no access token, authentication is incomplete
+          if (!this.accessToken) {
+            console.log("Failed to obtain access token after sign in");
+            return false;
+          }
+        } catch (error) {
+          console.log("Failed to get access token after sign in:", error.message || "Unknown error");
+          return false;
+        }
       }
       
       this.handleSuccessfulAuth(userInfo);
       return true;
     } catch (error) {
-      console.error("Authentication failed:", error);
-      
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-        // User cancelled login
-        console.log("User cancelled the login flow");
-      } else if (error.code === statusCodes.IN_PROGRESS) {
-        console.log("Sign in already in progress");
-      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        // Android: play services not available or outdated
-        console.log("Play services not available or outdated");
-      }
-      
-      throw error;
+      // Log without full error object to reduce noise
+      console.log("Authentication failed:", error.message || "Unknown error");
+      return false;
     }
   }
   
   // Get access token
   async getAccessToken() {
     try {
+      // First check if there's a user signed in to avoid unnecessary errors
+      const isSignedIn = await GoogleSignin.isSignedIn();
+      if (!isSignedIn) {
+        console.log("Cannot get access token - user not signed in");
+        return null;
+      }
+      
       const tokens = await GoogleSignin.getTokens();
       this.accessToken = tokens.accessToken;
       
@@ -211,8 +255,18 @@ class GoogleDriveService {
       await this.saveAuthState();
       return this.accessToken;
     } catch (error) {
-      console.error("Failed to get access token:", error);
-      throw error;
+      // Handle specific error types without logging full error objects
+      if (error.code === statusCodes.SIGN_IN_REQUIRED) {
+        console.log("User needs to sign in to get tokens");
+        return null;
+      } else if (error.message && error.message.includes("getTokens requires a user")) {
+        console.log("User not properly signed in for token retrieval");
+        return null;
+      }
+      
+      // For other errors, log message only to reduce noise
+      console.log("Failed to get access token:", error.message || "Unknown error");
+      return null;
     }
   }
   
@@ -285,7 +339,18 @@ class GoogleDriveService {
       
       // Check token validity
       if (!this.accessToken || this.isTokenExpired()) {
-        await this.getAccessToken();
+        try {
+          await this.getAccessToken();
+          
+          // If still no access token after trying to get one, return gracefully
+          if (!this.accessToken) {
+            console.log("Unable to get access token, user may not be signed in");
+            return null;
+          }
+        } catch (e) {
+          console.error("Failed to get access token for backup folder:", e);
+          return null;
+        }
       }
       
       // Search for existing backup folder
@@ -333,7 +398,8 @@ class GoogleDriveService {
       return this.backupFolderId;
     } catch (error) {
       console.error("Failed to ensure backup folder exists:", error);
-      throw error;
+      // Return null instead of throwing to prevent UI errors
+      return null;
     }
   }
   
@@ -357,11 +423,17 @@ class GoogleDriveService {
       // Ensure logged in with backup folder
       if (!this.isAuthenticated()) {
         console.log("Not authenticated, attempting to authenticate...");
-        await this.authenticate();
+        const authenticated = await this.authenticate();
+        if (!authenticated) {
+          return { success: false, message: "Authentication cancelled or failed" };
+        }
       }
       
       console.log("Getting backup folder...");
       const folderId = await this.ensureBackupFolderExists();
+      if (!folderId) {
+        return { success: false, message: "Could not access or create backup folder" };
+      }
       console.log("Backup folder ID:", folderId);
       
       // If filename not specified, generate one with timestamp
@@ -414,13 +486,13 @@ class GoogleDriveService {
       if (!sessionResponse.ok) {
         const errorText = await sessionResponse.text();
         console.error("Failed to create upload session:", errorText);
-        throw new Error(`Failed to create upload session: ${errorText}`);
+        return { success: false, message: "Failed to create upload session" };
       }
       
       // Get upload URL
       const uploadSessionUrl = sessionResponse.headers.get('Location');
       if (!uploadSessionUrl) {
-        throw new Error("Failed to get upload URL");
+        return { success: false, message: "Failed to get upload URL" };
       }
       
       console.log("Uploading data to session...");
@@ -443,7 +515,7 @@ class GoogleDriveService {
       if (!uploadContentResponse.ok) {
         const errorText = await uploadContentResponse.text();
         console.error("Failed to upload file content:", errorText);
-        throw new Error(`Failed to upload file content: ${errorText}`);
+        return { success: false, message: "Failed to upload file content" };
       }
       
       const responseData = await uploadContentResponse.json();
@@ -452,11 +524,11 @@ class GoogleDriveService {
       // Update last sync time
       await storageService.setItem(STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
       
-      return responseData;
+      return { success: true, data: responseData };
     } catch (error) {
       console.error("Failed to create backup, detailed error:", error);
-      // Ensure meaningful error message is thrown
-      throw new Error(`Failed to create backup: ${error.message || 'Unknown error'}`);
+      // Return error object instead of throwing
+      return { success: false, message: error.message || 'Unknown error' };
     }
   }
   
@@ -465,10 +537,16 @@ class GoogleDriveService {
     try {
       // Ensure logged in with backup folder
       if (!this.isAuthenticated()) {
-        await this.authenticate();
+        const authenticated = await this.authenticate();
+        if (!authenticated) {
+          return { success: false, message: "Authentication cancelled or failed", files: [] };
+        }
       }
       
       const folderId = await this.ensureBackupFolderExists();
+      if (!folderId) {
+        return { success: false, message: "Could not access backup folder", files: [] };
+      }
       
       console.log("Getting backups from folder ID:", folderId);
       
@@ -518,16 +596,21 @@ class GoogleDriveService {
         const alternativeUrl = `https://www.googleapis.com/drive/v3/files?${alternativeParams.toString()}`;
         console.log("Trying alternative URL:", alternativeUrl);
         
-        response = await fetch(alternativeUrl, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
-            'Accept': 'application/json'
-          },
-        });
-        
-        responseText = await response.text();
-        console.log("Alternative API response:", responseText);
+        try {
+          response = await fetch(alternativeUrl, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${this.accessToken}`,
+              'Accept': 'application/json'
+            },
+          });
+          
+          responseText = await response.text();
+          console.log("Alternative API response:", responseText);
+        } catch (altFetchError) {
+          console.error("Alternative fetch also failed:", altFetchError);
+          return { success: false, message: "Network error when retrieving backups", files: [] };
+        }
       }
       
       // Parse JSON from the response text
@@ -536,12 +619,12 @@ class GoogleDriveService {
         data = JSON.parse(responseText);
       } catch (e) {
         console.error("Failed to parse response JSON:", e);
-        throw new Error("Invalid response format from Google Drive API");
+        return { success: false, message: "Invalid response format from Google Drive API", files: [] };
       }
       
       if (!response.ok) {
         console.error("API error response:", data);
-        throw new Error(`List backups failed: ${JSON.stringify(data)}`);
+        return { success: false, message: "Google Drive API error", files: [] };
       }
       
       console.log("Backup list retrieved successfully, count:", data.files ? data.files.length : 0);
@@ -552,7 +635,7 @@ class GoogleDriveService {
       return data.files || [];
     } catch (error) {
       console.error("Failed to list backups:", error);
-      throw error;
+      return { success: false, message: error.message || "Unknown error when listing backups", files: [] };
     }
   }
   
@@ -561,7 +644,10 @@ class GoogleDriveService {
     try {
       // Ensure logged in
       if (!this.isAuthenticated()) {
-        await this.authenticate();
+        const authenticated = await this.authenticate();
+        if (!authenticated) {
+          return { success: false, message: "Authentication cancelled or failed" };
+        }
       }
       
       console.log("Downloading backup with ID:", fileId);
@@ -580,7 +666,7 @@ class GoogleDriveService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error("Download failed response:", errorText);
-        throw new Error(`Download failed: ${errorText}`);
+        return { success: false, message: "Failed to download backup file" };
       }
       
       // Get response text
@@ -593,11 +679,11 @@ class GoogleDriveService {
         return backupData;
       } catch (parseError) {
         console.error("Failed to parse backup data:", parseError);
-        throw new Error(`Failed to parse backup data: ${parseError.message}`);
+        return { success: false, message: "Failed to parse backup data" };
       }
     } catch (error) {
       console.error("Failed to download backup:", error);
-      throw error;
+      return { success: false, message: error.message || "Unknown error" };
     }
   }
   
@@ -606,7 +692,10 @@ class GoogleDriveService {
     try {
       // Ensure logged in
       if (!this.isAuthenticated()) {
-        await this.authenticate();
+        const authenticated = await this.authenticate();
+        if (!authenticated) {
+          return false;
+        }
       }
       
       // Delete file
@@ -622,13 +711,14 @@ class GoogleDriveService {
       
       if (!response.ok && response.status !== 204) {
         const errorText = await response.text();
-        throw new Error(`Delete failed: ${errorText}`);
+        console.error("Delete file failed:", errorText);
+        return false;
       }
       
       return true;
     } catch (error) {
       console.error("Failed to delete backup:", error);
-      throw error;
+      return false;
     }
   }
   
@@ -798,7 +888,19 @@ class GoogleDriveService {
   // Get backup list (compatible with CloudBackupSection.js call)
   async getBackups() {
     // Call existing listBackups method to get backup list
-    return this.listBackups();
+    const result = await this.listBackups();
+    
+    // Handle both formats: if result is array (old format) or object with files (new format)
+    if (Array.isArray(result)) {
+      return result;
+    } else if (result && result.success === false) {
+      console.log("Failed to get backups:", result.message);
+      return [];
+    } else if (result && result.files) {
+      return result.files;
+    }
+    
+    return [];
   }
   
   // Restore backup
@@ -944,7 +1046,10 @@ class GoogleDriveService {
     try {
       // Ensure logged in
       if (!this.isAuthenticated()) {
-        await this.authenticate();
+        const authenticated = await this.authenticate();
+        if (!authenticated) {
+          return [];
+        }
       }
       
       console.log("Getting shared drives list...");
@@ -976,12 +1081,12 @@ class GoogleDriveService {
         data = JSON.parse(responseText);
       } catch (e) {
         console.error("Failed to parse shared drives response:", e);
-        throw new Error("Invalid response format from Google Drive API");
+        return [];
       }
       
       if (!response.ok) {
         console.error("Shared drives API error:", data);
-        throw new Error(`Get shared drives failed: ${JSON.stringify(data)}`);
+        return [];
       }
       
       console.log("Shared drives retrieved successfully:", data.drives ? data.drives.length : 0);
@@ -990,11 +1095,7 @@ class GoogleDriveService {
     } catch (error) {
       console.error("Failed to get shared drives:", error);
       // If it's a permission error, the user may not have access to shared drives, return empty array
-      if (error.message && error.message.includes("403")) {
-        console.log("User may not have access to shared drives (403 error)");
-        return [];
-      }
-      throw error;
+      return [];
     }
   }
 
@@ -1003,7 +1104,10 @@ class GoogleDriveService {
     try {
       // Ensure logged in
       if (!this.isAuthenticated()) {
-        await this.authenticate();
+        const authenticated = await this.authenticate();
+        if (!authenticated) {
+          return null;
+        }
       }
       
       console.log("Getting shared drive with ID:", driveId);
@@ -1021,14 +1125,14 @@ class GoogleDriveService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error("Get shared drive failed:", errorText);
-        throw new Error(`Get shared drive failed: ${errorText}`);
+        return null;
       }
       
       const driveData = await response.json();
       return driveData;
     } catch (error) {
       console.error("Failed to get shared drive:", error);
-      throw error;
+      return null;
     }
   }
 

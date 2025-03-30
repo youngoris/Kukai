@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import googleDriveService from "../services/GoogleDriveService";
+import { statusCodes } from '@react-native-google-signin/google-signin';
 import Constants from "expo-constants";
 import storageService from "../services/storage/StorageService";
 
@@ -149,37 +150,50 @@ const CloudBackupSection = ({
         loadSyncSettings();
         Alert.alert("Success", "Successfully connected to Google Drive");
       } else {
-        console.log("CloudBackupSection: Google authentication failed");
-        Alert.alert(
-          "Error",
-          "Unable to connect to Google Drive, please try again",
-        );
+        console.log("CloudBackupSection: Google authentication cancelled or failed");
+        // Don't show an error alert when authentication fails - it's likely the user cancelled
+        // This prevents showing error message when user cancels on purpose
       }
     } catch (error) {
       console.error("CloudBackupSection: Authentication error:", error);
 
-      // Display more specific error message
+      // Only show error dialog for specific errors that need user attention
+      // Don't show error for user cancellation or common integration issues
+      let shouldShowError = true;
       let errorMessage = "An error occurred during authentication";
 
-      if (error.message.includes("Error DEVELOPER_ERROR")) {
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        // User cancelled login - don't show error
+        shouldShowError = false;
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        // Sign in already in progress - don't show error
+        shouldShowError = false;
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        // Play services not available - show specific message
+        errorMessage = "Google Play Services required for Google Drive integration is not available on this device.";
+      } else if (error.message && error.message.includes("Error DEVELOPER_ERROR")) {
         errorMessage =
           "Developer Error: Client ID may be invalid or incorrectly configured. Please check app settings.";
-      } else if (error.message.includes("access_denied")) {
-        errorMessage = "User denied the access request";
-      } else if (error.message.includes("network")) {
+      } else if (error.message && error.message.includes("access_denied")) {
+        // User denied access - don't show error
+        shouldShowError = false;
+      } else if (error.message && error.message.includes("network")) {
         errorMessage =
           "Network Error: Please check your network connection and try again";
-      } else if (error.message.includes("client_id")) {
+      } else if (error.message && error.message.includes("client_id")) {
         errorMessage = "Client ID Error: Google API configuration is incorrect";
       }
 
       // If an error occurs in Expo Go, add more guidance
-      if (isExpoGo) {
+      if (isExpoGo && shouldShowError) {
         errorMessage +=
           "\n\nUsing Google authentication in Expo Go may be unstable. Consider creating a development build version for full functionality.";
       }
 
-      Alert.alert("Authentication Error", errorMessage);
+      // Only show Alert if it's a critical error that needs user attention
+      if (shouldShowError) {
+        Alert.alert("Authentication Error", errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -261,17 +275,32 @@ const CloudBackupSection = ({
               // Call backup service
               const result = await googleDriveService.createBackup(backupData);
 
-              console.log("Backup successful:", result);
-              Alert.alert("Success", "Backup created successfully");
-              loadLastSyncTime();
-              
-              // Notify parent component when complete
-              if (onBackupComplete) {
-                onBackupComplete();
+              if (result.success) {
+                console.log("Backup successful:", result.data);
+                Alert.alert("Success", "Backup created successfully");
+                loadLastSyncTime();
+                
+                // Notify parent component when complete
+                if (onBackupComplete) {
+                  onBackupComplete();
+                }
+              } else {
+                // Handle specific error cases without showing technical errors to the user
+                console.error("Backup creation failed:", result.message);
+                
+                // Show user-friendly message
+                if (result.message === "Authentication cancelled or failed") {
+                  // User cancelled Google login, don't show error alert
+                  console.log("User cancelled Google authentication during backup");
+                } else if (result.message === "Could not access or create backup folder") {
+                  Alert.alert("Backup Error", "Could not access Google Drive backup location. Please try again later.");
+                } else {
+                  Alert.alert("Backup Error", "Could not create backup. Please try again later.");
+                }
               }
             } catch (error) {
               console.error("Backup creation error:", error);
-              Alert.alert("Error", `Failed to create backup: ${error.message || "Unknown error"}`);
+              Alert.alert("Error", "Failed to create backup. Please try again later.");
             } finally {
               setIsLoading(false);
             }
@@ -292,19 +321,22 @@ const CloudBackupSection = ({
     setIsLoading(true);
     try {
       const backupList = await googleDriveService.getBackups();
-      setBackups(backupList);
-      setIsLoading(false);
-
-      if (backupList.length === 0) {
+      
+      // getBackups now returns an empty array instead of throwing when there's an error
+      if (!backupList || backupList.length === 0) {
         Alert.alert("Note", "No backups available");
+        setIsLoading(false);
         return;
       }
-
+      
+      setBackups(backupList);
       setShowBackupListModal(true);
     } catch (error) {
+      // This catch block will rarely be used now but kept for backwards compatibility
       console.error("Error loading backups:", error);
-      setIsLoading(false);
       Alert.alert("Error", "Failed to load backup list");
+    } finally {
+      setIsLoading(false);
     }
   };
 
