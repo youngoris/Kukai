@@ -88,7 +88,12 @@
     "extra": {
       "eas": {
         "projectId": "8ee33501-ec7b-4c56-a239-e273a87a6f87"
-      }
+      },
+      "expoGo": true,
+      "googleSignInExpoGoCompatibility": true,
+      "useMockAuth": true,
+      "skipNativeModules": ["@react-native-google-signin/google-signin"],
+      "expoClient": true
     },
     "owner": "andreho",
     "runtimeVersion": "1.0.0",

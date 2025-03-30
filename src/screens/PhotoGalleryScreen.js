@@ -393,12 +393,6 @@ const PhotoGalleryScreen = ({ navigation, route }) => {
     </TouchableOpacity>
   );
 
-  const renderSectionHeader = ({ section: { title } }) => (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionHeaderText}>{title}</Text>
-    </View>
-  );
-
   const renderColumnOption = (count) => (
     <TouchableOpacity 
       key={`column-option-${count}`}
@@ -509,13 +503,46 @@ const PhotoGalleryScreen = ({ navigation, route }) => {
       // Use date from filename if error occurs
     }
     
-    return {
-      dateTime,
-      deviceInfo,
-      shotInfo,
-      resolution,
-      location
-    };
+    return (
+      <View style={styles.photoInfoContent}>
+        <View style={styles.photoInfoRow}>
+          <View style={styles.photoInfoItem}>
+            <MaterialIcons name="schedule" size={18} color={COLORS.text.primary} />
+            <Text style={styles.photoInfoText}>{dateTime}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.photoInfoRow}>
+          <View style={styles.photoInfoItem}>
+            <MaterialIcons name="photo-camera" size={18} color={COLORS.text.primary} />
+            <Text style={styles.photoInfoText}>{deviceInfo}</Text>
+          </View>
+        </View>
+        
+        {shotInfo ? (
+          <View style={styles.photoInfoRow}>
+            <View style={styles.photoInfoItem}>
+              <MaterialIcons name="tune" size={18} color={COLORS.text.primary} />
+              <Text style={styles.photoInfoText}>{shotInfo}</Text>
+            </View>
+          </View>
+        ) : null}
+        
+        <View style={styles.photoInfoRow}>
+          <View style={styles.photoInfoItem}>
+            <MaterialIcons name="aspect-ratio" size={18} color={COLORS.text.primary} />
+            <Text style={styles.photoInfoText}>{resolution}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.photoInfoRow}>
+          <View style={styles.photoInfoItem}>
+            <MaterialIcons name="location-on" size={18} color={COLORS.text.primary} />
+            <Text style={styles.photoInfoText}>{location}</Text>
+          </View>
+        </View>
+      </View>
+    );
   };
 
   // Get photo title (month day, year)
@@ -523,6 +550,12 @@ const PhotoGalleryScreen = ({ navigation, route }) => {
     if (!photo) return '';
     
     return format(photo.date, 'MMMM d, yyyy'); // Month day, year format
+  };
+
+  // Check if photo was taken today - used for retake button logic
+  const isPhotoFromToday = (photo) => {
+    if (!photo) return false;
+    return isToday(photo.date);
   };
 
   // Toggle photo info display
@@ -564,12 +597,28 @@ const PhotoGalleryScreen = ({ navigation, route }) => {
           </TouchableOpacity>
         </View>
       ) : (
-        <SectionList
-          sections={photosGrouped}
-          keyExtractor={(item, index) => item.uri + index}
-          renderItem={renderItem}
-          renderSectionHeader={renderSectionHeader}
-          stickySectionHeadersEnabled={false}
+        <FlatList
+          data={photosGrouped}
+          keyExtractor={(item) => item.title}
+          renderItem={({ item }) => (
+            <View>
+              {/* Section Header */}
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionHeaderText}>{item.title}</Text>
+              </View>
+              
+              {/* Photos in this section */}
+              <FlatList
+                key={`column-${columnCount}`}
+                data={item.data}
+                keyExtractor={(photo, index) => photo.uri + index}
+                renderItem={renderItem}
+                horizontal={false}
+                numColumns={columnCount}
+                contentContainerStyle={styles.photosRow}
+              />
+            </View>
+          )}
           contentContainerStyle={styles.galleryContainer}
         />
       )}
@@ -586,12 +635,18 @@ const PhotoGalleryScreen = ({ navigation, route }) => {
       
       {/* Settings Panel */}
       {showSettings && (
-        <View style={[styles.settingsPanel, { bottom: insets.bottom > 0 ? insets.bottom + 90 : 110 }]}>
+        <View style={[styles.settingsPanel, { 
+          position: 'absolute',
+          right: SPACING.xl,
+          top: insets.top + 50,
+          zIndex: 10
+        }]}>
           <Text style={styles.settingsTitle}>Grid Size</Text>
           <View style={styles.columnOptions}>
             {renderColumnOption(3)}
             {renderColumnOption(4)}
             {renderColumnOption(5)}
+            {renderColumnOption(6)}
           </View>
         </View>
       )}
@@ -617,20 +672,19 @@ const PhotoGalleryScreen = ({ navigation, route }) => {
             </View>
             
             {showPhotoInfo && (
-              <View style={[styles.photoInfoContainer, { bottom: insets.bottom > 0 ? insets.bottom + 130 : 180 }]}>
+              <View style={[styles.photoInfoContainer, { 
+                bottom: insets.bottom > 0 ? insets.bottom + 110 : 100 
+              }]}>
                 {getPhotoInfo(selectedPhoto)}
               </View>
             )}
             
-            <View style={[styles.previewControls, { bottom: insets.bottom > 0 ? insets.bottom + 20 : 40 }]}>
+            <View style={[styles.previewControls, { 
+              bottom: insets.bottom > 0 ? insets.bottom + 20 : 40 
+            }]}>
               <TouchableOpacity style={styles.previewButton} onPress={togglePhotoInfo}>
                 <MaterialIcons name="info-outline" size={24} color={COLORS.text.primary} />
                 <Text style={styles.previewButtonText}>Info</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.previewButton} onPress={toggleColorView}>
-                <MaterialIcons name={viewingColorVersion ? "filter-b-and-w" : "color-lens"} size={24} color={COLORS.text.primary} />
-                <Text style={styles.previewButtonText}>{viewingColorVersion ? "B&W" : "Color"}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.previewButton} onPress={saveToGallery}>
@@ -638,9 +692,29 @@ const PhotoGalleryScreen = ({ navigation, route }) => {
                 <Text style={styles.previewButtonText}>Save</Text>
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.previewButton} onPress={retakePhoto}>
-                <MaterialIcons name="camera-alt" size={24} color={COLORS.text.primary} />
-                <Text style={styles.previewButtonText}>Retake</Text>
+              <TouchableOpacity 
+                style={[
+                  styles.previewButton,
+                  // Add disabled styling if photo is not from today
+                  !isPhotoFromToday(selectedPhoto) && styles.previewButtonDisabled
+                ]} 
+                onPress={isPhotoFromToday(selectedPhoto) ? retakePhoto : null}
+                // Disable button press for photos not from today
+                disabled={!isPhotoFromToday(selectedPhoto)}
+              >
+                <MaterialIcons 
+                  name="camera-alt" 
+                  size={24} 
+                  // Use disabled color if photo is not from today
+                  color={isPhotoFromToday(selectedPhoto) ? COLORS.text.primary : COLORS.text.tertiary} 
+                />
+                <Text style={[
+                  styles.previewButtonText,
+                  // Add disabled text styling if photo is not from today
+                  !isPhotoFromToday(selectedPhoto) && styles.previewButtonTextDisabled
+                ]}>
+                  Retake
+                </Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.previewButton} onPress={closePhotoPreview}>
@@ -685,6 +759,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     overflow: 'hidden',
     backgroundColor: COLORS.card,
+    aspectRatio: 1,
   },
   photo: {
     width: '100%',
@@ -773,43 +848,49 @@ const styles = StyleSheet.create({
     height: width,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: -130, // Fine-tune photo position
+    marginTop: -200, // Fine-tune photo position
   },
   previewImage: {
-    width: width * 0.85,
-    height: width * 0.85, 
+    width: width * 0.9,
+    height: width * 0.9, 
     maxHeight: height * 0.6,
     borderRadius: 8,
   },
   photoInfoContainer: {
-    width: '85%',
-    backgroundColor: 'rgba(30, 30, 30, 0.8)',
-    padding: SPACING.m,
+    width: '90%',
+    backgroundColor: 'rgba(30, 30, 30, 0.85)',
+    padding: SPACING.s,
     borderRadius: 12,
     position: 'absolute',
-    bottom: 180, // Increase distance from bottom control bar
+    bottom: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  photoInfoContent: {
+    width: '100%',
+    marginBottom: SPACING.s,
   },
   photoInfoRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.xs, // Reduce row spacing
+    marginBottom: SPACING.s,
   },
   photoInfoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexShrink: 1,
-    marginRight: SPACING.s,
+    flex: 1,
   },
   photoInfoText: {
-    color: COLORS.text.secondary,
-    fontSize: FONT_SIZE.s,
-    marginLeft: SPACING.xs, // Reduce icon and text spacing
-    flexShrink: 1,
+    color: COLORS.text.primary,
+    fontSize: FONT_SIZE.m,
+    marginLeft: SPACING.s,
+    flex: 1,
   },
   previewControls: {
     position: 'absolute',
-    bottom: 40, // Raise bottom position
-    width: '85%',
+    bottom: 240, // Raise bottom position
+    width: '90%',
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
@@ -911,6 +992,17 @@ const styles = StyleSheet.create({
   galleryContainer: {
     padding: SPACING.s,
     paddingBottom: 100, // Space for footer
+  },
+  photosRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+  },
+  previewButtonDisabled: {
+    opacity: 0.5,
+  },
+  previewButtonTextDisabled: {
+    color: COLORS.text.tertiary,
   },
 });
 

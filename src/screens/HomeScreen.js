@@ -518,6 +518,13 @@ const HomeScreen = ({ navigation }) => {
         <Animated.View style={[{
           transform: [{ scale: circleScaleAnim }],
         }]}>
+          {Platform.OS === 'android' && !hasTakenPhotoToday && (
+            <>
+              <View style={styles.androidGlowOuter} />
+              <View style={styles.androidGlowMiddle} />
+              <View style={styles.androidGlowInner} />
+            </>
+          )}
           <TouchableOpacity
             style={[
               styles.circleButton,
@@ -665,7 +672,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#555', 
     justifyContent: 'center',
     alignItems: 'center',
-    // Fix shadow alignment for Android
     ...Platform.select({
       ios: {
         shadowColor: '#fff',
@@ -674,18 +680,12 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
       },
       android: {
-        elevation: 10,
-        // Android needs additional shadow properties
-        shadowColor: '#fff',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.6,
-        shadowRadius: 8,
+        elevation: 4,
       }
     }),
   },
   circleButtonHighlight: {
     backgroundColor: '#fff',
-    // Fix shadow alignment for Android
     ...Platform.select({
       ios: {
         shadowColor: '#fff',
@@ -694,14 +694,39 @@ const styles = StyleSheet.create({
         shadowRadius: 15,
       },
       android: {
-        elevation: 15,
-        // Android needs additional shadow properties
-        shadowColor: '#fff',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.8,
-        shadowRadius: 15,
+        elevation: 6,
       }
     }),
+  },
+  androidGlowOuter: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    top: -22,
+    left: -22,
+    zIndex: -3,
+  },
+  androidGlowMiddle: {
+    position: 'absolute',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    top: -14,
+    left: -14,
+    zIndex: -2,
+  },
+  androidGlowInner: {
+    position: 'absolute',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
+    top: -6,
+    left: -6,
+    zIndex: -1,
   },
 });
 

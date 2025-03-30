@@ -314,21 +314,41 @@ export default function useWeather(options = {}) {
         };
       } catch (error) {
         clearTimeout(timeoutId);
-        console.error("Fetch error:", error.message);
         
         // Handle abort error separately
         if (error.name === 'AbortError') {
-          const timeoutError = {
-            type: ERROR_TYPES.NETWORK,
-            message: "Request timeout",
-            details: "Weather API request timed out, please check your network connection",
-          };
-          setError(timeoutError);
+          // Silently handle AbortError without showing error to user
+          console.log("Weather fetch aborted - network may be unavailable");
           setIsLoading(false);
-          return { error: timeoutError };
+          
+          // Try to use cached data if available
+          const savedWeatherData = await storageService.getItem(
+            STORAGE_KEYS.WEATHER_DATA,
+          );
+          
+          if (savedWeatherData) {
+            const parsedWeatherData = JSON.parse(savedWeatherData);
+            setWeather({
+              main: parsedWeatherData.weather,
+              icon: parsedWeatherData.icon || "weather-partly-cloudy",
+            });
+            setTemperature(parsedWeatherData.temperature);
+            setLocation(parsedWeatherData.location);
+            setSource("cache");
+            return {
+              weather: parsedWeatherData.weather,
+              temperature: parsedWeatherData.temperature,
+              location: parsedWeatherData.location, 
+              source: "cache",
+              icon: parsedWeatherData.icon,
+            };
+          }
+          
+          // If no cached data, return empty result without error
+          return {};
         }
         
-        // Handle network errors
+        // Handle other network errors
         const networkError = {
           type: ERROR_TYPES.NETWORK,
           message: "Network connection error",
@@ -346,8 +366,35 @@ export default function useWeather(options = {}) {
       let errorMessage = `Unable to get weather: ${error.message}`;
 
       if (error.name === "AbortError") {
-        errorType = ERROR_TYPES.NETWORK;
-        errorMessage = "Network request timeout, unable to get weather data";
+        // Silently handle AbortError without showing error to user
+        console.log("Weather fetch aborted - network may be unavailable");
+        setIsLoading(false);
+        
+        // Try to use cached data if available
+        const savedWeatherData = await storageService.getItem(
+          STORAGE_KEYS.WEATHER_DATA,
+        );
+        
+        if (savedWeatherData) {
+          const parsedWeatherData = JSON.parse(savedWeatherData);
+          setWeather({
+            main: parsedWeatherData.weather,
+            icon: parsedWeatherData.icon || "weather-partly-cloudy",
+          });
+          setTemperature(parsedWeatherData.temperature);
+          setLocation(parsedWeatherData.location);
+          setSource("cache");
+          return {
+            weather: parsedWeatherData.weather,
+            temperature: parsedWeatherData.temperature,
+            location: parsedWeatherData.location, 
+            source: "cache",
+            icon: parsedWeatherData.icon,
+          };
+        }
+        
+        // If no cached data, return empty result without error
+        return {};
       } else if (error.message.includes("network")) {
         errorType = ERROR_TYPES.NETWORK;
         errorMessage = "Network connection error, unable to get weather data";
