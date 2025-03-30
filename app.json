@@ -79,6 +79,12 @@
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to take daily selfies."
         }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.550142175159-r46m01p9l6vlv25g3ou3io7kfn0k3gqa"
+        }
       ]
     ],
     "scheme": "com.andre.kukai",

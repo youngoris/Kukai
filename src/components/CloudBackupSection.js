@@ -13,6 +13,7 @@ import {
 import { MaterialIcons } from "@expo/vector-icons";
 import googleDriveService from "../services/GoogleDriveService";
 import Constants from "expo-constants";
+import storageService from "../services/storage/StorageService";
 
 // Check if running in Expo Go
 const isExpoGo = Constants.appOwnership === "expo";
@@ -234,23 +235,43 @@ const CloudBackupSection = ({
           onPress: async (description) => {
             setIsLoading(true);
             try {
-              const result = await googleDriveService.createBackup({
-                description,
-              });
+              // Collect all application data for backup
+              const timestamp = new Date().toISOString();
+              
+              // Get all types of stored data
+              const meditationsData = await storageService.getItem('meditations');
+              const tasksData = await storageService.getItem('tasks');
+              const journalData = await storageService.getItem('journal');
+              const settingsData = await storageService.getItem('settings');
+              
+              // Prepare complete backup data structure
+              const backupData = {
+                description: description || `Backup created on ${new Date().toLocaleString()}`,
+                timestamp: timestamp,
+                data: {
+                  meditations: meditationsData ? JSON.parse(meditationsData) : null,
+                  tasks: tasksData ? JSON.parse(tasksData) : null,
+                  journal: journalData ? JSON.parse(journalData) : null,
+                  settings: settingsData ? JSON.parse(settingsData) : null
+                }
+              };
+              
+              console.log("Creating backup with data structure:", Object.keys(backupData.data));
+              
+              // Call backup service
+              const result = await googleDriveService.createBackup(backupData);
 
-              if (result.success) {
-                Alert.alert("Success", "Backup created successfully");
-                loadLastSyncTime();
-                if (onBackupComplete) onBackupComplete();
-              } else {
-                Alert.alert(
-                  "Error",
-                  `Failed to create backup: ${result.error}`,
-                );
+              console.log("Backup successful:", result);
+              Alert.alert("Success", "Backup created successfully");
+              loadLastSyncTime();
+              
+              // Notify parent component when complete
+              if (onBackupComplete) {
+                onBackupComplete();
               }
             } catch (error) {
               console.error("Backup creation error:", error);
-              Alert.alert("Error", "An error occurred during backup creation");
+              Alert.alert("Error", `Failed to create backup: ${error.message || "Unknown error"}`);
             } finally {
               setIsLoading(false);
             }
@@ -521,7 +542,7 @@ const CloudBackupSection = ({
                         <MaterialIcons
                           name="restore"
                           size={20}
-                          color={isLightTheme ? "#333" : "#FFF"}
+                          color="#FFFFFF"
                         />
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -535,7 +556,7 @@ const CloudBackupSection = ({
                         <MaterialIcons
                           name="delete"
                           size={20}
-                          color={isLightTheme ? "#333" : "#FFF"}
+                          color="#FFFFFF"
                         />
                       </TouchableOpacity>
                     </View>
@@ -571,13 +592,11 @@ const CloudBackupSection = ({
               isLightTheme && styles.lightSectionTitle,
             ]}
           >
-            Backup and restore data to Google Drive
+            Cloud Backup
           </Text>
 
           <Text style={[styles.noteText, isLightTheme && styles.lightNoteText]}>
-            Note: This feature may be unstable in Expo Go. If you don't have a
-            developer account, it's recommended to use local backup or a mock
-            account.
+            Backup and sync your app data
           </Text>
 
           <TouchableOpacity
@@ -675,7 +694,7 @@ const CloudBackupSection = ({
               <MaterialIcons
                 name="backup"
                 size={24}
-                color={isLightTheme ? "#333" : "#FFFFFF"}
+                color="#FFFFFF"
               />
               <Text
                 style={[
@@ -694,7 +713,7 @@ const CloudBackupSection = ({
               <MaterialIcons
                 name="restore"
                 size={24}
-                color={isLightTheme ? "#333" : "#FFFFFF"}
+                color="#FFFFFF"
               />
               <Text
                 style={[
@@ -777,6 +796,7 @@ const CloudBackupSection = ({
                     style={[
                       styles.frequencyText,
                       isLightTheme && styles.lightFrequencyText,
+                      syncFrequency === "daily" && styles.frequencyTextSelected,
                     ]}
                   >
                     Daily
@@ -799,6 +819,7 @@ const CloudBackupSection = ({
                     style={[
                       styles.frequencyText,
                       isLightTheme && styles.lightFrequencyText,
+                      syncFrequency === "weekly" && styles.frequencyTextSelected,
                     ]}
                   >
                     Weekly
@@ -821,6 +842,7 @@ const CloudBackupSection = ({
                     style={[
                       styles.frequencyText,
                       isLightTheme && styles.lightFrequencyText,
+                      syncFrequency === "monthly" && styles.frequencyTextSelected,
                     ]}
                   >
                     Monthly
@@ -895,7 +917,7 @@ const styles = StyleSheet.create({
     color: "#555",
   },
   connectButton: {
-    backgroundColor: "#4285F4", // Google blue
+    backgroundColor: "#333", // Changed to dark gray from blue
     padding: 15,
     borderRadius: 8,
     alignItems: "center",
@@ -909,13 +931,13 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   disconnectButton: {
-    backgroundColor: "#444",
+    backgroundColor: "#444", // Changed to gray from red
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 5,
   },
   lightDisconnectButton: {
-    backgroundColor: "#DDD",
+    backgroundColor: "#BBBBBB", // Light gray for light theme
   },
   disconnectButtonText: {
     color: "#FFF",
@@ -961,7 +983,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   lightButton: {
-    backgroundColor: "#4285F4",
+    backgroundColor: "#BBBBBB", // Changed to light gray
   },
   buttonText: {
     color: "#FFF",
@@ -969,7 +991,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   lightButtonText: {
-    color: "#FFF",
+    color: "#333",
   },
   frequencySelector: {
     backgroundColor: "#222",
@@ -1005,14 +1027,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#CCC",
   },
   frequencyOptionSelected: {
-    backgroundColor: "#4285F4",
+    backgroundColor: "#555", // Changed to darker gray from blue
   },
   lightFrequencyOptionSelected: {
-    backgroundColor: "#4285F4",
+    backgroundColor: "#999", // Medium gray for selected in light theme
   },
   frequencyText: {
     color: "#CCC",
     fontSize: 12,
+  },
+  frequencyTextSelected: {
+    color: "#FFFFFF", // White text for selected option
   },
   lightFrequencyText: {
     color: "#333",
@@ -1105,13 +1130,13 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   lightBackupAction: {
-    backgroundColor: "#4285F4",
+    backgroundColor: "#999", // Changed to gray from blue
   },
   deleteAction: {
-    backgroundColor: "#661111",
+    backgroundColor: "#555", // Changed to gray from red
   },
   lightDeleteAction: {
-    backgroundColor: "#FF6B6B",
+    backgroundColor: "#AAAAAA", // Light gray
   },
   loadingContainer: {
     padding: 20,
