@@ -9,66 +9,15 @@ import {
   Alert,
   Modal,
   FlatList,
-  Platform,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import googleDriveService from "../services/GoogleDriveService";
+import { statusCodes } from '@react-native-google-signin/google-signin';
 import Constants from "expo-constants";
 import storageService from "../services/storage/StorageService";
 
-// 检测是否在Expo Go环境中运行
-const isExpoGo = Constants.appOwnership === "expo" || 
-                (Constants.manifest && !!Constants.manifest.extra?.expoGo);
-
-// 只在非Expo Go环境中导入模块
-let statusCodes = {};
-if (!isExpoGo) {
-  try {
-    const GoogleSignInModule = require('@react-native-google-signin/google-signin');
-    statusCodes = GoogleSignInModule.statusCodes;
-  } catch (e) {
-    console.log("Failed to import Google Sign-In statusCodes:", e);
-    // 创建模拟状态代码
-    statusCodes = {
-      SIGN_IN_CANCELLED: 'SIGN_IN_CANCELLED',
-      IN_PROGRESS: 'IN_PROGRESS',
-      PLAY_SERVICES_NOT_AVAILABLE: 'PLAY_SERVICES_NOT_AVAILABLE'
-    };
-  }
-}
-
-// 创建默认的环境能力对象
-const defaultCapabilities = {
-  isExpoGo: isExpoGo,
-  platform: Platform.OS,
-  supportsNativeGoogleAuth: !isExpoGo,
-  supportsNativeFacebookAuth: !isExpoGo,
-  supportsDeepLinking: true,
-  supportsBackgroundTasks: !isExpoGo,
-  supportsNotifications: true,
-  isDevBuild: __DEV__,
-  recommendedAuthMethod: isExpoGo ? 'mock' : 'native'
-};
-
-// 只在非Expo Go环境中导入ExpoGoCompatibility
-let ExpoGoCompatibility;
-if (!isExpoGo) {
-  try {
-    ExpoGoCompatibility = require("../utils/ExpoGoCompatibility").default;
-  } catch (e) {
-    console.log("Failed to import ExpoGoCompatibility:", e);
-  }
-}
-
-// 使用实际检测或默认检测
-const expoGoStatus = !isExpoGo && ExpoGoCompatibility
-  ? ExpoGoCompatibility.detectExpoGo()
-  : { isExpoGo: isExpoGo, detectionMethod: 'direct-check' };
-
-// 使用实际能力检查或默认值
-const environmentCapabilities = !isExpoGo && ExpoGoCompatibility
-  ? ExpoGoCompatibility.checkEnvironmentCompatibility()
-  : defaultCapabilities;
+// Check if running in Expo Go
+const isExpoGo = Constants.appOwnership === "expo";
 
 const CloudBackupSection = ({
   navigation,
@@ -83,7 +32,6 @@ const CloudBackupSection = ({
   const [showBackupListModal, setShowBackupListModal] = useState(false);
   const [backups, setBackups] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [isMockAuth, setIsMockAuth] = useState(isExpoGo); // 在Expo Go中默认为模拟认证
 
   // light or dark theme
   const isLightTheme = theme === "light";
@@ -100,9 +48,6 @@ const CloudBackupSection = ({
       // Initialize service
       const initialized = await googleDriveService.initialize();
       setIsAuthenticated(initialized);
-      
-      // Check if using mock auth
-      setIsMockAuth(googleDriveService.usingMockAuth || false);
 
       // Load auto sync settings
       if (initialized) {
@@ -139,24 +84,18 @@ const CloudBackupSection = ({
 
   // Handle Google authentication
   const handleAuthenticate = async () => {
-    // 在Expo Go环境中直接使用模拟认证
+    // Check if running in Expo Go
     if (isExpoGo) {
-      useMockGoogleAccount();
-      return;
-    }
-    
-    // 在正常环境中检查环境兼容性
-    if (!environmentCapabilities.supportsNativeGoogleAuth) {
       Alert.alert(
         "Feature Limitation",
-        "Google Sign-In has limited compatibility with this environment.\n\nYou have the following options:",
+        "Expo Go has very limited support for Google authentication and may cause the app to crash.\n\nYou have the following options:",
         [
           {
             text: "Use Local Backup",
             onPress: () => {
               Alert.alert(
                 "Use Local Backup",
-                'Local backup allows you to export data to a file without needing a Google account. You can find this feature in the settings menu.',
+                'The local backup feature allows you to export data to a file without needing a Google account. You can find the "Local Backup" feature in the settings menu.',
                 [{ text: "Got it" }],
               );
             },
@@ -182,41 +121,20 @@ const CloudBackupSection = ({
   };
 
   // Use mock Google account (no actual authentication needed)
-  const useMockGoogleAccount = async () => {
+  const useMockGoogleAccount = () => {
     setIsLoading(true);
-    try {
-      // Use the enhanced mock auth system from GoogleDriveService
-      const success = await googleDriveService.setMockAuth(true);
-      
-      if (success) {
-        setIsAuthenticated(true);
-        setIsMockAuth(true);
-        setAutoSyncEnabled(false);
-        setSyncFrequency("daily");
-        setLastSyncTime(new Date().toISOString());
-        
-        Alert.alert(
-          "Connected to Mock Account",
-          "You are now connected to a mock Google account. This is only for interface demonstration in Expo Go. Actual data will not be uploaded to Google Drive. Please use local backup for important data.",
-          [{ text: "Got it" }],
-        );
-      } else {
-        Alert.alert(
-          "Error",
-          "Failed to set up mock authentication. Please try again.",
-          [{ text: "OK" }],
-        );
-      }
-    } catch (error) {
-      console.error("Error setting up mock auth:", error);
+    setTimeout(() => {
+      setIsAuthenticated(true);
+      setAutoSyncEnabled(false);
+      setSyncFrequency("daily");
+      setLastSyncTime(new Date().toISOString());
       Alert.alert(
-        "Error",
-        "Failed to set up mock authentication. Please try again.",
-        [{ text: "OK" }],
+        "Connected to Mock Account",
+        "You are now connected to a mock Google account. Please note that this is only for interface demonstration, and actual data will not be uploaded to the cloud. Please use local backup to save important data.",
+        [{ text: "Got it" }],
       );
-    } finally {
       setIsLoading(false);
-    }
+    }, 1500);
   };
 
   // Actual authentication attempt
@@ -226,21 +144,11 @@ const CloudBackupSection = ({
       console.log("CloudBackupSection: Starting Google authentication...");
       const success = await googleDriveService.authenticate();
       setIsAuthenticated(success);
-      setIsMockAuth(googleDriveService.usingMockAuth || false);
 
       if (success) {
         console.log("CloudBackupSection: Google authentication successful");
         loadSyncSettings();
-        
-        // Show different messages based on mock status
-        if (googleDriveService.usingMockAuth) {
-          Alert.alert(
-            "Mock Connection Successful", 
-            "Successfully connected to mock Google Drive (Expo Go compatibility mode)."
-          );
-        } else {
-          Alert.alert("Success", "Successfully connected to Google Drive");
-        }
+        Alert.alert("Success", "Successfully connected to Google Drive");
       } else {
         console.log("CloudBackupSection: Google authentication cancelled or failed");
         // Don't show an error alert when authentication fails - it's likely the user cancelled
@@ -276,10 +184,10 @@ const CloudBackupSection = ({
         errorMessage = "Client ID Error: Google API configuration is incorrect";
       }
 
-      // If an error occurs in Expo Go, suggest mock authentication
+      // If an error occurs in Expo Go, add more guidance
       if (isExpoGo && shouldShowError) {
         errorMessage +=
-          "\n\nGoogle authentication in Expo Go is often unstable. Please consider using the 'Mock Account' option instead, or create a development build for full functionality.";
+          "\n\nUsing Google authentication in Expo Go may be unstable. Consider creating a development build version for full functionality.";
       }
 
       // Only show Alert if it's a critical error that needs user attention
@@ -295,9 +203,7 @@ const CloudBackupSection = ({
   const handleSignOut = async () => {
     Alert.alert(
       "Disconnect",
-      isMockAuth 
-        ? "Are you sure you want to disconnect from the mock Google Drive account?"
-        : "Are you sure you want to disconnect from Google Drive?",
+      "Are you sure you want to disconnect from Google Drive?",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -306,18 +212,9 @@ const CloudBackupSection = ({
           onPress: async () => {
             setIsLoading(true);
             try {
-              // If using mock auth, just disable it directly
-              let success = false;
-              
-              if (isMockAuth) {
-                success = await googleDriveService.setMockAuth(false);
-              } else {
-                success = await googleDriveService.signOut();
-              }
-              
+              const success = await googleDriveService.signOut();
               if (success) {
                 setIsAuthenticated(false);
-                setIsMockAuth(false);
                 setAutoSyncEnabled(false);
                 Alert.alert("Success", "Disconnected from Google Drive");
               } else {
@@ -339,38 +236,6 @@ const CloudBackupSection = ({
   const handleCreateBackup = async () => {
     if (!isAuthenticated) {
       Alert.alert("Note", "Please connect to Google Drive first");
-      return;
-    }
-    
-    // If using mock authentication in Expo Go, show mock behavior
-    if (isMockAuth) {
-      Alert.prompt(
-        "Create Mock Backup",
-        "Enter backup description (mock only - no actual backup will be created in Expo Go):",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Create",
-            onPress: async (description) => {
-              setIsLoading(true);
-              
-              // Simulate backup creation delay
-              setTimeout(() => {
-                setIsLoading(false);
-                setLastSyncTime(new Date().toISOString());
-                Alert.alert(
-                  "Mock Backup Created", 
-                  "A mock backup has been created (Expo Go compatibility mode). No actual data was backed up."
-                );
-                
-                if (onBackupComplete) {
-                  onBackupComplete();
-                }
-              }, 1500);
-            },
-          },
-        ],
-      );
       return;
     }
 

@@ -1,63 +1,27 @@
 import storageService from "./storage/StorageService";
 import * as FileSystem from "expo-file-system";
-import Constants from "expo-constants";
-import * as Application from "expo-application";
-import { Platform } from "react-native";
-
-// 检测是否在Expo Go环境中运行
-const isExpoGo = Constants.appOwnership === "expo" || 
-                (Constants.manifest && !!Constants.manifest.extra?.expoGo);
-
-// 只在非Expo Go环境中导入Google Sign-In
-let GoogleSignin;
-let statusCodes;
-if (!isExpoGo) {
-  try {
-    const GoogleSignInModule = require('@react-native-google-signin/google-signin');
-    GoogleSignin = GoogleSignInModule.GoogleSignin;
-    statusCodes = GoogleSignInModule.statusCodes;
-  } catch (e) {
-    console.log("Failed to import Google Sign-In:", e);
-  }
-}
-
-// 导入环境变量
+import {
+  GoogleSignin,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
 import {
   GOOGLE_IOS_CLIENT_ID,
   GOOGLE_ANDROID_CLIENT_ID,
   GOOGLE_WEB_CLIENT_ID,
 } from "@env";
+import Constants from "expo-constants";
+import * as Application from "expo-application";
+import { Platform } from "react-native";
 
-// 只在非Expo Go环境中导入ExpoGoCompatibility
-let ExpoGoCompatibility;
-if (!isExpoGo) {
-  try {
-    ExpoGoCompatibility = require('../utils/ExpoGoCompatibility').default;
-  } catch (e) {
-    console.log("Failed to import ExpoGoCompatibility:", e);
-  }
-}
-
-// 创建默认的检测结果对象，用于Expo Go环境
-const defaultExpoGoStatus = {
-  isExpoGo: true,
-  detectionMethod: 'direct-check'
-};
-
-// 使用工具或默认值检测Expo Go环境
-const expoGoStatus = !isExpoGo && ExpoGoCompatibility 
-  ? ExpoGoCompatibility.detectExpoGo() 
-  : defaultExpoGoStatus;
-
-const isRunningInExpoGo = expoGoStatus.isExpoGo;
+// Check if running in Expo Go
+const isExpoGo = Constants.appOwnership === "expo";
 
 // Print environment variables, for debugging
 console.log("GoogleDriveService - Environment variable check:");
 console.log("GOOGLE_IOS_CLIENT_ID:", GOOGLE_IOS_CLIENT_ID ? "Set" : "Not set");
 console.log("GOOGLE_ANDROID_CLIENT_ID:", GOOGLE_ANDROID_CLIENT_ID ? "Set" : "Not set");
 console.log("GOOGLE_WEB_CLIENT_ID:", GOOGLE_WEB_CLIENT_ID ? "Set" : "Not set");
-console.log("Running in Expo Go:", isRunningInExpoGo ? "Yes" : "No");
-console.log("Expo Go detection method:", expoGoStatus.detectionMethod);
+console.log("Running in Expo Go:", isExpoGo ? "Yes" : "No");
 console.log("Platform:", Platform.OS);
 
 // Storage keys
@@ -66,85 +30,10 @@ const STORAGE_KEYS = {
   SYNC_STATE: "google_drive_sync_state",
   LAST_SYNC: "google_drive_last_sync",
   AUTO_SYNC: "google_drive_auto_sync",
-  MOCK_AUTH: "google_drive_mock_auth",
 };
 
 // Backup folder name
 const BACKUP_FOLDER_NAME = "KukaiAppBackups";
-
-// 模拟Google Sign-In方法
-const MockGoogleSignin = {
-  configure: (config) => {
-    console.log("Mock GoogleSignin.configure called with config:", config);
-  },
-  signIn: async () => {
-    console.log("Mock GoogleSignin.signIn called");
-    return {
-      user: {
-        id: 'mock-user-id',
-        name: 'Expo Go User',
-        email: 'mock-user@expogoapp.com',
-        photo: null
-      },
-      idToken: 'mock-id-token',
-    };
-  },
-  signOut: async () => {
-    console.log("Mock GoogleSignin.signOut called");
-    return true;
-  },
-  getCurrentUser: async () => {
-    console.log("Mock GoogleSignin.getCurrentUser called");
-    return {
-      user: {
-        id: 'mock-user-id',
-        name: 'Expo Go User',
-        email: 'mock-user@expogoapp.com',
-        photo: null
-      }
-    };
-  },
-  isSignedIn: async () => {
-    console.log("Mock GoogleSignin.isSignedIn called");
-    return true;
-  },
-  hasPlayServices: async () => {
-    console.log("Mock GoogleSignin.hasPlayServices called");
-    return true;
-  },
-  getTokens: async () => {
-    console.log("Mock GoogleSignin.getTokens called");
-    return {
-      accessToken: 'mock-access-token',
-      idToken: 'mock-id-token',
-    };
-  },
-  signInSilently: async () => {
-    console.log("Mock GoogleSignin.signInSilently called");
-    return {
-      user: {
-        id: 'mock-user-id',
-        name: 'Expo Go User',
-        email: 'mock-user@expogoapp.com',
-        photo: null
-      },
-      idToken: 'mock-id-token',
-    };
-  }
-};
-
-// 模拟状态代码
-const MockStatusCodes = {
-  SIGN_IN_CANCELLED: 'SIGN_IN_CANCELLED',
-  IN_PROGRESS: 'IN_PROGRESS',
-  PLAY_SERVICES_NOT_AVAILABLE: 'PLAY_SERVICES_NOT_AVAILABLE',
-  SIGN_IN_REQUIRED: 'SIGN_IN_REQUIRED',
-  NETWORK_ERROR: 'NETWORK_ERROR'
-};
-
-// 使用实际模块或模拟模块
-const GoogleSigninImpl = isRunningInExpoGo ? MockGoogleSignin : GoogleSignin;
-const statusCodesImpl = isRunningInExpoGo ? MockStatusCodes : statusCodes;
 
 class GoogleDriveService {
   constructor() {
@@ -153,7 +42,6 @@ class GoogleDriveService {
     this.expiresAt = null;
     this.backupFolderId = null;
     this.isInitialized = false;
-    this.usingMockAuth = isRunningInExpoGo; // 在Expo Go环境中默认使用模拟认证
   }
 
   // Initialize service
@@ -161,19 +49,9 @@ class GoogleDriveService {
     try {
       console.log("GoogleDriveService.initialize: Starting initialization");
       
-      // Check if mock auth is being used
-      const mockAuthJson = await storageService.getItem(STORAGE_KEYS.MOCK_AUTH);
-      this.usingMockAuth = isRunningInExpoGo || (mockAuthJson ? JSON.parse(mockAuthJson) : false);
-      
-      // If we're in Expo Go and using mock auth, skip actual Google Sign-In setup
-      if (isRunningInExpoGo) {
-        console.log("GoogleDriveService: Using mock auth in Expo Go");
-        return true; // 在Expo Go中直接返回成功
-      }
-      
       if (!this.isInitialized) {
         // Configure Google Sign-In
-        const config = {
+        GoogleSignin.configure({
           webClientId: GOOGLE_WEB_CLIENT_ID,
           iosClientId: GOOGLE_IOS_CLIENT_ID, // Only needed for iOS
           offlineAccess: true, // Request refresh token to access Google API
@@ -183,28 +61,9 @@ class GoogleDriveService {
             "https://www.googleapis.com/auth/drive.metadata.readonly", // Metadata read-only permissions
             "https://www.googleapis.com/auth/drive.readonly",   // Read-only permissions (for listing files)
           ],
-        };
-        
-        // 在非Expo Go环境中使用正常配置流程
-        if (!isRunningInExpoGo) {
-          try {
-            GoogleSigninImpl.configure(config);
-            console.log("Google Sign-In configured successfully");
-          } catch (error) {
-            console.error("Failed to configure Google Sign-In:", error);
-          }
-        } else {
-          // 在Expo Go环境中使用模拟配置
-          console.log("Using mock Google Sign-In configuration in Expo Go");
-          MockGoogleSignin.configure(config);
-        }
+        });
         
         this.isInitialized = true;
-      }
-      
-      // If using mock auth, return true without further checks
-      if (this.usingMockAuth) {
-        return true;
       }
       
       await this.loadAuthState();
@@ -229,16 +88,12 @@ class GoogleDriveService {
     } catch (error) {
       // Log without full error object to avoid noisy logs
       console.log("Failed to initialize Google Drive service:", error.message || "Unknown error");
-      return isRunningInExpoGo; // 在Expo Go环境中即使出错也返回true
+      return false;
     }
   }
 
   // Check if authenticated
   isAuthenticated() {
-    // If using mock auth in Expo Go, always return true
-    if (isRunningInExpoGo || this.usingMockAuth) {
-      return true;
-    }
     return !!this.accessToken && !this.isTokenExpired();
   }
 
@@ -276,48 +131,16 @@ class GoogleDriveService {
     }
   }
 
-  // Set mock authentication for Expo Go
-  async setMockAuth(enabled) {
-    try {
-      this.usingMockAuth = enabled;
-      await storageService.setItem(STORAGE_KEYS.MOCK_AUTH, JSON.stringify(enabled));
-      
-      if (enabled) {
-        // Create mock user data
-        this.user = {
-          id: 'mock-user-id',
-          name: 'Expo Go User',
-          email: 'mock-user@expogoapp.com',
-          photo: null
-        };
-        this.accessToken = 'mock-access-token';
-        this.expiresAt = Date.now() + (1000 * 60 * 60 * 24); // 24 hours from now
-        await this.saveAuthState();
-      }
-      
-      return true;
-    } catch (error) {
-      console.error("Failed to set mock auth:", error);
-      return false;
-    }
-  }
-
   // Check Google Play Services
   async hasPlayServices() {
-    // Skip Play Services check in Expo Go to avoid crashes
-    if (isRunningInExpoGo) {
-      console.log("Skipping Play Services check in Expo Go");
-      return true;
-    }
-    
     try {
-      await GoogleSigninImpl.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       return true;
     } catch (error) {
       // Log specific error message instead of full error
       console.log("Play Services check failed:", error.message || "Unknown error");
       
-      if (error.code === statusCodesImpl.PLAY_SERVICES_NOT_AVAILABLE) {
+      if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         console.log("Play Services not available or outdated");
       }
       
@@ -327,21 +150,16 @@ class GoogleDriveService {
   
   // Silent sign-in, try to refresh existing login state
   async silentSignIn() {
-    // If using mock auth in Expo Go, skip actual sign-in
-    if (isRunningInExpoGo || this.usingMockAuth) {
-      return true;
-    }
-    
     try {
-      const userInfo = await GoogleSigninImpl.signInSilently();
+      const userInfo = await GoogleSignin.signInSilently();
       this.handleSuccessfulAuth(userInfo);
       return true;
     } catch (error) {
       // Handle various silent sign in failures gracefully without logging full error objects
-      if (error.code === statusCodesImpl.SIGN_IN_REQUIRED) {
+      if (error.code === statusCodes.SIGN_IN_REQUIRED) {
         console.log("Silent sign in failed, user needs to sign in again");
         return false;
-      } else if (error.code === statusCodesImpl.NETWORK_ERROR) {
+      } else if (error.code === statusCodes.NETWORK_ERROR) {
         console.log("Network error during silent sign in");
         return false;
       } else if (error.message && error.message.includes("getTokens requires a user")) {
@@ -357,12 +175,6 @@ class GoogleDriveService {
 
   // Perform Google authentication
   async authenticate() {
-    // If in Expo Go, prefer mock authentication to avoid crashes
-    if (isRunningInExpoGo) {
-      console.log("Authenticating in Expo Go environment");
-      return this.setMockAuth(true);
-    }
-    
     try {
       console.log("Starting authentication process");
       
@@ -377,17 +189,17 @@ class GoogleDriveService {
       }
       
       // Try to sign in
-      let signInResult;
+      let userInfo;
       try {
-        signInResult = await GoogleSigninImpl.signIn();
+        userInfo = await GoogleSignin.signIn();
       } catch (error) {
-        if (error.code === statusCodesImpl.SIGN_IN_CANCELLED) {
+        if (error.code === statusCodes.SIGN_IN_CANCELLED) {
           console.log("User cancelled the login flow");
           return false;
-        } else if (error.code === statusCodesImpl.IN_PROGRESS) {
+        } else if (error.code === statusCodes.IN_PROGRESS) {
           console.log("Sign in already in progress");
           return false;
-        } else if (error.code === statusCodesImpl.PLAY_SERVICES_NOT_AVAILABLE) {
+        } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
           console.log("Play services not available or outdated");
           return false;
         }
@@ -415,7 +227,7 @@ class GoogleDriveService {
         }
       }
       
-      this.handleSuccessfulAuth(signInResult);
+      this.handleSuccessfulAuth(userInfo);
       return true;
     } catch (error) {
       // Log without full error object to reduce noise
@@ -426,20 +238,15 @@ class GoogleDriveService {
   
   // Get access token
   async getAccessToken() {
-    // If using mock auth in Expo Go, return mock token
-    if (isRunningInExpoGo || this.usingMockAuth) {
-      return this.accessToken || 'mock-access-token';
-    }
-    
     try {
       // First check if there's a user signed in to avoid unnecessary errors
-      const isSignedIn = await GoogleSigninImpl.isSignedIn();
+      const isSignedIn = await GoogleSignin.isSignedIn();
       if (!isSignedIn) {
         console.log("Cannot get access token - user not signed in");
         return null;
       }
       
-      const tokens = await GoogleSigninImpl.getTokens();
+      const tokens = await GoogleSignin.getTokens();
       this.accessToken = tokens.accessToken;
       
       // Access tokens typically last for 1 hour, but set to 50 minutes to be safe
@@ -449,7 +256,7 @@ class GoogleDriveService {
       return this.accessToken;
     } catch (error) {
       // Handle specific error types without logging full error objects
-      if (error.code === statusCodesImpl.SIGN_IN_REQUIRED) {
+      if (error.code === statusCodes.SIGN_IN_REQUIRED) {
         console.log("User needs to sign in to get tokens");
         return null;
       } else if (error.message && error.message.includes("getTokens requires a user")) {
@@ -480,7 +287,7 @@ class GoogleDriveService {
   async signOut() {
     try {
       // Call Google Sign-In sign out
-      await GoogleSigninImpl.signOut();
+      await GoogleSignin.signOut();
       
       // Clear local state
       this.accessToken = null;
@@ -500,7 +307,7 @@ class GoogleDriveService {
   // Get current user
   async getCurrentUser() {
     try {
-      const currentUser = await GoogleSigninImpl.getCurrentUser();
+      const currentUser = await GoogleSignin.getCurrentUser();
       return currentUser;
     } catch (error) {
       console.error("Failed to get current user:", error);
