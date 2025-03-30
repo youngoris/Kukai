@@ -10,7 +10,7 @@ import storageService from '../services/storage/StorageService';
 const defaultSettings = {
   // Meditation settings
   meditationDuration: 10,
-  selectedSoundTheme: "rain",
+  selectedSoundTheme: "forest",
   meditationReminder: false,
   meditationReminderTime: new Date(new Date().setHours(8, 30, 0, 0)).toISOString(),
   keepScreenAwake: true,
@@ -19,7 +19,7 @@ const defaultSettings = {
   defaultGuidanceType: "dailyFocus",
   voiceGuidanceVolume: 0.7,
   selectedVoice: "en-US-JennyMultilingualNeural",
-  voiceSpeed: 1.0,
+  voiceSpeed: 0.95,
 
   // Focus settings
   focusDuration: 25,
