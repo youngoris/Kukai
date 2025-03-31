@@ -32,6 +32,24 @@ Or using yarn:
 yarn install
 ```
 
+#### Resolving npm Conflicts
+
+If you encounter npm conflicts during installation, try the following solutions:
+
+```bash
+# Clean npm cache
+npm cache clean --force
+
+# Use npm with force flag
+npm install --force
+
+# Or use npm with legacy peer deps
+npm install --legacy-peer-deps
+
+# If specific packages cause issues, try installing them separately
+npm install <problem-package> --force
+```
+
 ### 3. Environment Configuration (Optional)
 
 Create a `.env` file and configure the necessary environment variables if you need the following features:
@@ -48,6 +66,44 @@ GOOGLE_WEB_CLIENT_ID=your_web_client_id
 ```
 
 The app will still function without these environment variables, but certain features will be limited or unavailable.
+
+### 4. Setting Up Google Sign-In (Optional)
+
+If you need Google Sign-In functionality for Google Drive synchronization, run:
+
+```bash
+# Make script executable
+chmod +x scripts/setup-google-signin.sh
+
+# Run the setup script
+./scripts/setup-google-signin.sh
+```
+
+This script will:
+- Check for necessary environment variables in your `.env` file
+- Run Expo prebuild with clean flag
+- Apply necessary fixes to iOS configuration files
+- Install CocoaPods dependencies
+
+If you need to manually fix Google Sign-In issues after setup:
+
+```bash
+# Run only the fix script
+chmod +x scripts/fix-google-signin.sh
+./scripts/fix-google-signin.sh
+
+# Then install CocoaPods
+cd ios && pod install && cd ..
+```
+
+#### Troubleshooting Google Sign-In
+
+If you encounter issues with Google Sign-In:
+- Verify that all Google client IDs in your `.env` file are correct
+- Check the iOS configuration files manually (Info.plist and AppDelegate.mm)
+- Run the diagnostic script: `chmod +x scripts/google-signin-check.sh && ./scripts/google-signin-check.sh`
+
+For detailed information about Google Sign-In integration, refer to `GOOGLE_SIGNIN_README.md`.
 
 ## Running the Application
 
@@ -186,7 +242,6 @@ kukai/
     ├── services/            # Service modules
     │   ├── NotificationService.js  # Notifications management
     │   └── GoogleDriveService.js   # Google Drive integration
-    ├── store/               # State management
     └── utils/               # Utility functions
         └── useWeather.js        # Weather API integration hook
 ```
@@ -202,13 +257,85 @@ The application follows a well-organized structure:
    - **hooks/**: Custom React hooks for shared functionality
    - **constants/**: Application-wide constants and configuration
    - **utils/**: Helper functions and utilities
-   - **store/**: State management for the application
 
 2. **assets/**: Contains static resources like sounds, images, and icons
 
 3. **Platform-specific directories**:
    - **android/**: Contains Android-specific configuration and build files
    - **ios/**: Contains iOS-specific configuration and build files
+
+### Component Description
+
+#### Core Components
+
+- `App.js` - Application entry point
+- `AppNavigator.js` - Navigation configuration
+
+#### Screen Components
+
+- `HomeScreen.js` - Home screen
+- `MeditationScreen.js` - Meditation function
+- `TaskScreen.js` - Task management
+- `FocusScreen.js` - Focus mode
+- `SummaryScreen.js` - Daily summary
+- `JournalScreen.js` - Journal list
+- `JournalEditScreen.js` - Journal editing
+- `SettingsScreen.js` - Settings page
+
+#### Reusable Components
+
+- `MarkdownRenderer.js` - Markdown rendering component
+- `SettingItem.js` - Setting item component
+- `SettingSection.js` - Setting section component
+- `CustomDateTimePicker.js` - Custom date time picker
+- `CloudBackupSection.js` - Cloud backup component
+- `JournalTemplateManager.js` - Journal template manager
+
+#### Services
+
+- `GoogleDriveService.js` - Google Drive integration
+- `NotificationService.js` - Notification service
+
+#### Custom Hooks
+
+- `useAsyncStorage.js` - AsyncStorage operation hook
+- `useWeather.js` - Weather data fetching hook
+
+#### Constants
+
+- `Config.js` - Configuration constants
+- `DesignSystem.js` - Design system constants
+- `JournalTemplates.js` - Journal template definitions
+
+### Development Guide
+
+#### Adding New Screens
+
+1. Create a new screen component in the `/src/screens` directory
+2. Register the new screen in `/src/navigation/AppNavigator.js`
+
+#### Adding New Components
+
+1. Create a new component in the `/src/components` directory
+2. Ensure the component is reusable and properly documented
+
+#### Adding New Services
+
+1. Create a new service in the `/src/services` directory
+2. Initialize the service in `App.js` (if needed)
+
+#### Adding New Hooks
+
+1. Create a new hook in the `/src/hooks` directory
+2. Ensure the hook follows React Hooks rules
+
+### Code Standards
+
+- Use ES6+ syntax
+- Use functional components and React Hooks
+- Document functions and components with JSDoc comments
+- Use appropriate error handling
+- Avoid direct state mutations, use immutable update patterns
 
 ## License
 
