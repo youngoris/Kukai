@@ -2,7 +2,8 @@
 
 #import <React/RCTBundleURLProvider.h>
 #import <React/RCTLinkingManager.h>
-#import <GoogleSignIn/GoogleSignIn.h>
+#import <GoogleSignIn/GIDSignIn.h>
+#import <GoogleSignIn/GIDConfiguration.h>
 
 @implementation AppDelegate
 
@@ -13,6 +14,13 @@
   // You can add your custom initial props in the dictionary below.
   // They will be passed down to the ViewController used by React Native.
   self.initialProps = @{};
+
+  // Configure Google Sign-In
+  NSString *clientID = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"GIDClientID"];
+  if (clientID) {
+    GIDConfiguration *config = [[GIDConfiguration alloc] initWithClientID:clientID];
+    [GIDSignIn.sharedInstance setConfiguration:config];
+  }
 
   return [super application:application didFinishLaunchingWithOptions:launchOptions];
 }
@@ -33,10 +41,6 @@
 
 // Linking API
 - (BOOL)application:(UIApplication *)application openURL:(NSURL *)url options:(NSDictionary<UIApplicationOpenURLOptionsKey,id> *)options {
-  BOOL handled = [GIDSignIn.sharedInstance handleURL:url];
-  if (handled) {
-    return YES;
-  }
   return [super application:application openURL:url options:options] || [RCTLinkingManager application:application openURL:url options:options];
 }
 

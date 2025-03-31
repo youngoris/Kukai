@@ -24,10 +24,16 @@
         "NSLocationAlwaysUsageDescription": "This app needs access to your location to provide weather information and location-based features",
         "NSCameraUsageDescription": "This app needs access to your camera to take daily selfies",
         "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to save daily selfies",
+        "GIDClientID": "550142175159-g68otva0ota8927c7tjl3qhv21hp4v88.apps.googleusercontent.com",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
               "com.andre.kukai"
+            ]
+          },
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.550142175159-g68otva0ota8927c7tjl3qhv21hp4v88"
             ]
           }
         ]
@@ -82,7 +88,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.550142175159-g68otva0ota8927c7tjl3qhv21hp4v88"
         }
-      ]
+      ],
+      "./google-signin-plugin.js"
     ],
     "scheme": "com.andre.kukai",
     "extra": {

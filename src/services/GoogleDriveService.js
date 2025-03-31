@@ -1,4 +1,5 @@
 import storageService from "./storage/StorageService";
+import googleSignInService from "./auth/GoogleSignInService";
 import * as FileSystem from "expo-file-system";
 import {
   GoogleSignin,
@@ -50,17 +51,14 @@ class GoogleDriveService {
       console.log("GoogleDriveService.initialize: Starting initialization");
       
       if (!this.isInitialized) {
-        // Configure Google Sign-In
-        console.log("Configuring Google Sign-In with:", {
-          iosClientId: GOOGLE_IOS_CLIENT_ID ? GOOGLE_IOS_CLIENT_ID.substring(0, 15) + '...' : 'Not set',
-          webClientId: GOOGLE_WEB_CLIENT_ID ? GOOGLE_WEB_CLIENT_ID.substring(0, 15) + '...' : 'Not set',
-          androidClientId: GOOGLE_ANDROID_CLIENT_ID ? GOOGLE_ANDROID_CLIENT_ID.substring(0, 15) + '...' : 'Not set',
-        });
+        // Use GoogleSignInService to configure Google Sign-In
+        await googleSignInService.initialize();
         
+        // Configure additional scopes for Google Drive
         GoogleSignin.configure({
           webClientId: GOOGLE_WEB_CLIENT_ID,
-          iosClientId: GOOGLE_IOS_CLIENT_ID, // Only needed for iOS
-          offlineAccess: true, // Request refresh token to access Google API
+          iosClientId: GOOGLE_IOS_CLIENT_ID,
+          offlineAccess: true,
           scopes: [
             "https://www.googleapis.com/auth/drive.file",       // File permissions
             "https://www.googleapis.com/auth/drive.appdata",    // Application data
@@ -136,44 +134,14 @@ class GoogleDriveService {
       console.error("Failed to save auth state:", error);
     }
   }
-
-  // Check Google Play Services
-  async hasPlayServices() {
-    try {
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      return true;
-    } catch (error) {
-      // Log specific error message instead of full error
-      console.log("Play Services check failed:", error.message || "Unknown error");
-      
-      if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        console.log("Play Services not available or outdated");
-      }
-      
-      return false;
-    }
-  }
   
   // Silent sign-in, try to refresh existing login state
   async silentSignIn() {
     try {
-      const userInfo = await GoogleSignin.signInSilently();
-      this.handleSuccessfulAuth(userInfo);
+      await googleSignInService.silentSignIn();
+      await this.getAccessToken();
       return true;
     } catch (error) {
-      // Handle various silent sign in failures gracefully without logging full error objects
-      if (error.code === statusCodes.SIGN_IN_REQUIRED) {
-        console.log("Silent sign in failed, user needs to sign in again");
-        return false;
-      } else if (error.code === statusCodes.NETWORK_ERROR) {
-        console.log("Network error during silent sign in");
-        return false;
-      } else if (error.message && error.message.includes("getTokens requires a user")) {
-        console.log("User not properly signed in for silent authentication");
-        return false;
-      }
-      
-      // Log other errors without full stack trace
       console.log("Silent sign in failed:", error.message || "Unknown error");
       return false;
     }
@@ -184,115 +152,32 @@ class GoogleDriveService {
     try {
       console.log("Starting authentication process");
       
-      // Special handling for iOS Client ID format
-      let clientId = GOOGLE_IOS_CLIENT_ID;
-      if (Platform.OS === 'ios' && clientId) {
-        // Ensure Client ID is correctly formatted to match URL Scheme
-        const iosClientIdFormatted = clientId.indexOf('.apps.googleusercontent.com') > -1 
-          ? clientId 
-          : `${clientId}.apps.googleusercontent.com`;
-        
-        console.log("Using iOS client ID:", iosClientIdFormatted.substring(0, 15) + '...');
-        
-        // Reconfigure for iOS only
-        GoogleSignin.configure({
-          iosClientId: iosClientIdFormatted,
-          webClientId: GOOGLE_WEB_CLIENT_ID,
-          offlineAccess: true,
-          scopes: [
-            "https://www.googleapis.com/auth/drive.file",
-            "https://www.googleapis.com/auth/drive.appdata",
-            "https://www.googleapis.com/auth/drive.metadata.readonly",
-            "https://www.googleapis.com/auth/drive.readonly",
-          ],
-        });
-      }
+      // Use GoogleSignInService for authentication
+      const signInResult = await googleSignInService.signIn();
       
-      // Check Play Services (only needed for Android)
-      if (Platform.OS === 'android') {
-        try {
-          await this.hasPlayServices();
-        } catch (error) {
-          console.log("Play Services check failed:", error.message || "Unknown error");
-          return false;
-        }
-      }
-      
-      // Try to sign in
-      let userInfo;
-      try {
-        console.log("Attempting to sign in with Google...");
-        userInfo = await GoogleSignin.signIn();
-        console.log("Google sign in success");
-        
-        // Save user information, this is important
-        this.user = userInfo.user;
-      } catch (error) {
-        if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-          console.log("User cancelled the login flow");
-          return false;
-        } else if (error.code === statusCodes.IN_PROGRESS) {
-          console.log("Sign in already in progress");
-          return false;
-        } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-          console.log("Play services not available or outdated");
-          return false;
-        }
-        
-        // Log error with more details for debugging
-        console.log("Sign in error details:", {
-          code: error.code,
-          message: error.message,
-          platformErrors: Platform.OS === 'ios' ? "Check URL schemes in Info.plist" : "Check Android configuration"
-        });
+      if (!signInResult.success) {
+        console.log("Google sign-in failed:", signInResult.error);
         return false;
       }
       
-      // Special handling: if userInfo already has idToken, use it directly
-      if (userInfo && userInfo.user && userInfo.user.idToken) {
-        this.accessToken = userInfo.user.idToken;
-        this.expiresAt = Date.now() + (50 * 60 * 1000);
-        await this.saveAuthState();
-        
-        this.handleSuccessfulAuth(userInfo);
-        return true;
+      this.user = signInResult.user;
+      
+      // Get access token
+      await this.getAccessToken();
+      
+      // If still no access token, authentication is incomplete
+      if (!this.accessToken) {
+        console.log("Failed to obtain access token after sign in");
+        return false;
       }
       
-      // If Google API access is needed, get access token
-      if (Platform.OS !== 'web') {
-        try {
-          console.log("Attempting to get access token...");
-          await this.getAccessToken();
-          
-          // If still no access token, authentication is incomplete
-          if (!this.accessToken) {
-            console.log("Failed to obtain access token after sign in");
-            
-            // Try alternative methods to get token
-            if (userInfo && userInfo.user) {
-              // If login successful but token retrieval failed, we still consider authentication successful
-              // Mark as logged in, may try to refresh token later
-              this.handleSuccessfulAuth(userInfo);
-              return true;
-            }
-            return false;
-          }
-        } catch (error) {
-          console.log("Failed to get access token after sign in:", error.message || "Unknown error");
-          
-          // If we have user info but token retrieval failed, we still consider authentication successful
-          if (userInfo && userInfo.user) {
-            this.handleSuccessfulAuth(userInfo);
-            return true; 
-          }
-          return false;
-        }
-      }
+      // Ensure backup folder exists
+      this.ensureBackupFolderExists().catch(err => {
+        console.log("Note: Failed to ensure backup folder exists:", err.message);
+      });
       
-      this.handleSuccessfulAuth(userInfo);
       return true;
     } catch (error) {
-      // Log without full error object to reduce noise
       console.log("Authentication failed:", error.message || "Unknown error");
       return false;
     }
@@ -301,107 +186,31 @@ class GoogleDriveService {
   // Get access token
   async getAccessToken() {
     try {
-      // First check if user is logged in to avoid unnecessary errors
-      let isSignedIn = false;
+      const tokens = await googleSignInService.getTokens();
       
-      try {
-        // Try to check if already signed in
-        isSignedIn = await GoogleSignin.isSignedIn();
-      } catch (checkError) {
-        console.log("Error checking sign in status:", checkError.message);
-        
-        // If isSignedIn method is unavailable, try using getCurrentUser as an alternative check
-        try {
-          const currentUser = await GoogleSignin.getCurrentUser();
-          isSignedIn = currentUser != null;
-        } catch (userError) {
-          console.log("Also failed to get current user:", userError.message);
-        }
-      }
-      
-      if (!isSignedIn) {
-        console.log("Failed to get token - user not logged in or login status cannot be confirmed");
+      if (!tokens) {
+        console.log("Failed to get tokens");
         return null;
       }
       
-      // Try to get token
-      try {
-        const tokens = await GoogleSignin.getTokens();
-        this.accessToken = tokens.accessToken;
-        
-        // Access tokens typically expire in 1 hour, setting to 50 minutes for safety
-        this.expiresAt = Date.now() + (50 * 60 * 1000);
-        
-        await this.saveAuthState();
-        return this.accessToken;
-      } catch (tokenError) {
-        console.log("Failed to get token:", tokenError.message);
-        
-        // If error getting token, try to revalidate
-        if (this.user) {
-          try {
-            // Use current user info to directly extract token
-            if (this.user.idToken) {
-              this.accessToken = this.user.idToken;
-              this.expiresAt = Date.now() + (50 * 60 * 1000);
-              await this.saveAuthState();
-              return this.accessToken;
-            }
-          } catch (e) {
-            console.log("Failed to use idToken as fallback");
-          }
-        }
-        
-        return null;
-      }
+      this.accessToken = tokens.accessToken;
+      
+      // Access tokens typically expire in 1 hour, setting to 50 minutes for safety
+      this.expiresAt = Date.now() + (50 * 60 * 1000);
+      
+      await this.saveAuthState();
+      return this.accessToken;
     } catch (error) {
-      // Handle specific error types
-      if (error.code === statusCodes.SIGN_IN_REQUIRED) {
-        console.log("User needs to sign in again to get tokens");
-        return null;
-      } else if (error.message && error.message.includes("getTokens requires a user")) {
-        console.log("User not properly signed in for token retrieval");
-        return null;
-      }
-      
-      // For other errors, only log the message to reduce noise
       console.log("Failed to get access token:", error.message || "Unknown error");
       return null;
     }
-  }
-  
-  // Handle successful authentication result
-  handleSuccessfulAuth(userInfo) {
-    if (!userInfo || !userInfo.user) {
-      console.log("Warning: handleSuccessfulAuth called with invalid user info");
-      return;
-    }
-    
-    // Save user information
-    this.user = userInfo.user;
-    
-    // If userInfo has idToken but no accessToken, use idToken as fallback
-    if (!this.accessToken && userInfo.user.idToken) {
-      this.accessToken = userInfo.user.idToken;
-      this.expiresAt = Date.now() + (50 * 60 * 1000);
-      console.log("Using idToken as accessToken fallback");
-    }
-    
-    // Save authentication state
-    this.saveAuthState();
-    
-    // Ensure backup folder exists
-    this.ensureBackupFolderExists().catch(err => {
-      console.log("Note: Failed to ensure backup folder exists:", err.message);
-      // Don't interrupt flow, this is just a warning
-    });
   }
 
   // Sign out
   async signOut() {
     try {
-      // Call Google Sign-In sign out
-      await GoogleSignin.signOut();
+      // Use GoogleSignInService to sign out
+      await googleSignInService.signOut();
       
       // Clear local state
       this.accessToken = null;
@@ -420,13 +229,7 @@ class GoogleDriveService {
   
   // Get current user
   async getCurrentUser() {
-    try {
-      const currentUser = await GoogleSignin.getCurrentUser();
-      return currentUser;
-    } catch (error) {
-      console.error("Failed to get current user:", error);
-      return null;
-    }
+    return googleSignInService.getCurrentUser();
   }
   
   // Ensure backup folder exists

@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   FlatList,
+  TextInput,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import googleDriveService from "../services/GoogleDriveService";
@@ -32,6 +33,8 @@ const CloudBackupSection = ({
   const [showBackupListModal, setShowBackupListModal] = useState(false);
   const [backups, setBackups] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [showBackupDescriptionModal, setShowBackupDescriptionModal] = useState(false);
+  const [backupDescription, setBackupDescription] = useState("");
 
   // light or dark theme
   const isLightTheme = theme === "light";
@@ -239,76 +242,70 @@ const CloudBackupSection = ({
       return;
     }
 
-    Alert.prompt(
-      "Create Backup",
-      "Enter backup description (optional):",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Create",
-          onPress: async (description) => {
-            setIsLoading(true);
-            try {
-              // Collect all application data for backup
-              const timestamp = new Date().toISOString();
-              
-              // Get all types of stored data
-              const meditationsData = await storageService.getItem('meditations');
-              const tasksData = await storageService.getItem('tasks');
-              const journalData = await storageService.getItem('journal');
-              const settingsData = await storageService.getItem('settings');
-              
-              // Prepare complete backup data structure
-              const backupData = {
-                description: description || `Backup created on ${new Date().toLocaleString()}`,
-                timestamp: timestamp,
-                data: {
-                  meditations: meditationsData ? JSON.parse(meditationsData) : null,
-                  tasks: tasksData ? JSON.parse(tasksData) : null,
-                  journal: journalData ? JSON.parse(journalData) : null,
-                  settings: settingsData ? JSON.parse(settingsData) : null
-                }
-              };
-              
-              console.log("Creating backup with data structure:", Object.keys(backupData.data));
-              
-              // Call backup service
-              const result = await googleDriveService.createBackup(backupData);
+    // Show the custom modal instead of using Alert.prompt (which is iOS only)
+    setBackupDescription("");
+    setShowBackupDescriptionModal(true);
+  };
 
-              if (result.success) {
-                console.log("Backup successful:", result.data);
-                Alert.alert("Success", "Backup created successfully");
-                loadLastSyncTime();
-                
-                // Notify parent component when complete
-                if (onBackupComplete) {
-                  onBackupComplete();
-                }
-              } else {
-                // Handle specific error cases without showing technical errors to the user
-                console.error("Backup creation failed:", result.message);
-                
-                // Show user-friendly message
-                if (result.message === "Authentication cancelled or failed") {
-                  // User cancelled Google login, don't show error alert
-                  console.log("User cancelled Google authentication during backup");
-                } else if (result.message === "Could not access or create backup folder") {
-                  Alert.alert("Backup Error", "Could not access Google Drive backup location. Please try again later.");
-                } else {
-                  Alert.alert("Backup Error", "Could not create backup. Please try again later.");
-                }
-              }
-            } catch (error) {
-              console.error("Backup creation error:", error);
-              Alert.alert("Error", "Failed to create backup. Please try again later.");
-            } finally {
-              setIsLoading(false);
-            }
-          },
-        },
-      ],
-      "plain-text",
-    );
+  // New function to perform the actual backup
+  const performBackup = async (description) => {
+    setIsLoading(true);
+    try {
+      // Collect all application data for backup
+      const timestamp = new Date().toISOString();
+      
+      // Get all types of stored data
+      const meditationsData = await storageService.getItem('meditations');
+      const tasksData = await storageService.getItem('tasks');
+      const journalData = await storageService.getItem('journal');
+      const settingsData = await storageService.getItem('settings');
+      
+      // Prepare complete backup data structure
+      const backupData = {
+        description: description || `Backup created on ${new Date().toLocaleString()}`,
+        timestamp: timestamp,
+        data: {
+          meditations: meditationsData ? JSON.parse(meditationsData) : null,
+          tasks: tasksData ? JSON.parse(tasksData) : null,
+          journal: journalData ? JSON.parse(journalData) : null,
+          settings: settingsData ? JSON.parse(settingsData) : null
+        }
+      };
+      
+      console.log("Creating backup with data structure:", Object.keys(backupData.data));
+      
+      // Call backup service
+      const result = await googleDriveService.createBackup(backupData);
+
+      if (result.success) {
+        console.log("Backup successful:", result.data);
+        Alert.alert("Success", "Backup created successfully");
+        loadLastSyncTime();
+        
+        // Notify parent component when complete
+        if (onBackupComplete) {
+          onBackupComplete();
+        }
+      } else {
+        // Handle specific error cases without showing technical errors to the user
+        console.error("Backup creation failed:", result.message);
+        
+        // Show user-friendly message
+        if (result.message === "Authentication cancelled or failed") {
+          // User cancelled Google login, don't show error alert
+          console.log("User cancelled Google authentication during backup");
+        } else if (result.message === "Could not access or create backup folder") {
+          Alert.alert("Backup Error", "Could not access Google Drive backup location. Please try again later.");
+        } else {
+          Alert.alert("Backup Error", "Could not create backup. Please try again later.");
+        }
+      }
+    } catch (error) {
+      console.error("Backup creation error:", error);
+      Alert.alert("Error", "Failed to create backup. Please try again later.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Handle restore backup
@@ -604,6 +601,89 @@ const CloudBackupSection = ({
     );
   };
 
+  // Add this new function to render the custom backup description modal
+  const renderBackupDescriptionModal = () => {
+    return (
+      <Modal
+        visible={showBackupDescriptionModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowBackupDescriptionModal(false)}
+      >
+        <View
+          style={[
+            styles.modalOverlay,
+            isLightTheme && styles.lightModalOverlay,
+          ]}
+        >
+          <View
+            style={[
+              styles.modalContent,
+              isLightTheme && styles.lightModalContent,
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  isLightTheme && styles.lightModalTitle,
+                ]}
+              >
+                Create Backup
+              </Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowBackupDescriptionModal(false)}
+              >
+                <MaterialIcons
+                  name="close"
+                  size={24}
+                  color={isLightTheme ? "#333" : "#FFF"}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.inputLabel, isLightTheme && styles.lightInputLabel]}>
+              Backup description (optional):
+            </Text>
+            <TextInput
+              style={[
+                styles.inputField,
+                isLightTheme && styles.lightInputField,
+              ]}
+              value={backupDescription}
+              onChangeText={setBackupDescription}
+              placeholder="Enter description"
+              placeholderTextColor={isLightTheme ? "#999" : "#666"}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton, isLightTheme && styles.lightCancelButton]}
+                onPress={() => setShowBackupDescriptionModal(false)}
+              >
+                <Text style={[styles.modalButtonText, isLightTheme && styles.lightModalButtonText]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={() => {
+                  setShowBackupDescriptionModal(false);
+                  performBackup(backupDescription);
+                }}
+              >
+                <Text style={styles.modalButtonText}>
+                  Create
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   return (
     <View style={[styles.container, isLightTheme && styles.lightContainer]}>
       {isLoading ? (
@@ -887,6 +967,7 @@ const CloudBackupSection = ({
       )}
 
       {renderBackupListModal()}
+      {renderBackupDescriptionModal()}
     </View>
   );
 };
@@ -1208,6 +1289,55 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   lightMockButtonText: {
+    color: "#333",
+  },
+  inputLabel: {
+    color: "#CCC",
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  lightInputLabel: {
+    color: "#333",
+  },
+  inputField: {
+    backgroundColor: "#222",
+    borderRadius: 5,
+    padding: 12,
+    color: "#FFF",
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  lightInputField: {
+    backgroundColor: "#EEE",
+    color: "#333",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 5,
+    marginHorizontal: 5,
+  },
+  cancelButton: {
+    backgroundColor: "#444",
+  },
+  lightCancelButton: {
+    backgroundColor: "#CCC",
+  },
+  confirmButton: {
+    backgroundColor: "#333",
+  },
+  modalButtonText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  lightModalButtonText: {
     color: "#333",
   },
 });

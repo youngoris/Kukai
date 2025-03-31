@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@expo-google-fonts/roboto": "^0.2.3",
+    "@expo/config-plugins": "^9.0.17",
     "@expo/metro-runtime": "~4.0.1",
     "@expo/vector-icons": "^14.0.4",
     "@react-native-async-storage/async-storage": "^1.24.0",
