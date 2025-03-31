@@ -34,23 +34,42 @@ yarn install
 
 #### Resolving npm Conflicts
 
-If you encounter npm conflicts during installation, try the following solutions:
+If you encounter dependency conflicts during installation, try these solutions:
 
 ```bash
 # Clean npm cache
 npm cache clean --force
 
-# Use npm with force flag
-npm install --force
-
-# Or use npm with legacy peer deps
+# Using npm with legacy peer deps flag for compatibility issues
 npm install --legacy-peer-deps
 
-# If specific packages cause issues, try installing them separately
-npm install <problem-package> --force
+# Alternative: Clear node_modules and reinstall with a clean slate
+rm -rf node_modules
+rm package-lock.json
+npm install
+
+# If specific packages are causing issues, install them explicitly
+npx expo install react-native-reanimated@~2.14.4
 ```
 
-### 3. Environment Configuration (Optional)
+### 3. Fix Google Sign-in (Required for Google Authentication)
+
+The project includes a convenience script to set up Google Sign-in properly:
+
+```bash
+# Make the script executable
+chmod +x ./fix-google-signin.sh
+
+# Run the script
+./fix-google-signin.sh
+
+# Finalize the setup for iOS
+cd ios && pod install && cd ..
+```
+
+For detailed Google Sign-in configuration, refer to `GOOGLE_SIGNIN_README.md`.
+
+### 4. Environment Configuration (Optional)
 
 Create a `.env` file and configure the necessary environment variables if you need the following features:
 
@@ -66,44 +85,6 @@ GOOGLE_WEB_CLIENT_ID=your_web_client_id
 ```
 
 The app will still function without these environment variables, but certain features will be limited or unavailable.
-
-### 4. Setting Up Google Sign-In (Optional)
-
-If you need Google Sign-In functionality for Google Drive synchronization, run:
-
-```bash
-# Make script executable
-chmod +x scripts/setup-google-signin.sh
-
-# Run the setup script
-./scripts/setup-google-signin.sh
-```
-
-This script will:
-- Check for necessary environment variables in your `.env` file
-- Run Expo prebuild with clean flag
-- Apply necessary fixes to iOS configuration files
-- Install CocoaPods dependencies
-
-If you need to manually fix Google Sign-In issues after setup:
-
-```bash
-# Run only the fix script
-chmod +x scripts/fix-google-signin.sh
-./scripts/fix-google-signin.sh
-
-# Then install CocoaPods
-cd ios && pod install && cd ..
-```
-
-#### Troubleshooting Google Sign-In
-
-If you encounter issues with Google Sign-In:
-- Verify that all Google client IDs in your `.env` file are correct
-- Check the iOS configuration files manually (Info.plist and AppDelegate.mm)
-- Run the diagnostic script: `chmod +x scripts/google-signin-check.sh && ./scripts/google-signin-check.sh`
-
-For detailed information about Google Sign-In integration, refer to `GOOGLE_SIGNIN_README.md`.
 
 ## Running the Application
 
@@ -135,6 +116,9 @@ npm run ios
 
 # Using npx
 npx expo run:ios
+
+# Specify a simulator device
+npx expo run:ios --simulator="iPhone 14 Pro"
 ```
 
 #### Android
@@ -145,13 +129,42 @@ npm run android
 
 # Using npx
 npx expo run:android
+
+# Run on a specific device (if multiple connected)
+npx expo run:android --device="Pixel_4_API_30"
+```
+
+### Building for Production
+
+```bash
+# Create a production build for iOS
+npx expo build:ios
+
+# Create a production build for Android
+npx expo build:android
+
+# Use EAS Build (recommended for production)
+npx eas build --platform ios
+npx eas build --platform android
+```
+
+### Updating Expo Packages
+
+When you need to update Expo SDK or packages:
+
+```bash
+# Update all Expo packages
+npx expo install
+
+# Update a specific package
+npx expo install package-name@version
 ```
 
 ### Using the Expo Go App
 
 1. Install the [Expo Go](https://expo.dev/client) app on your iOS or Android device
 2. Ensure your phone is on the same Wi-Fi network as your development computer
-3. Start the project: `npm start`
+3. Start the project: `npx expo start`
 4. Scan the QR code in the terminal or web page with the Expo Go app
 
 **Note:** You do not need to log in to an Expo account when developing or testing with Expo Go in development mode.
