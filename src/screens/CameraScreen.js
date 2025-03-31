@@ -43,7 +43,7 @@ const CameraScreen = ({ navigation, route }) => {
   const cameraRef = useRef(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   
-  // 获取设备安全区域尺寸
+  
   const insets = useSafeAreaInsets();
   
   // Randomly select a quote
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
     width: screenWidth,
     height: screenWidth, 
     overflow: 'hidden',
-    marginTop: 40,
+    marginTop: 70,
   },
   camera: {
     width: '100%',

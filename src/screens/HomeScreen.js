@@ -510,7 +510,7 @@ const HomeScreen = ({ navigation }) => {
 
       {/* White circle button between menu and settings */}
       <View style={[styles.circleButtonContainer, {
-        bottom: insets.bottom > 0 ? insets.bottom + 110 : 100,
+        bottom: insets.bottom > 0 ? insets.bottom + 95 : 100,
         left: insets.left,
         right: insets.right,
         zIndex: 20,

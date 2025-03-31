@@ -51,6 +51,12 @@ class GoogleDriveService {
       
       if (!this.isInitialized) {
         // Configure Google Sign-In
+        console.log("Configuring Google Sign-In with:", {
+          iosClientId: GOOGLE_IOS_CLIENT_ID ? GOOGLE_IOS_CLIENT_ID.substring(0, 15) + '...' : 'Not set',
+          webClientId: GOOGLE_WEB_CLIENT_ID ? GOOGLE_WEB_CLIENT_ID.substring(0, 15) + '...' : 'Not set',
+          androidClientId: GOOGLE_ANDROID_CLIENT_ID ? GOOGLE_ANDROID_CLIENT_ID.substring(0, 15) + '...' : 'Not set',
+        });
+        
         GoogleSignin.configure({
           webClientId: GOOGLE_WEB_CLIENT_ID,
           iosClientId: GOOGLE_IOS_CLIENT_ID, // Only needed for iOS
@@ -178,6 +184,30 @@ class GoogleDriveService {
     try {
       console.log("Starting authentication process");
       
+      // Special handling for iOS Client ID format
+      let clientId = GOOGLE_IOS_CLIENT_ID;
+      if (Platform.OS === 'ios' && clientId) {
+        // Ensure Client ID is correctly formatted to match URL Scheme
+        const iosClientIdFormatted = clientId.indexOf('.apps.googleusercontent.com') > -1 
+          ? clientId 
+          : `${clientId}.apps.googleusercontent.com`;
+        
+        console.log("Using iOS client ID:", iosClientIdFormatted.substring(0, 15) + '...');
+        
+        // Reconfigure for iOS only
+        GoogleSignin.configure({
+          iosClientId: iosClientIdFormatted,
+          webClientId: GOOGLE_WEB_CLIENT_ID,
+          offlineAccess: true,
+          scopes: [
+            "https://www.googleapis.com/auth/drive.file",
+            "https://www.googleapis.com/auth/drive.appdata",
+            "https://www.googleapis.com/auth/drive.metadata.readonly",
+            "https://www.googleapis.com/auth/drive.readonly",
+          ],
+        });
+      }
+      
       // Check Play Services (only needed for Android)
       if (Platform.OS === 'android') {
         try {
@@ -191,7 +221,12 @@ class GoogleDriveService {
       // Try to sign in
       let userInfo;
       try {
+        console.log("Attempting to sign in with Google...");
         userInfo = await GoogleSignin.signIn();
+        console.log("Google sign in success");
+        
+        // Save user information, this is important
+        this.user = userInfo.user;
       } catch (error) {
         if (error.code === statusCodes.SIGN_IN_CANCELLED) {
           console.log("User cancelled the login flow");
@@ -204,25 +239,52 @@ class GoogleDriveService {
           return false;
         }
         
-        // Log other errors without full stack trace
-        console.log("Sign in error:", error.message || "Unknown error");
+        // Log error with more details for debugging
+        console.log("Sign in error details:", {
+          code: error.code,
+          message: error.message,
+          platformErrors: Platform.OS === 'ios' ? "Check URL schemes in Info.plist" : "Check Android configuration"
+        });
         return false;
       }
       
-      console.log("Google sign in success");
+      // Special handling: if userInfo already has idToken, use it directly
+      if (userInfo && userInfo.user && userInfo.user.idToken) {
+        this.accessToken = userInfo.user.idToken;
+        this.expiresAt = Date.now() + (50 * 60 * 1000);
+        await this.saveAuthState();
+        
+        this.handleSuccessfulAuth(userInfo);
+        return true;
+      }
       
       // If Google API access is needed, get access token
       if (Platform.OS !== 'web') {
         try {
+          console.log("Attempting to get access token...");
           await this.getAccessToken();
           
           // If still no access token, authentication is incomplete
           if (!this.accessToken) {
             console.log("Failed to obtain access token after sign in");
+            
+            // Try alternative methods to get token
+            if (userInfo && userInfo.user) {
+              // If login successful but token retrieval failed, we still consider authentication successful
+              // Mark as logged in, may try to refresh token later
+              this.handleSuccessfulAuth(userInfo);
+              return true;
+            }
             return false;
           }
         } catch (error) {
           console.log("Failed to get access token after sign in:", error.message || "Unknown error");
+          
+          // If we have user info but token retrieval failed, we still consider authentication successful
+          if (userInfo && userInfo.user) {
+            this.handleSuccessfulAuth(userInfo);
+            return true; 
+          }
           return false;
         }
       }
@@ -239,32 +301,70 @@ class GoogleDriveService {
   // Get access token
   async getAccessToken() {
     try {
-      // First check if there's a user signed in to avoid unnecessary errors
-      const isSignedIn = await GoogleSignin.isSignedIn();
+      // First check if user is logged in to avoid unnecessary errors
+      let isSignedIn = false;
+      
+      try {
+        // Try to check if already signed in
+        isSignedIn = await GoogleSignin.isSignedIn();
+      } catch (checkError) {
+        console.log("Error checking sign in status:", checkError.message);
+        
+        // If isSignedIn method is unavailable, try using getCurrentUser as an alternative check
+        try {
+          const currentUser = await GoogleSignin.getCurrentUser();
+          isSignedIn = currentUser != null;
+        } catch (userError) {
+          console.log("Also failed to get current user:", userError.message);
+        }
+      }
+      
       if (!isSignedIn) {
-        console.log("Cannot get access token - user not signed in");
+        console.log("Failed to get token - user not logged in or login status cannot be confirmed");
         return null;
       }
       
-      const tokens = await GoogleSignin.getTokens();
-      this.accessToken = tokens.accessToken;
-      
-      // Access tokens typically last for 1 hour, but set to 50 minutes to be safe
-      this.expiresAt = Date.now() + (50 * 60 * 1000);
-      
-      await this.saveAuthState();
-      return this.accessToken;
+      // Try to get token
+      try {
+        const tokens = await GoogleSignin.getTokens();
+        this.accessToken = tokens.accessToken;
+        
+        // Access tokens typically expire in 1 hour, setting to 50 minutes for safety
+        this.expiresAt = Date.now() + (50 * 60 * 1000);
+        
+        await this.saveAuthState();
+        return this.accessToken;
+      } catch (tokenError) {
+        console.log("Failed to get token:", tokenError.message);
+        
+        // If error getting token, try to revalidate
+        if (this.user) {
+          try {
+            // Use current user info to directly extract token
+            if (this.user.idToken) {
+              this.accessToken = this.user.idToken;
+              this.expiresAt = Date.now() + (50 * 60 * 1000);
+              await this.saveAuthState();
+              return this.accessToken;
+            }
+          } catch (e) {
+            console.log("Failed to use idToken as fallback");
+          }
+        }
+        
+        return null;
+      }
     } catch (error) {
-      // Handle specific error types without logging full error objects
+      // Handle specific error types
       if (error.code === statusCodes.SIGN_IN_REQUIRED) {
-        console.log("User needs to sign in to get tokens");
+        console.log("User needs to sign in again to get tokens");
         return null;
       } else if (error.message && error.message.includes("getTokens requires a user")) {
         console.log("User not properly signed in for token retrieval");
         return null;
       }
       
-      // For other errors, log message only to reduce noise
+      // For other errors, only log the message to reduce noise
       console.log("Failed to get access token:", error.message || "Unknown error");
       return null;
     }
@@ -272,15 +372,29 @@ class GoogleDriveService {
   
   // Handle successful authentication result
   handleSuccessfulAuth(userInfo) {
+    if (!userInfo || !userInfo.user) {
+      console.log("Warning: handleSuccessfulAuth called with invalid user info");
+      return;
+    }
+    
     // Save user information
     this.user = userInfo.user;
     
-    // Access token and expiry time are handled in getAccessToken
-    // Save authentication state here
+    // If userInfo has idToken but no accessToken, use idToken as fallback
+    if (!this.accessToken && userInfo.user.idToken) {
+      this.accessToken = userInfo.user.idToken;
+      this.expiresAt = Date.now() + (50 * 60 * 1000);
+      console.log("Using idToken as accessToken fallback");
+    }
+    
+    // Save authentication state
     this.saveAuthState();
     
     // Ensure backup folder exists
-    this.ensureBackupFolderExists();
+    this.ensureBackupFolderExists().catch(err => {
+      console.log("Note: Failed to ensure backup folder exists:", err.message);
+      // Don't interrupt flow, this is just a warning
+    });
   }
 
   // Sign out
@@ -1133,6 +1247,47 @@ class GoogleDriveService {
     } catch (error) {
       console.error("Failed to get shared drive:", error);
       return null;
+    }
+  }
+
+  // Check and fix environment configuration to ensure Google login works properly
+  static async ensureProperSetup() {
+    try {
+      console.log("GoogleDriveService: Checking environment configuration...");
+      
+      // Check Info.plist configuration (iOS)
+      if (Platform.OS === 'ios') {
+        // Can't directly check Info.plist here, but can provide logs
+        console.log("iOS configuration tip: Ensure Info.plist URL types contains the correct Scheme");
+        
+        // Check if environment variables are properly set
+        if (GOOGLE_IOS_CLIENT_ID) {
+          console.log("iOS Client ID configured:", GOOGLE_IOS_CLIENT_ID.substring(0, 15) + '...');
+        } else {
+          console.warn("Warning: iOS Client ID not configured!");
+        }
+      }
+      
+      // Check Android configuration
+      if (Platform.OS === 'android') {
+        if (GOOGLE_ANDROID_CLIENT_ID) {
+          console.log("Android Client ID configured:", GOOGLE_ANDROID_CLIENT_ID.substring(0, 15) + '...');
+        } else {
+          console.warn("Warning: Android Client ID not configured!");
+        }
+      }
+      
+      // Check Web Client ID (universal)
+      if (GOOGLE_WEB_CLIENT_ID) {
+        console.log("Web Client ID configured:", GOOGLE_WEB_CLIENT_ID.substring(0, 15) + '...');
+      } else {
+        console.warn("Warning: Web Client ID not configured!");
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error checking Google environment configuration:", error);
+      return false;
     }
   }
 

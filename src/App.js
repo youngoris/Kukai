@@ -125,6 +125,10 @@ export default function App() {
   const initGoogleDrive = async () => {
     try {
       console.log("Initializing Google Drive service...");
+      
+      // First check and ensure environment configuration is correct
+      await googleDriveService.ensureProperSetup();
+      
       const initialized = await googleDriveService.initialize();
       if (initialized) {
         await googleDriveService.checkAndPerformAutoSync();
