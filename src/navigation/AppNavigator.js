@@ -32,6 +32,9 @@ console.log("PhotoGalleryScreen:", !!PhotoGalleryScreen);
 const { width } = Dimensions.get("window");
 const Stack = createNativeStackNavigator();
 
+// Development mode flag - set to true to always show onboarding screen
+const DEV_MODE = true; // Set to false when done with development
+
 const AppNavigator = () => {
   // Add state to track initial route
   const [initialRoute, setInitialRoute] = useState('Onboarding');
@@ -43,13 +46,15 @@ const AppNavigator = () => {
       try {
         const hasCompletedOnboarding = await storageService.getItem('hasCompletedOnboarding');
         console.log("AppNavigator - Onboarding status:", hasCompletedOnboarding);
-        if (hasCompletedOnboarding === 'true') {
+        if (hasCompletedOnboarding === 'true' && !DEV_MODE) {
           setInitialRoute('Home');
         }
       } catch (error) {
         console.error('Error checking onboarding status:', error);
         // Default to Home screen on error
-        setInitialRoute('Home');
+        if (!DEV_MODE) {
+          setInitialRoute('Home');
+        }
       } finally {
         setIsLoading(false);
       }

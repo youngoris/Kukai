@@ -44,12 +44,13 @@ const PhotoGalleryScreen = ({ navigation, route }) => {
   // Check if we came from a retake operation
   const fromRetake = route.params?.fromRetake || false;
 
-  // Photo size calculation considering safe margins
-  const containerPadding = SPACING.s * 2; // Container padding
-  const footerHeight = 100; // Bottom navigation area height
-  const availableWidth = width - containerPadding;
-  const totalGapWidth = GRID_SPACING * (columnCount - 1);
-  const itemSize = Math.floor((availableWidth - totalGapWidth) / columnCount);
+  // Photo size calculation ensuring equal margins on both sides
+  const screenPadding = SPACING.m; // Padding applied to entire screen edges
+  const availableWidth = width - (screenPadding * 2); // Available width for photos
+  const totalGapWidth = GRID_SPACING * (columnCount - 1); // Total width of gaps between photos
+  const itemSize = Math.floor((availableWidth - totalGapWidth) / columnCount); // Size of each photo
+  const rowWidth = (itemSize * columnCount) + totalGapWidth; // Total width of all photos in a row with gaps
+  const rowMargin = (width - rowWidth) / 2; // Equal margin on both sides to center the photos
 
   // 获取设备安全区域尺寸
   const insets = useSafeAreaInsets();
@@ -588,13 +589,45 @@ const PhotoGalleryScreen = ({ navigation, route }) => {
       {/* Main content - Photo Grid */}
       {photos.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No selfies yet</Text>
-          <TouchableOpacity 
-            style={styles.emptyButton}
-            onPress={handleTakeNewPicture}
-          >
-            <Text style={styles.emptyButtonText}>Take your first selfie</Text>
-          </TouchableOpacity>
+          {/* Placeholder photo grid background */}
+          <View style={[styles.placeholderGrid, { paddingLeft: rowMargin, paddingRight: rowMargin }]}>
+            {/* Create 15 rows with exact number of columns in each row */}
+            {Array(15).fill().map((_, rowIndex) => (
+              <View 
+                key={`row-${rowIndex}`} 
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'flex-start',
+                  marginBottom: GRID_SPACING
+                }}
+              >
+                {/* Generate exact number of columns per row */}
+                {Array(columnCount).fill().map((_, colIndex) => (
+                  <View 
+                    key={`placeholder-${rowIndex}-${colIndex}`} 
+                    style={[
+                      styles.placeholderPhoto, 
+                      { 
+                        width: itemSize, 
+                        height: itemSize,
+                        marginLeft: colIndex === 0 ? 0 : GRID_SPACING/2,
+                        marginRight: colIndex === columnCount - 1 ? 0 : GRID_SPACING/2,
+                      }
+                    ]}
+                  />
+                ))}
+              </View>
+            ))}
+          </View>
+          
+          <View style={styles.emptyContentOverlay}>
+            <TouchableOpacity 
+              style={styles.emptyButton}
+              onPress={handleTakeNewPicture}
+            >
+              <Text style={styles.emptyButtonText}>Take Your First Selfie</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : (
         <FlatList
@@ -603,7 +636,7 @@ const PhotoGalleryScreen = ({ navigation, route }) => {
           renderItem={({ item }) => (
             <View>
               {/* Section Header */}
-              <View style={styles.sectionHeader}>
+              <View style={[styles.sectionHeader, { marginLeft: rowMargin, marginRight: rowMargin }]}>
                 <Text style={styles.sectionHeaderText}>{item.title}</Text>
               </View>
               
@@ -615,7 +648,10 @@ const PhotoGalleryScreen = ({ navigation, route }) => {
                 renderItem={renderItem}
                 horizontal={false}
                 numColumns={columnCount}
-                contentContainerStyle={styles.photosRow}
+                contentContainerStyle={[
+                  styles.photosRow,
+                  { marginLeft: rowMargin, marginRight: rowMargin }
+                ]}
               />
             </View>
           )}
@@ -819,6 +855,7 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 30 : 20,
     paddingTop: SPACING.m,
     backgroundColor: COLORS.background,
+    zIndex: 2,
   },
   footerButton: {
     width: 50,
@@ -953,8 +990,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     padding: SPACING.s,
-    // paddingHorizontal: SPACING.m,
-    // marginVertical: SPACING.xs,
+    marginBottom: SPACING.xs,
     borderRadius: 4,
     alignItems: 'flex-start',
   },
@@ -990,19 +1026,62 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   galleryContainer: {
-    padding: SPACING.s,
     paddingBottom: 100, // Space for footer
+    paddingTop: SPACING.s,
   },
   photosRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-start',
+    padding: 0,
   },
   previewButtonDisabled: {
     opacity: 0.5,
   },
   previewButtonTextDisabled: {
     color: COLORS.text.tertiary,
+  },
+  placeholderGrid: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
+    padding: 0,
+    paddingTop: SPACING.s,
+    opacity: 0.5,
+    zIndex: 1,
+    pointerEvents: 'none',
+  },
+  placeholderPhoto: {
+    margin: GRID_SPACING/2,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 5,
+  },
+  emptyContentOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    paddingHorizontal: SPACING.xl,
+    zIndex: 2,
+  },
+  emptyButton: {
+    backgroundColor: COLORS.text.primary,
+    paddingHorizontal: SPACING.l,
+    paddingVertical: SPACING.m,
+    borderRadius: 12,
+  },
+  emptyButtonText: {
+    color: COLORS.background,
+    fontSize: FONT_SIZE.m,
+    fontWeight: '600',
   },
 });
 

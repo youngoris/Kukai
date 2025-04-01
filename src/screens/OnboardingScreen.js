@@ -39,6 +39,9 @@ const OnboardingScreen = ({ navigation }) => {
   // Add debug logs to confirm component is rendering
   console.log("OnboardingScreen rendering");
 
+  // Development mode flag - set to true to always show onboarding screen
+  const DEV_MODE = true; // Set to false when done with development
+
   // Check if onboarding has been completed
   useEffect(() => {
     const checkOnboardingStatus = async () => {
@@ -47,8 +50,8 @@ const OnboardingScreen = ({ navigation }) => {
         const hasCompletedOnboarding = await storageService.getItem('hasCompletedOnboarding');
         console.log("DEBUG - Onboarding status:", hasCompletedOnboarding);
         
-        // Uncomment auto-navigation logic to ensure proper flow
-        if (hasCompletedOnboarding === 'true') {
+        // Only navigate to Home if DEV_MODE is false
+        if (hasCompletedOnboarding === 'true' && !DEV_MODE) {
           // Navigate to Home screen immediately to avoid flicker
           navigation.replace('Home');
         }
@@ -56,7 +59,9 @@ const OnboardingScreen = ({ navigation }) => {
         console.error('Error checking onboarding status:', error);
         // Add back navigation in error handling for better user experience
         // In case of error, still navigate to Home to prevent UX issues
-        navigation.replace('Home');
+        if (!DEV_MODE) {
+          navigation.replace('Home');
+        }
       }
     };
     

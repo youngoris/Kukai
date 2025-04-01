@@ -1234,7 +1234,7 @@ const MeditationScreen = ({ navigation }) => {
 
   // Function to navigate to task screen
   const navigateToTasks = useCallback(() => {
-    navigation.navigate('Tasks');
+    navigation.navigate('Task');
   }, [navigation]);
   
   // Function to navigate to journal screen
@@ -1553,7 +1553,7 @@ const MeditationScreen = ({ navigation }) => {
           <View style={styles.navigationButtonsContainer}>
             <TouchableOpacity
               style={styles.continueButton}
-              onPress={() => navigation.navigate("Tasks")}
+              onPress={() => navigation.navigate("Task")}
             >
               <MaterialIcons name="assignment" size={24} color={COLORS.background} />
               <Text style={styles.continueButtonText}>Continue to Tasks</Text>

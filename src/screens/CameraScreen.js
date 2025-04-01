@@ -298,7 +298,7 @@ const CameraScreen = ({ navigation, route }) => {
         styles.topBar,
         { paddingTop: insets.top > 0 ? insets.top : Platform.OS === 'ios' ? 40 : 20 }
       ]}>
-        <Text style={styles.quoteText}>{quote}</Text>
+        <Text style={styles.quoteText}>"{quote}"</Text>
       </View>
       
       {/* Camera viewfinder area */}
@@ -328,10 +328,10 @@ const CameraScreen = ({ navigation, route }) => {
       ]}>
         <View style={styles.buttonContainer}>
           <TouchableOpacity
-            style={styles.flipButton}
-            onPress={toggleCameraFacing}
+            style={styles.galleryButton}
+            onPress={() => navigation.navigate('PhotoGallery')}
           >
-            <MaterialIcons name="flip-camera-ios" size={28} color="white" />
+            <MaterialIcons name="photo-library" size={28} color="white" />
           </TouchableOpacity>
 
           <Animated.View style={[styles.captureButtonContainer, {
@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
   buttonContainer: {
     flexDirection: 'row',
     width: '100%',
-    justifyContent: 'space-around',
+    justifyContent: 'space-evenly',
     alignItems: 'center',
     padding: SPACING.m,
   },
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   captureButtonDisabled: {
     opacity: 0.5,
   },
-  flipButton: {
+  galleryButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
